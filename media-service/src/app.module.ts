@@ -1,0 +1,47 @@
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
+import { MulterModule } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname, join } from 'path';
+import { v4 as uuidv4 } from 'uuid';
+import { Media } from './media.entity';
+import { MediaController } from './media.controller';
+import { MediaService } from './media.service';
+import { JwtStrategy } from './jwt.strategy';
+import * as fs from 'fs';
+
+const uploadDir = join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+@Module({
+  imports: [
+    TypeOrmModule.forRoot({
+      type: 'better-sqlite3',
+      database: 'media.db',
+      entities: [Media],
+      synchronize: true,
+    }),
+    TypeOrmModule.forFeature([Media]),
+    PassportModule,
+    JwtModule.register({ secret: 'myblogs-secret-key-2024' }),
+    MulterModule.register({
+      storage: diskStorage({
+        destination: uploadDir,
+        filename: (req, file, cb) => {
+          const ext = extname(file.originalname);
+          cb(null, `${uuidv4()}${ext}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        const allowed = /jpeg|jpg|png|gif|webp|svg/;
+        cb(null, allowed.test(extname(file.originalname).toLowerCase()));
+      },
+      limits: { fileSize: 10 * 1024 * 1024 },
+    }),
+  ],
+  controllers: [MediaController],
+  providers: [MediaService, JwtStrategy],
+})
+export class AppModule {}

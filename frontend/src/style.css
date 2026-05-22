@@ -1,0 +1,74 @@
+@import "tailwindcss";
+@import "highlight.js/styles/github-dark.css";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-200: #bfdbfe;
+  --color-primary-300: #93c5fd;
+  --color-primary-400: #60a5fa;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  --color-primary-800: #1e40af;
+  --color-primary-900: #1e3a8a;
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-serif: 'Georgia', serif;
+}
+
+/* Code block styling in blog posts */
+.post-content pre {
+  background: #0d1117;
+  border-radius: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  border: 1px solid #30363d;
+}
+
+.post-content pre code {
+  background: transparent !important;
+  padding: 0 !important;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+}
+
+.post-content code:not(pre code) {
+  background: #f1f5f9;
+  color: #e11d48;
+  padding: 0.15em 0.4em;
+  border-radius: 0.35rem;
+  font-size: 0.875em;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+}
+
+/* Copy button wrapper for code blocks */
+.code-block-wrapper {
+  position: relative;
+}
+
+.code-copy-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: #30363d;
+  color: #8b949e;
+  border: none;
+  border-radius: 0.4rem;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.code-block-wrapper:hover .code-copy-btn {
+  opacity: 1;
+}
+
+.code-copy-btn:hover {
+  background: #484f58;
+  color: #e6edf3;
+}
