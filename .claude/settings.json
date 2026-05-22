@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(sqlite3 /home/azure/myblogs/media-service/media.db \"SELECT id, filename, url FROM media LIMIT 5;\")",
+      "Bash(node -e ' *)"
+    ]
+  }
+}

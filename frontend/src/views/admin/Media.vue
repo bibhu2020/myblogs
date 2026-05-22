@@ -34,7 +34,7 @@ async function deleteMedia(id) {
 }
 
 function copyUrl(url) {
-  navigator.clipboard.writeText(`${window.location.protocol}//${window.location.hostname}:3003${url}`)
+  navigator.clipboard.writeText(url)
 }
 </script>
 
@@ -57,14 +57,14 @@ function copyUrl(url) {
       <div v-for="item in media" :key="item.id" @click="selected = item"
         class="aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all hover:opacity-80"
         :class="selected?.id === item.id ? 'border-blue-500' : 'border-transparent'">
-        <img :src="`http://localhost:3003${item.url}`" :alt="item.alt" class="w-full h-full object-cover" />
+        <img :src="item.url" :alt="item.alt" class="w-full h-full object-cover" />
       </div>
     </div>
 
     <!-- Selected file detail -->
     <div v-if="selected" class="fixed right-6 top-24 w-72 bg-white rounded-2xl shadow-xl border border-gray-200 p-5 z-30">
       <button @click="selected=null" class="absolute top-3 right-3 text-gray-400 hover:text-gray-600">&times;</button>
-      <img :src="`http://localhost:3003${selected.url}`" :alt="selected.alt" class="w-full aspect-square object-cover rounded-xl mb-3" />
+      <img :src="selected.url" :alt="selected.alt" class="w-full aspect-square object-cover rounded-xl mb-3" />
       <p class="text-sm font-medium text-gray-900 truncate">{{ selected.originalName }}</p>
       <p class="text-xs text-gray-400 mt-0.5">{{ Math.round(selected.size / 1024) }} KB</p>
       <div class="mt-3 flex gap-2">
