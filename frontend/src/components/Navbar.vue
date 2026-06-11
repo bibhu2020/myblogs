@@ -31,6 +31,9 @@ function submitSearch(e) {
 </script>
 
 <template>
+  <!-- HOLIDAY-BANNER-START -->
+  <div class="bg-primary-600 text-white text-center text-sm py-1">Happy Father's Day &amp; Summer Solstice! ☀️</div>
+  <!-- HOLIDAY-BANNER-END -->
   <nav class="bg-white border-b border-gray-100 sticky top-0 z-50 shadow-sm">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex justify-between h-16 items-center gap-6">
