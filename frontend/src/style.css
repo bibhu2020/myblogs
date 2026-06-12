@@ -110,4 +110,10 @@ h1, h2 { text-wrap: balance; }
   50%       { box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.25), 0 4px 18px rgba(74, 222, 128, 0.22); }
 }
 :focus-visible { outline: 2px solid #15803d; outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .holiday-badge, .holiday-badge-b {
+    animation: none;
+  }
+}
 /* HOLIDAY-CSS-END */

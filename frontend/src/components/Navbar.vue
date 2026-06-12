@@ -83,6 +83,9 @@ const isB = () => layout.variant === 'b'
           <div class="relative" ref="topicsRef">
             <button
               @click="topicsOpen = !topicsOpen"
+              aria-haspopup="true"
+              :aria-expanded="topicsOpen.toString()"
+              aria-controls="topics-dropdown"
               class="flex items-center gap-1 px-3 py-2 text-sm font-medium transition-colors rounded-lg"
               :class="layout.variant === 'b'
                 ? (topicsOpen ? 'text-violet-400 bg-violet-950' : 'text-slate-400 hover:text-violet-400 hover:bg-slate-900')
@@ -94,6 +97,8 @@ const isB = () => layout.variant === 'b'
               </svg>
             </button>
             <div v-if="topicsOpen"
+              id="topics-dropdown"
+              role="menu"
               class="absolute top-full left-0 mt-2 w-56 rounded-xl shadow-lg py-2 z-50"
               :class="layout.variant === 'b' ? 'bg-[#0f0f1e] border border-[#1e1e3a]' : 'bg-white border border-gray-100'"
             >
@@ -101,6 +106,7 @@ const isB = () => layout.variant === 'b'
                 v-for="cat in blog.categories" :key="cat.id"
                 :to="`/category/${cat.slug}`"
                 @click="topicsOpen = false"
+                role="menuitem"
                 class="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
                 :class="layout.variant === 'b'
                   ? 'text-slate-300 hover:bg-slate-900 hover:text-violet-400'

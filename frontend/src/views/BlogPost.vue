@@ -243,6 +243,7 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
 <template>
   <div :class="layout.variant === 'b' ? 'min-h-screen bg-[#080810]' : 'min-h-screen bg-white'">
     <Navbar />
+    <main id="main-content" tabindex="-1" class="outline-none">
 
     <div v-if="blog.loading" class="max-w-4xl mx-auto px-4 py-12 animate-pulse">
       <div class="h-8 rounded mb-4 w-3/4" :class="layout.variant === 'b' ? 'bg-slate-800' : 'bg-gray-200'"></div>
@@ -516,6 +517,7 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
       </div>
     </Teleport>
 
+    </main>
     <Footer />
   </div>
 </template>

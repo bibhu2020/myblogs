@@ -38,10 +38,11 @@ function ago(d) {
   <!-- ══════════════════════════════════════════════════════════════════════ -->
   <!--  LAYOUT A — Editorial Light                                           -->
   <!-- ══════════════════════════════════════════════════════════════════════ -->
-  <div v-if="layout.variant === 'a'" id="main-content" class="min-h-screen bg-white">
+  <div v-if="layout.variant === 'a'" class="min-h-screen bg-white">
     <Navbar />
 
     <!-- Holiday badge -->
+    <main id="main-content" tabindex="-1" class="outline-none">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 text-center">
       <!-- HOLIDAY-HERO-START -->
       <span class="holiday-badge bg-primary-50 text-primary-800 border border-primary-200 rounded-full px-4 py-1 text-sm inline-block">⚽ World Cup 2026 Season — Ideas That Score</span>
@@ -151,15 +152,17 @@ function ago(d) {
       </div>
     </section>
 
+    </main>
     <Footer />
   </div>
 
   <!-- ══════════════════════════════════════════════════════════════════════ -->
   <!--  LAYOUT B — Dark Magazine                                             -->
   <!-- ══════════════════════════════════════════════════════════════════════ -->
-  <div v-else id="main-content" class="min-h-screen bg-[#080810] text-slate-200">
+  <div v-else class="min-h-screen bg-[#080810] text-slate-200">
     <Navbar />
 
+    <main id="main-content" tabindex="-1" class="outline-none">
     <!-- Layout B holiday badge -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 text-center">
       <!-- HOLIDAY-HERO-B-START -->
@@ -301,6 +304,7 @@ function ago(d) {
     </section>
 
     <!-- Footer (dark) -->
+    </main>
     <footer class="bg-[#050508] border-t border-[#1a1a2e] text-slate-400 mt-8">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div class="grid grid-cols-1 md:grid-cols-4 gap-12">

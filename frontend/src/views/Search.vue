@@ -83,6 +83,7 @@ function submitSearch(e) {
 <template>
   <div :class="layout.variant === 'b' ? 'min-h-screen bg-[#080810]' : 'min-h-screen bg-gray-50'">
     <Navbar />
+    <main id="main-content" tabindex="-1" class="outline-none">
 
     <!-- Search Header -->
     <div :class="layout.variant === 'b' ? 'bg-[#0d0d1a] border-b border-[#1e1e3a]' : 'bg-white border-b border-gray-200'">
@@ -301,5 +302,6 @@ function submitSearch(e) {
     </div>
 
     <Footer />
+      </main>
   </div>
 </template>

@@ -29,6 +29,7 @@ watch(page, loadPosts)
 <template>
   <div :class="layout.variant === 'b' ? 'min-h-screen bg-[#080810]' : 'min-h-screen bg-white'">
     <Navbar />
+    <main id="main-content" tabindex="-1" class="outline-none">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div class="flex items-center gap-4 mb-10">
         <div v-if="category" class="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl" :style="{ background: (category.color || '#3B82F6') + '20' }">{{ category.icon }}</div>
@@ -63,5 +64,6 @@ watch(page, loadPosts)
       </div>
     </div>
     <Footer />
+      </main>
   </div>
 </template>
