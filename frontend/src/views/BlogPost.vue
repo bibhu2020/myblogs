@@ -135,9 +135,10 @@ async function openPlayer() {
   ttsProgress.value = 0
   ttsChunkIdx.value = 0
 
-  // Max 2 concurrent TTS requests — TTS is CPU-bound and serialised by a server-side lock,
-  // so flooding with many parallel requests just queues them all at 120s timeout each.
-  const limit = pLimit(2)
+  // 3 concurrent requests: 1 synthesizing + 2 queued at the server lock.
+  // Keeps the server pipeline full so there's no idle gap between chunks
+  // while the next HTTP request is still in-flight from the browser.
+  const limit = pLimit(3)
   chunkFetches = chunks.map(text =>
     limit(() =>
       api.post('/tts', { text }, { responseType: 'blob', timeout: 120_000 })

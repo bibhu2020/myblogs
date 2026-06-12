@@ -1,5 +1,6 @@
 import io
 import threading
+from functools import lru_cache
 import numpy as np
 import scipy.io.wavfile as wavfile
 import torch
@@ -19,6 +20,19 @@ _lock = threading.Lock()
 print('TTS model ready.', flush=True)
 
 
+@lru_cache(maxsize=128)
+def _synthesize(text: str) -> bytes:
+    """Synthesize text → WAV bytes. Result is cached so replays and seeks are instant."""
+    with _lock:
+        inputs = _tokenizer(text, return_tensors='pt')
+        with torch.no_grad():
+            waveform = _model(**inputs).waveform.squeeze().numpy()
+    rate = _model.config.sampling_rate
+    buf = io.BytesIO()
+    wavfile.write(buf, rate, (waveform * 32767).astype(np.int16))
+    return buf.getvalue()
+
+
 @app.route('/health')
 def health():
     return jsonify({'status': 'ok'})
@@ -30,15 +44,8 @@ def synthesize():
     if not text:
         return jsonify({'error': 'text required'}), 400
     try:
-        with _lock:
-            inputs = _tokenizer(text, return_tensors='pt')
-            with torch.no_grad():
-                waveform = _model(**inputs).waveform.squeeze().numpy()
-        rate = _model.config.sampling_rate
-        buf = io.BytesIO()
-        wavfile.write(buf, rate, (waveform * 32767).astype(np.int16))
-        buf.seek(0)
-        return send_file(buf, mimetype='audio/wav')
+        audio_bytes = _synthesize(text)
+        return send_file(io.BytesIO(audio_bytes), mimetype='audio/wav')
     except Exception as exc:
         return jsonify({'error': str(exc)}), 500
 
