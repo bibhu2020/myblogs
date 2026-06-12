@@ -314,8 +314,10 @@ export class McpController {
 
   /** Short-lived JWT for internal service calls made on behalf of MCP agent. */
   private agentAuth(): string {
+    // sub=0 is required: all JwtStrategy validators read payload.sub for the user id.
+    // Without sub, authorId arrives as undefined and blog post INSERT fails (NOT NULL).
     const token = this.jwt.sign(
-      { id: 0, email: 'mcp-agent@meridian.internal', name: 'MCP Agent', role: 'admin' },
+      { sub: 0, id: 0, email: 'mcp-agent@meridian.internal', name: 'MCP Agent', role: 'admin' },
       { expiresIn: '5m' },
     );
     return `Bearer ${token}`;

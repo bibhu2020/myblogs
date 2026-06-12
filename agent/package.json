@@ -8,6 +8,7 @@
     "start": "node index.js"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.0",
     "dotenv": "^16.4.5",
     "node-cron": "^3.0.3",
     "openai": "^4.85.0"

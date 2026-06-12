@@ -80,8 +80,8 @@ export class PostsService {
     const postData: any = {
       ...dto,
       slug,
-      authorId: user.id,
-      authorName: user.name,
+      authorId: user?.id ?? 0,
+      authorName: dto.authorName || user?.name || 'Anonymous',
       readTime: Math.ceil((dto.content || '').split(' ').length / 200),
       gallery: dto.gallery ? JSON.stringify(dto.gallery) : null,
     };
