@@ -19,6 +19,35 @@ const commentSubmitted = ref(false)
 const galleryOpen = ref(false)
 const galleryIndex = ref(0)
 
+const ttsState = ref('idle') // idle | loading | playing
+let ttsAudio = null
+
+async function toggleTTS() {
+  if (ttsState.value === 'playing') {
+    ttsAudio?.pause()
+    ttsAudio = null
+    ttsState.value = 'idle'
+    return
+  }
+
+  ttsState.value = 'loading'
+  try {
+    const div = document.createElement('div')
+    div.innerHTML = post.value.content
+    const text = div.textContent || div.innerText || ''
+
+    const res = await api.post('/tts', { text }, { responseType: 'blob' })
+    const url = URL.createObjectURL(res.data)
+    ttsAudio = new Audio(url)
+    ttsAudio.onended = () => { ttsState.value = 'idle'; URL.revokeObjectURL(url) }
+    ttsAudio.onerror = () => { ttsState.value = 'idle' }
+    await ttsAudio.play()
+    ttsState.value = 'playing'
+  } catch {
+    ttsState.value = 'idle'
+  }
+}
+
 function applyHighlighting() {
   nextTick(() => {
     document.querySelectorAll('.post-content pre code').forEach(block => {
@@ -92,6 +121,25 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
             {{ post.views }} views
           </span>
+          <span>·</span>
+          <button @click="toggleTTS" :disabled="ttsState === 'loading'"
+            class="flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium transition-colors"
+            :class="ttsState === 'playing' ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-600 hover:bg-primary-50 hover:text-primary-600'">
+            <!-- loading spinner -->
+            <svg v-if="ttsState === 'loading'" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+            <!-- stop icon -->
+            <svg v-else-if="ttsState === 'playing'" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <rect x="6" y="6" width="12" height="12" rx="1"/>
+            </svg>
+            <!-- play/speaker icon -->
+            <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072M12 6v12m0 0l-3-3m3 3l3-3M9 9H6a1 1 0 00-1 1v4a1 1 0 001 1h3l4 4V5L9 9z"/>
+            </svg>
+            {{ ttsState === 'loading' ? 'Loading…' : ttsState === 'playing' ? 'Stop' : 'Listen' }}
+          </button>
         </div>
       </div>
 
