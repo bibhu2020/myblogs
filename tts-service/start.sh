@@ -1,5 +1,13 @@
 #!/bin/sh
-# Run the local TTS model everywhere (including HuggingFace Spaces).
-# HF Spaces free tier has 2 vCPU / 16 GB RAM — local VITS inference is
-# significantly faster than the HF Inference API which cold-starts per request.
-exec /opt/tts-venv/bin/python /app/tts-service/app.py
+# Production TTS server — gunicorn with 1 worker + 8 threads.
+# 1 worker: keeps a single model copy in memory (avoids duplicating ~500MB weights).
+# 8 threads: accepts concurrent HTTP connections while the inference lock serialises GPU/CPU work.
+# 120s timeout: CPU inference on a 500-char chunk takes 5-15s; give plenty of headroom.
+exec /opt/tts-venv/bin/gunicorn \
+    --bind 0.0.0.0:5050 \
+    --workers 1 \
+    --threads 8 \
+    --timeout 120 \
+    --keep-alive 5 \
+    --log-level info \
+    app:app

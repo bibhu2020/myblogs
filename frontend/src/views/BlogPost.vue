@@ -109,22 +109,41 @@ function cancelCurrentChunk() {
   if (resolveChunk) { resolveChunk('cancelled'); resolveChunk = null }
 }
 
+// Limits concurrent promises to `concurrency` at a time.
+function pLimit(concurrency) {
+  let active = 0
+  const queue = []
+  function next() {
+    if (active >= concurrency || !queue.length) return
+    active++
+    const { fn, resolve, reject } = queue.shift()
+    fn().then(resolve, reject).finally(() => { active--; next() })
+  }
+  return fn => new Promise((resolve, reject) => { queue.push({ fn, resolve, reject }); next() })
+}
+
 async function openPlayer() {
   playerOpen.value = true
   if (ttsState.value !== 'idle') return
 
-  const chunks = splitChunks(post.value.content)
+  const bodyChunks = splitChunks(post.value.content)
+  // Prepend the post title so TTS reads it first
+  const chunks = post.value.title ? [post.value.title, ...bodyChunks] : bodyChunks
   if (!chunks.length) return
 
   ttsTotalChunks.value = chunks.length
   ttsProgress.value = 0
   ttsChunkIdx.value = 0
 
-  // Kick off ALL fetches concurrently — later chunks are pre-fetched while the first plays
+  // Max 2 concurrent TTS requests — TTS is CPU-bound and serialised by a server-side lock,
+  // so flooding with many parallel requests just queues them all at 120s timeout each.
+  const limit = pLimit(2)
   chunkFetches = chunks.map(text =>
-    api.post('/tts', { text }, { responseType: 'blob' })
-      .then(r => r.data)
-      .catch(() => null)
+    limit(() =>
+      api.post('/tts', { text }, { responseType: 'blob', timeout: 120_000 })
+        .then(r => r.data)
+        .catch(() => null)
+    )
   )
 
   ttsState.value = 'loading'

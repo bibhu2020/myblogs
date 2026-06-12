@@ -1,4 +1,5 @@
 import io
+import threading
 import numpy as np
 import scipy.io.wavfile as wavfile
 import torch
@@ -12,6 +13,9 @@ print(f'Loading {MODEL}...', flush=True)
 _tokenizer = AutoTokenizer.from_pretrained(MODEL)
 _model = VitsModel.from_pretrained(MODEL)
 _model.eval()
+# PyTorch VITS inference is not thread-safe — one inference at a time.
+# Gunicorn handles concurrent HTTP connections; this lock serialises the GPU/CPU work.
+_lock = threading.Lock()
 print('TTS model ready.', flush=True)
 
 
@@ -26,9 +30,10 @@ def synthesize():
     if not text:
         return jsonify({'error': 'text required'}), 400
     try:
-        inputs = _tokenizer(text, return_tensors='pt')
-        with torch.no_grad():
-            waveform = _model(**inputs).waveform.squeeze().numpy()
+        with _lock:
+            inputs = _tokenizer(text, return_tensors='pt')
+            with torch.no_grad():
+                waveform = _model(**inputs).waveform.squeeze().numpy()
         rate = _model.config.sampling_rate
         buf = io.BytesIO()
         wavfile.write(buf, rate, (waveform * 32767).astype(np.int16))
@@ -39,4 +44,5 @@ def synthesize():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5050)
+    # Dev only — production uses gunicorn via start.sh
+    app.run(host='0.0.0.0', port=5050, threaded=True)

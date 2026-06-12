@@ -218,6 +218,7 @@ export class AppController {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text }),
+          signal: AbortSignal.timeout(120_000),
         });
         if (!r.ok) { res.status(502).json({ message: `Local TTS error: ${await r.text()}` }); return; }
         contentType = 'audio/wav';
