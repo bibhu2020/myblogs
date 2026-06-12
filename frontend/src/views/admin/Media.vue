@@ -4,6 +4,7 @@ import api from '../../api'
 
 const media = ref([])
 const uploading = ref(false)
+const uploadError = ref('')
 const selected = ref(null)
 const fileInput = ref(null)
 
@@ -18,12 +19,19 @@ async function upload(event) {
   const file = event.target.files[0]
   if (!file) return
   uploading.value = true
-  const fd = new FormData()
-  fd.append('file', file)
-  fd.append('alt', file.name)
-  await api.post('/media/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-  await loadMedia()
-  uploading.value = false
+  uploadError.value = ''
+  try {
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('alt', file.name)
+    await api.post('/media/upload', fd)
+    await loadMedia()
+  } catch (e) {
+    uploadError.value = e.response?.data?.message || 'Upload failed. Please try again.'
+  } finally {
+    uploading.value = false
+    fileInput.value.value = ''
+  }
 }
 
 async function deleteMedia(id) {
@@ -45,11 +53,12 @@ function copyUrl(url) {
         <h1 class="text-2xl font-bold text-gray-900" style="font-family:'Playfair Display',serif">Media Library</h1>
         <p class="text-sm text-gray-500 mt-1">{{ media.length }} files</p>
       </div>
-      <div>
+      <div class="flex flex-col items-end gap-2">
         <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="upload" />
         <button @click="fileInput.click()" :disabled="uploading" class="bg-primary-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary-700 transition-colors disabled:opacity-60">
-          {{ uploading ? 'Uploading...' : '+ Upload Image' }}
+          {{ uploading ? 'Uploading…' : '+ Upload Image' }}
         </button>
+        <p v-if="uploadError" class="text-xs text-red-500">{{ uploadError }}</p>
       </div>
     </div>
 

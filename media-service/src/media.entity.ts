@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
 
-@Entity('media')
+@Entity('media_media')
 export class Media {
   @PrimaryGeneratedColumn()
   id: number;

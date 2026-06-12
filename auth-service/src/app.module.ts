@@ -13,8 +13,9 @@ import { LocalStrategy } from './local.strategy';
 @Module({
   imports: [
     TypeOrmModule.forRoot({
-      type: 'better-sqlite3',
-      database: 'auth.db',
+      type: 'postgres',
+      url: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_96zZibhKwEcG@ep-delicate-fire-atgeeiwh-pooler.c-9.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
+      ssl: { rejectUnauthorized: false },
       entities: [User],
       synchronize: true,
     }),

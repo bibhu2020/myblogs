@@ -1,0 +1,7 @@
+node_modules
+*/node_modules
+*/dist
+.git
+.claude
+*.db
+migrate_to_pg.py

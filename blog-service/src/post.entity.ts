@@ -8,7 +8,7 @@ export enum PostStatus {
   PUBLISHED = 'published',
 }
 
-@Entity('posts')
+@Entity('blog_posts')
 export class Post {
   @PrimaryGeneratedColumn()
   id: number;
@@ -50,7 +50,11 @@ export class Post {
   category: Category;
 
   @ManyToMany(() => Tag, { eager: true, cascade: true })
-  @JoinTable()
+  @JoinTable({
+    name: 'blog_posts_tags_tags',
+    joinColumn: { name: 'postsId', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'tagsId', referencedColumnName: 'id' },
+  })
   tags: Tag[];
 
   @OneToMany(() => Comment, c => c.post)

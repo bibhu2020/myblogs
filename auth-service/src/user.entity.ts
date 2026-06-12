@@ -5,7 +5,7 @@ export enum UserRole {
   GUEST = 'guest',
 }
 
-@Entity('users')
+@Entity('auth_users')
 export class User {
   @PrimaryGeneratedColumn()
   id: number;

@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn } from 'typeorm';
 import { Post } from './post.entity';
 
-@Entity('comments')
+@Entity('blog_comments')
 export class Comment {
   @PrimaryGeneratedColumn()
   id: number;
