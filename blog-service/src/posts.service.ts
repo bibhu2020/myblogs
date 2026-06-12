@@ -26,7 +26,10 @@ export class PostsService {
 
     if (category) qb.andWhere('category.slug = :category', { category });
     if (tag) qb.andWhere('tags.slug = :tag', { tag });
-    if (search) qb.andWhere('(post.title LIKE :search OR post.excerpt LIKE :search)', { search: `%${search}%` });
+    if (search) qb.andWhere(
+      '(post.title ILIKE :search OR post.excerpt ILIKE :search OR post.content ILIKE :search)',
+      { search: `%${search}%` },
+    );
 
     const total = await qb.getCount();
     const skip = (page - 1) * limit;
