@@ -190,16 +190,21 @@ export class AppController {
     return this.proxy.forward('media', `/media/${id}`, 'DELETE', null, { Authorization: this.getAuthHeader(req) });
   }
 
-  // TEXT-TO-SPEECH — one small chunk per request; chunking handled client-side
+  // TEXT-TO-SPEECH — one small chunk per request; chunking handled client-side.
+  // Priority: local Python service (Docker) → HF Inference API → OpenAI TTS.
   @Post('tts')
   async textToSpeech(@Body() body: { text: string }, @Res() res: Response) {
     const text = (body.text || '').trim();
     if (!text) { res.status(400).json({ message: 'text is required' }); return; }
 
+    // SPACE_ID is always set on HuggingFace Spaces — use HF/OpenAI API there instead of local model
+    const onHFSpace = !!process.env.SPACE_ID;
+    const localTts  = !onHFSpace ? process.env.TTS_SERVICE_URL : undefined;
     const hfToken   = process.env.HF_TOKEN;
     const openaiKey = process.env.OPENAI_API_KEY;
-    if (!hfToken && !openaiKey) {
-      res.status(503).json({ message: 'TTS not configured: set HF_TOKEN or OPENAI_API_KEY' });
+
+    if (!localTts && !hfToken && !openaiKey) {
+      res.status(503).json({ message: 'TTS not configured: set TTS_SERVICE_URL, HF_TOKEN, or OPENAI_API_KEY' });
       return;
     }
 
@@ -207,8 +212,18 @@ export class AppController {
       let buf: Buffer;
       let contentType: string;
 
-      if (hfToken) {
-        // HF Inference API — facebook/mms-tts-eng (fast, lightweight)
+      if (localTts) {
+        // Local Python TTS service (facebook/mms-tts-eng, running on-container)
+        const r = await fetch(`${localTts}/tts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        if (!r.ok) { res.status(502).json({ message: `Local TTS error: ${await r.text()}` }); return; }
+        contentType = 'audio/wav';
+        buf = Buffer.from(await r.arrayBuffer());
+      } else if (hfToken) {
+        // HF Inference API fallback (cold-start possible)
         const r = await fetch(
           'https://api-inference.huggingface.co/models/facebook/mms-tts-eng',
           {
@@ -221,7 +236,7 @@ export class AppController {
         contentType = r.headers.get('content-type') || 'audio/flac';
         buf = Buffer.from(await r.arrayBuffer());
       } else {
-        // Fallback: OpenAI TTS
+        // OpenAI TTS fallback
         const r = await fetch('https://api.openai.com/v1/audio/speech', {
           method: 'POST',
           headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
