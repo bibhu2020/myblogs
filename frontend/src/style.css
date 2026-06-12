@@ -73,6 +73,20 @@
   color: #e6edf3;
 }
 
+/* ── Layout B — Dark Magazine ────────────────────────────────────────────── */
+[data-layout="b"] .lb-page        { background: #080810; color: #e2e8f0; min-height: 100vh; }
+[data-layout="b"] .lb-nav         { background: #0d0d1a; border-color: #1e1e3a; }
+[data-layout="b"] .lb-nav-link    { color: #94a3b8; }
+[data-layout="b"] .lb-nav-link:hover { color: #a78bfa; }
+[data-layout="b"] .lb-surface     { background: #0f0f1e; border: 1px solid #1e1e3a; }
+[data-layout="b"] .lb-surface-2   { background: #13132a; }
+[data-layout="b"] .lb-accent      { color: #a78bfa; }
+[data-layout="b"] .lb-accent-bg   { background: #7c3aed; }
+[data-layout="b"] .lb-accent-bg:hover { background: #6d28d9; }
+[data-layout="b"] .lb-muted       { color: #64748b; }
+[data-layout="b"] .lb-heading     { color: #f8fafc; }
+[data-layout="b"] .lb-card-hover:hover { background: #16162e; border-color: #4c1d95; }
+
 /* HOLIDAY-CSS-START */
 /* Juneteenth: warm red/gold festive accents */
 body { background: linear-gradient(180deg, #fffaf5 0%, #ffffff 240px); }
