@@ -241,7 +241,7 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
 </script>
 
 <template>
-  <div :class="layout.variant === 'b' ? 'min-h-screen bg-[#080810]' : 'min-h-screen bg-white'">
+  <div :class="layout.variant === 'b' ? 'min-h-screen bg-[#0f172a]' : 'min-h-screen bg-white'">
     <Navbar />
     <main id="main-content" tabindex="-1" class="outline-none">
 
@@ -284,7 +284,7 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
             Listen to this article
           </button>
         </div>
-        <div v-else class="rounded-2xl shadow-lg p-4" :class="layout.variant === 'b' ? 'bg-[#0f0f1e] border border-[#1e1e3a]' : 'bg-white border border-gray-100'">
+        <div v-else class="rounded-2xl shadow-lg p-4" :class="layout.variant === 'b' ? 'bg-[#162236] border border-[#2d3f5f]' : 'bg-white border border-gray-100'">
           <!-- Header row -->
           <div class="flex items-center gap-2 mb-3">
             <div class="flex items-end gap-0.5 h-5 flex-shrink-0" aria-hidden="true">
@@ -293,7 +293,7 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
                 :style="ttsState === 'playing' ? `animation-delay:${i * 80}ms` : ''"></span>
             </div>
             <p class="text-sm font-semibold truncate flex-1" :class="layout.variant === 'b' ? 'text-slate-200' : 'text-gray-800'">{{ post.title }}</p>
-            <span v-if="ttsTotalChunks" class="text-xs flex-shrink-0" :class="layout.variant === 'b' ? 'text-slate-500' : 'text-gray-400'">{{ ttsChunkIdx + 1 }}/{{ ttsTotalChunks }}</span>
+            <span v-if="ttsTotalChunks" class="text-xs flex-shrink-0" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">{{ ttsChunkIdx + 1 }}/{{ ttsTotalChunks }}</span>
             <button @click="closePlayer" class="flex-shrink-0 ml-1" :class="layout.variant === 'b' ? 'text-slate-500 hover:text-slate-300' : 'text-gray-400 hover:text-gray-600'">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
@@ -341,7 +341,7 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
         v-html="post.content" style="font-family:'Inter',sans-serif"></div>
 
       <!-- Tags -->
-      <div v-if="post.tags?.length" class="flex flex-wrap gap-2 mt-10 pt-8" :class="layout.variant === 'b' ? 'border-t border-[#1e1e3a]' : 'border-t border-gray-100'">
+      <div v-if="post.tags?.length" class="flex flex-wrap gap-2 mt-10 pt-8" :class="layout.variant === 'b' ? 'border-t border-[#2d3f5f]' : 'border-t border-gray-100'">
         <span v-for="tag in post.tags" :key="tag.id" class="px-3 py-1 rounded-full text-sm font-medium transition-colors cursor-pointer"
           :class="layout.variant === 'b' ? 'bg-slate-800 text-slate-300 hover:bg-violet-900 hover:text-violet-300' : 'bg-gray-100 text-gray-600 hover:bg-primary-100 hover:text-primary-700'"
         >#{{ tag.name }}</span>
@@ -358,7 +358,7 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
       </div>
 
       <!-- Share -->
-      <div class="mt-12 p-6 rounded-2xl" :class="layout.variant === 'b' ? 'bg-[#0f0f1e] border border-[#1e1e3a]' : 'bg-gray-50'">
+      <div class="mt-12 p-6 rounded-2xl" :class="layout.variant === 'b' ? 'bg-[#162236] border border-[#2d3f5f]' : 'bg-gray-50'">
         <p class="text-sm font-semibold mb-3" :class="layout.variant === 'b' ? 'text-slate-300' : 'text-gray-700'">Share this article</p>
         <div class="flex gap-3">
           <button class="flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-medium transition-colors" :class="layout.variant === 'b' ? 'bg-slate-800 hover:bg-slate-700' : 'bg-gray-900 hover:bg-gray-700'">𝕏 Twitter</button>
@@ -381,14 +381,14 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
       <h2 class="text-2xl font-bold mb-6" :class="layout.variant === 'b' ? 'text-slate-100' : 'text-gray-900'" style="font-family:'Playfair Display',serif">{{ comments.length }} Comments</h2>
 
       <div class="space-y-4 mb-10">
-        <div v-for="c in comments" :key="c.id" class="rounded-2xl p-5" :class="layout.variant === 'b' ? 'bg-[#0f0f1e] border border-[#1e1e3a]' : 'bg-gray-50'">
+        <div v-for="c in comments" :key="c.id" class="rounded-2xl p-5" :class="layout.variant === 'b' ? 'bg-[#162236] border border-[#2d3f5f]' : 'bg-gray-50'">
           <div class="flex items-center gap-3 mb-3">
             <div class="w-8 h-8 rounded-full flex items-center justify-center" :class="layout.variant === 'b' ? 'bg-violet-900' : 'bg-primary-100'">
               <span class="font-bold text-sm" :class="layout.variant === 'b' ? 'text-violet-400' : 'text-primary-600'">{{ c.authorName.charAt(0) }}</span>
             </div>
             <div>
               <div class="font-semibold text-sm" :class="layout.variant === 'b' ? 'text-slate-200' : 'text-gray-800'">{{ c.authorName }}</div>
-              <div class="text-xs" :class="layout.variant === 'b' ? 'text-slate-500' : 'text-gray-400'">{{ format(new Date(c.createdAt), 'MMM d, yyyy') }}</div>
+              <div class="text-xs" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">{{ format(new Date(c.createdAt), 'MMM d, yyyy') }}</div>
             </div>
           </div>
           <p class="text-sm" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-600'">{{ c.content }}</p>
@@ -399,16 +399,16 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
         Your comment has been submitted and is awaiting approval. Thank you!
       </div>
 
-      <form v-else @submit.prevent="submitComment" class="rounded-2xl p-6" :class="layout.variant === 'b' ? 'bg-[#0f0f1e] border border-[#1e1e3a]' : 'bg-gray-50'">
+      <form v-else @submit.prevent="submitComment" class="rounded-2xl p-6" :class="layout.variant === 'b' ? 'bg-[#162236] border border-[#2d3f5f]' : 'bg-gray-50'">
         <h3 class="font-bold mb-4" :class="layout.variant === 'b' ? 'text-slate-100' : 'text-gray-900'">Leave a Comment</h3>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
           <input v-model="commentForm.authorName" type="text" placeholder="Your Name *" required class="px-4 py-3 rounded-xl border text-sm focus:outline-none"
-            :class="layout.variant === 'b' ? 'bg-[#13132a] border-[#1e1e3a] text-slate-200 placeholder-slate-500 focus:border-violet-500' : 'bg-white border-gray-200 focus:border-primary-400'" />
+            :class="layout.variant === 'b' ? 'bg-[#1c2d44] border-[#2d3f5f] text-slate-200 placeholder-slate-500 focus:border-violet-500' : 'bg-white border-gray-200 focus:border-primary-400'" />
           <input v-model="commentForm.authorEmail" type="email" placeholder="Your Email" class="px-4 py-3 rounded-xl border text-sm focus:outline-none"
-            :class="layout.variant === 'b' ? 'bg-[#13132a] border-[#1e1e3a] text-slate-200 placeholder-slate-500 focus:border-violet-500' : 'bg-white border-gray-200 focus:border-primary-400'" />
+            :class="layout.variant === 'b' ? 'bg-[#1c2d44] border-[#2d3f5f] text-slate-200 placeholder-slate-500 focus:border-violet-500' : 'bg-white border-gray-200 focus:border-primary-400'" />
         </div>
         <textarea v-model="commentForm.content" rows="4" placeholder="Write your comment..." required class="w-full px-4 py-3 rounded-xl border text-sm focus:outline-none resize-none mb-4"
-          :class="layout.variant === 'b' ? 'bg-[#13132a] border-[#1e1e3a] text-slate-200 placeholder-slate-500 focus:border-violet-500' : 'bg-white border-gray-200 focus:border-primary-400'"></textarea>
+          :class="layout.variant === 'b' ? 'bg-[#1c2d44] border-[#2d3f5f] text-slate-200 placeholder-slate-500 focus:border-violet-500' : 'bg-white border-gray-200 focus:border-primary-400'"></textarea>
         <button type="submit" class="text-white px-6 py-3 rounded-xl text-sm font-semibold transition-colors"
           :class="layout.variant === 'b' ? 'bg-violet-600 hover:bg-violet-700' : 'bg-primary-600 hover:bg-primary-700'">Post Comment</button>
       </form>
@@ -416,10 +416,10 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
 
     <!-- Gallery Lightbox -->
     <div v-if="galleryOpen" class="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" @click.self="galleryOpen=false">
-      <button @click="galleryOpen=false" class="absolute top-4 right-4 text-white text-3xl">&times;</button>
-      <button @click="galleryIndex = (galleryIndex - 1 + getGallery().length) % getGallery().length" class="absolute left-4 text-white text-3xl p-2">&#8249;</button>
-      <img :src="getGallery()[galleryIndex]" alt="Gallery image enlarged" class="max-h-[90vh] max-w-full rounded-2xl object-contain" />
-      <button @click="galleryIndex = (galleryIndex + 1) % getGallery().length" class="absolute right-4 text-white text-3xl p-2">&#8250;</button>
+      <button @click="galleryOpen=false" aria-label="Close gallery" class="absolute top-4 right-4 text-white text-3xl leading-none w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/20 transition-colors">&times;</button>
+      <button @click="galleryIndex = (galleryIndex - 1 + getGallery().length) % getGallery().length" aria-label="Previous image" class="absolute left-4 text-white text-3xl p-2 rounded-full hover:bg-white/20 transition-colors">&#8249;</button>
+      <img :src="getGallery()[galleryIndex]" :alt="`Gallery image ${galleryIndex + 1} of ${getGallery().length}`" class="max-h-[90vh] max-w-full rounded-2xl object-contain" />
+      <button @click="galleryIndex = (galleryIndex + 1) % getGallery().length" aria-label="Next image" class="absolute right-4 text-white text-3xl p-2 rounded-full hover:bg-white/20 transition-colors">&#8250;</button>
     </div>
 
     <!-- Desktop TTS sliding panel — fixed right side, hidden on mobile -->
@@ -443,7 +443,7 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
         <div class="overflow-hidden transition-all duration-300 ease-in-out"
           :style="playerOpen ? 'width:288px' : 'width:0'">
           <div class="w-[288px] h-full flex flex-col p-5 gap-4"
-            :class="layout.variant === 'b' ? 'bg-[#0f0f1e] border-l border-[#1e1e3a]' : 'bg-white border-l border-gray-100'">
+            :class="layout.variant === 'b' ? 'bg-[#162236] border-l border-[#2d3f5f]' : 'bg-white border-l border-gray-100'">
 
             <!-- Header -->
             <div class="flex items-start justify-between gap-2">
@@ -470,7 +470,7 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
                 :disabled="ttsState === 'loading' || ttsState === 'idle'"
                 class="tts-slider w-full"
                 @change="seekTo($event.target.value / 100)" />
-              <div class="flex justify-between mt-1.5 text-xs" :class="layout.variant === 'b' ? 'text-slate-500' : 'text-gray-400'">
+              <div class="flex justify-between mt-1.5 text-xs" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">
                 <span v-if="ttsTotalChunks">Segment {{ ttsChunkIdx + 1 }} / {{ ttsTotalChunks }}</span>
                 <span v-else>—</span>
                 <span>{{ Math.round(ttsProgress * 100) }}%</span>
@@ -511,7 +511,7 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
               </button>
             </div>
 
-            <p class="text-xs text-center" :class="layout.variant === 'b' ? 'text-slate-600' : 'text-gray-400'">Powered by local AI</p>
+            <p class="text-xs text-center" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">Powered by local AI</p>
           </div>
         </div>
       </div>

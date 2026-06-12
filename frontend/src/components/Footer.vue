@@ -8,7 +8,7 @@ const layout = useLayoutStore()
 </script>
 
 <template>
-  <footer :class="layout.variant === 'b' ? 'bg-[#05050e] text-slate-400 mt-24' : 'bg-primary-900 text-primary-200 mt-24'">
+  <footer :class="layout.variant === 'b' ? 'bg-[#090f1d] text-slate-400 mt-24' : 'bg-primary-900 text-primary-200 mt-24'">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
       <div class="grid grid-cols-1 md:grid-cols-4 gap-12">
         <div class="md:col-span-2">

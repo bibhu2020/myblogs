@@ -5,7 +5,7 @@ import { useLayoutStore } from '../stores/layout'
 const layout = useLayoutStore()
 </script>
 <template>
-  <div :class="layout.variant === 'b' ? 'min-h-screen bg-[#080810]' : 'min-h-screen bg-white'">
+  <div :class="layout.variant === 'b' ? 'min-h-screen bg-[#0f172a]' : 'min-h-screen bg-white'">
     <Navbar />
     <div class="max-w-2xl mx-auto px-4 py-32 text-center">
       <div class="text-8xl mb-6" :class="layout.variant === 'b' ? 'text-slate-300' : ''">404</div>

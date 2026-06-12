@@ -15,7 +15,7 @@ function formatDate(d) { return format(new Date(d), 'MMM d, yyyy') }
 <template>
   <!-- Layout B: horizontal card -->
   <RouterLink v-if="layout.variant === 'b'" :to="`/blog/${post.slug}`" class="group block">
-    <article class="flex gap-4 p-4 rounded-xl border border-[#1e1e3a] bg-[#0f0f1e] hover:border-violet-800 hover:bg-[#13132a] transition-all duration-200">
+    <article class="flex gap-4 p-4 rounded-xl border border-[#2d3f5f] bg-[#162236] hover:border-violet-600 hover:bg-[#1c2d44] transition-all duration-200">
       <div class="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0 bg-slate-800">
         <img v-if="post.featuredImage" :src="post.featuredImage" :alt="post.title"
           class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
@@ -40,8 +40,8 @@ function formatDate(d) { return format(new Date(d), 'MMM d, yyyy') }
 
   <!-- Layout A: vertical card (original style) -->
   <RouterLink v-else :to="`/blog/${post.slug}`" class="group block">
-    <article class="flex flex-col">
-      <div class="relative overflow-hidden rounded-2xl bg-gray-100" :class="featured ? 'aspect-[16/9]' : 'aspect-[16/10]'">
+    <article class="flex flex-col rounded-2xl overflow-hidden bg-white border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+      <div class="relative overflow-hidden bg-gray-100" :class="featured ? 'aspect-[16/9]' : 'aspect-[16/10]'">
         <img v-if="post.featuredImage" :src="post.featuredImage" :alt="post.title"
           class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
         <div v-else class="w-full h-full bg-gradient-to-br from-primary-100 to-purple-100 flex items-center justify-center">
@@ -54,7 +54,7 @@ function formatDate(d) { return format(new Date(d), 'MMM d, yyyy') }
           </span>
         </div>
       </div>
-      <div class="mt-4 flex-1 flex flex-col">
+      <div class="mt-0 flex-1 flex flex-col p-4">
         <div class="flex items-center gap-2 text-xs text-gray-500 mb-2">
           <span>{{ formatDate(post.createdAt) }}</span>
           <span>·</span>
@@ -71,7 +71,7 @@ function formatDate(d) { return format(new Date(d), 'MMM d, yyyy') }
           <div class="w-6 h-6 bg-primary-600 rounded-full flex items-center justify-center flex-shrink-0">
             <span class="text-white text-xs font-bold">{{ (post.authorName || 'A').charAt(0) }}</span>
           </div>
-          <span class="text-xs font-medium text-gray-700">{{ post.authorName }}</span>
+          <span class="text-xs font-medium text-gray-600">{{ post.authorName }}</span>
         </div>
       </div>
     </article>

@@ -27,7 +27,7 @@ watch(page, loadPosts)
 </script>
 
 <template>
-  <div :class="layout.variant === 'b' ? 'min-h-screen bg-[#080810]' : 'min-h-screen bg-white'">
+  <div :class="layout.variant === 'b' ? 'min-h-screen bg-[#0f172a]' : 'min-h-screen bg-white'">
     <Navbar />
     <main id="main-content" tabindex="-1" class="outline-none">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">

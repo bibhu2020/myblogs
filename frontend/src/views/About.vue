@@ -182,11 +182,11 @@ const maintenanceItems = [
   </div>
 
   <!-- ═══════════════════════════ LAYOUT B — Dark ════════════════════════════ -->
-  <div v-else class="min-h-screen bg-[#080810] text-slate-200">
+  <div v-else class="min-h-screen bg-[#0f172a] text-slate-200">
     <Navbar />
 
     <!-- Hero -->
-    <section class="border-b border-[#1e1e3a]">
+    <section class="border-b border-[#2d3f5f]">
       <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
         <span class="inline-block bg-violet-950 text-violet-400 text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full border border-violet-900 mb-6">About Meridian</span>
         <h1 class="text-4xl sm:text-5xl font-black text-white leading-tight mb-6" style="font-family:'Playfair Display',serif">
@@ -231,7 +231,7 @@ const maintenanceItems = [
               <span class="mt-0.5 w-6 h-6 rounded-full bg-violet-950 border border-violet-800 text-violet-400 flex items-center justify-center text-xs font-bold flex-shrink-0">✓</span>
               <div>
                 <span class="font-semibold text-slate-200">{{ cap.label }}</span>
-                <span class="text-slate-500"> — {{ cap.desc }}</span>
+                <span class="text-slate-400"> — {{ cap.desc }}</span>
               </div>
             </li>
           </ul>
@@ -248,10 +248,10 @@ const maintenanceItems = [
           <h2 class="text-2xl font-bold text-white" style="font-family:'Playfair Display',serif">AI-Driven Maintenance</h2>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div v-for="item in maintenanceItems" :key="item.title" class="bg-[#0f0f1e] rounded-2xl p-6 border border-[#1e1e3a]">
+          <div v-for="item in maintenanceItems" :key="item.title" class="bg-[#162236] rounded-2xl p-6 border border-[#2d3f5f]">
             <div class="text-3xl mb-3">{{ item.icon }}</div>
             <h3 class="font-bold text-slate-100 mb-2">{{ item.title }}</h3>
-            <p class="text-slate-500 text-sm leading-relaxed">{{ item.desc }}</p>
+            <p class="text-slate-400 text-sm leading-relaxed">{{ item.desc }}</p>
           </div>
         </div>
       </section>
@@ -262,18 +262,18 @@ const maintenanceItems = [
           <div class="w-10 h-10 rounded-xl bg-amber-600 flex items-center justify-center text-white text-xl">🎨</div>
           <h2 class="text-2xl font-bold text-white" style="font-family:'Playfair Display',serif">Monthly AI Rebranding</h2>
         </div>
-        <div class="bg-[#0f0f1e] border border-amber-900/40 rounded-2xl p-8">
+        <div class="bg-[#162236] border border-amber-900/40 rounded-2xl p-8">
           <p class="text-slate-400 leading-relaxed mb-4">
             Every month, an AI agent surveys the global landscape — major sporting events, cultural milestones, scientific breakthroughs, seasonal celebrations — and rebrands Meridian to reflect the moment. Color themes, hero banners, holiday badges, and editorial tone shift to stay culturally resonant and visually fresh.
           </p>
-          <p class="text-slate-500 text-sm leading-relaxed">
+          <p class="text-slate-400 text-sm leading-relaxed">
             This month, for example, the platform wears the colors of <span class="text-amber-400 font-semibold">FIFA World Cup 2026</span>. Next month it will wear something new. The world changes; Meridian keeps up — automatically.
           </p>
         </div>
       </section>
 
       <!-- Divider -->
-      <div class="border-t border-[#1e1e3a]"></div>
+      <div class="border-t border-[#2d3f5f]"></div>
 
       <!-- Ideator -->
       <section id="ideator">
@@ -281,7 +281,7 @@ const maintenanceItems = [
           <span class="inline-block bg-violet-950 text-violet-400 text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full border border-violet-900 mb-4">The Human Behind the Vision</span>
           <h2 class="text-3xl font-bold text-white" style="font-family:'Playfair Display',serif">Meet the Ideator</h2>
         </div>
-        <div class="bg-[#0f0f1e] rounded-3xl border border-[#1e1e3a] p-8 sm:p-12 flex flex-col sm:flex-row gap-8 items-start">
+        <div class="bg-[#162236] rounded-3xl border border-[#2d3f5f] p-8 sm:p-12 flex flex-col sm:flex-row gap-8 items-start">
           <div class="flex-shrink-0">
             <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-violet-600 to-primary-700 flex items-center justify-center text-white text-4xl font-black select-none">
               B
@@ -290,7 +290,7 @@ const maintenanceItems = [
           <div class="flex-1">
             <h3 class="text-2xl font-bold text-white mb-1" style="font-family:'Playfair Display',serif">Bibhu Mishra</h3>
             <p class="text-violet-400 font-semibold mb-1">Principal Cloud / DevOps Architect</p>
-            <p class="text-slate-500 text-sm mb-5">Azure &amp; Kubernetes · MLOps · DevOps &amp; Cloud Transformation · LTIMindtree</p>
+            <p class="text-slate-400 text-sm mb-5">Azure &amp; Kubernetes · MLOps · DevOps &amp; Cloud Transformation · LTIMindtree</p>
 
             <div class="text-slate-400 text-sm leading-relaxed space-y-3">
               <p>

@@ -159,14 +159,14 @@ function ago(d) {
   <!-- ══════════════════════════════════════════════════════════════════════ -->
   <!--  LAYOUT B — Dark Magazine                                             -->
   <!-- ══════════════════════════════════════════════════════════════════════ -->
-  <div v-else class="min-h-screen bg-[#080810] text-slate-200">
+  <div v-else class="min-h-screen bg-[#0f172a] text-slate-200">
     <Navbar />
 
     <main id="main-content" tabindex="-1" class="outline-none">
     <!-- Layout B holiday badge -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 text-center">
       <!-- HOLIDAY-HERO-B-START -->
-      <span class="holiday-badge-b bg-[#13132a] border border-[#4ade80]/30 text-[#4ade80] rounded-full px-4 py-1 text-sm inline-block">⚽ World Cup 2026 Season — Ideas That Score</span>
+      <span class="holiday-badge-b bg-[#1c2d44] border border-[#4ade80]/30 text-[#4ade80] rounded-full px-4 py-1 text-sm inline-block">⚽ World Cup 2026 Season — Ideas That Score</span>
       <!-- HOLIDAY-HERO-B-END -->
     </div>
 
@@ -180,8 +180,8 @@ function ago(d) {
           <span class="text-8xl opacity-20">{{ hero.category?.icon || '📝' }}</span>
         </div>
         <!-- Deep gradient overlay -->
-        <div class="absolute inset-0 bg-gradient-to-t from-[#080810] via-[#080810]/50 to-transparent" />
-        <div class="absolute inset-0 bg-gradient-to-r from-[#080810]/60 to-transparent" />
+        <div class="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-[#0f172a]/50 to-transparent" />
+        <div class="absolute inset-0 bg-gradient-to-r from-[#0f172a]/60 to-transparent" />
 
         <!-- "NEW" badge -->
         <div class="absolute top-6 left-6 md:left-10">
@@ -235,10 +235,10 @@ function ago(d) {
             <span class="w-2 h-2 rounded-full bg-violet-500 animate-pulse"></span>
             <h2 class="text-xs font-bold uppercase tracking-widest text-violet-400">Latest Stories</h2>
           </div>
-          <div class="space-y-0 divide-y divide-[#1e1e3a]">
+          <div class="space-y-0 divide-y divide-[#2d3f5f]">
             <RouterLink v-for="(post, i) in listPosts" :key="post.id" :to="`/blog/${post.slug}`"
-              class="group flex gap-5 py-6 hover:bg-[#0f0f1e] transition-colors rounded-xl px-2 -mx-2">
-              <span class="text-4xl font-black text-[#1e1e3a] group-hover:text-violet-900 transition-colors tabular-nums leading-none mt-1 w-8 flex-shrink-0">
+              class="group flex gap-5 py-6 hover:bg-[#162236] transition-colors rounded-xl px-2 -mx-2">
+              <span class="text-4xl font-black text-[#2d3f5f] group-hover:text-violet-800 transition-colors tabular-nums leading-none mt-1 w-8 flex-shrink-0">
                 {{ String(i + 2).padStart(2, '0') }}
               </span>
               <div class="flex-1 min-w-0">
@@ -247,8 +247,8 @@ function ago(d) {
                 </div>
                 <h3 class="font-bold text-slate-100 group-hover:text-violet-300 transition-colors text-lg leading-snug mb-2"
                   style="font-family:'Playfair Display',serif">{{ post.title }}</h3>
-                <p class="text-slate-500 text-sm line-clamp-2 mb-3">{{ post.excerpt }}</p>
-                <div class="flex items-center gap-3 text-xs text-slate-600">
+                <p class="text-slate-400 text-sm line-clamp-2 mb-3">{{ post.excerpt }}</p>
+                <div class="flex items-center gap-3 text-xs text-slate-400">
                   <span>{{ post.authorName }}</span>
                   <span>·</span>
                   <span>{{ ago(post.createdAt) }}</span>
@@ -264,7 +264,7 @@ function ago(d) {
           </div>
 
           <RouterLink to="/blog"
-            class="mt-8 inline-flex items-center gap-2 border border-[#1e1e3a] hover:border-violet-700 text-slate-400 hover:text-violet-400 px-6 py-3 rounded-full text-sm font-medium transition-all">
+            class="mt-8 inline-flex items-center gap-2 border border-[#2d3f5f] hover:border-violet-500 text-slate-400 hover:text-violet-400 px-6 py-3 rounded-full text-sm font-medium transition-all">
             View all stories
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
           </RouterLink>
@@ -274,12 +274,12 @@ function ago(d) {
         <div class="lg:col-span-5 space-y-4">
           <div class="flex items-center gap-3 mb-8">
             <span class="w-2 h-2 rounded-full bg-slate-600"></span>
-            <h2 class="text-xs font-bold uppercase tracking-widest text-slate-500">More Stories</h2>
+            <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400">More Stories</h2>
           </div>
           <PostCard v-for="post in morePosts.slice(0, 4)" :key="post.id" :post="post" />
 
           <!-- Newsletter (dark variant) -->
-          <div class="mt-6 bg-[#0f0f1e] border border-violet-900/40 rounded-2xl p-6">
+          <div class="mt-6 bg-[#162236] border border-violet-700/40 rounded-2xl p-6">
             <div class="text-violet-400 text-xs font-bold uppercase tracking-widest mb-2">Newsletter</div>
             <h3 class="font-bold text-white text-lg mb-2" style="font-family:'Playfair Display',serif">Stay Ahead</h3>
             <p class="text-slate-400 text-sm mb-4">Daily dispatches from AI, science, and beyond.</p>
@@ -295,8 +295,8 @@ function ago(d) {
 
     <!-- More stories grid (deeper posts) -->
     <section v-if="morePosts.length > 4" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
-      <div class="border-t border-[#1e1e3a] pt-12 mb-8">
-        <h2 class="text-xs font-bold uppercase tracking-widest text-slate-500">Archive</h2>
+      <div class="border-t border-[#2d3f5f] pt-12 mb-8">
+        <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400">Archive</h2>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <PostCard v-for="post in morePosts.slice(4)" :key="post.id" :post="post" />
@@ -305,20 +305,20 @@ function ago(d) {
 
     <!-- Footer (dark) -->
     </main>
-    <footer class="bg-[#050508] border-t border-[#1a1a2e] text-slate-400 mt-8">
+    <footer class="bg-[#090f1d] border-t border-[#1e2d44] text-slate-400 mt-8">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div class="grid grid-cols-1 md:grid-cols-4 gap-12">
           <div class="md:col-span-2">
             <div class="flex items-center gap-2.5 mb-4">
               <span class="text-2xl font-bold text-white tracking-tight" style="font-family:'Playfair Display',serif">Meridian</span>
             </div>
-            <p class="text-slate-500 leading-relaxed text-sm max-w-xs">Where ideas converge. Thoughtful writing on technology, science, history, and the ideas that shape our world.</p>
+            <p class="text-slate-400 leading-relaxed text-sm max-w-xs">Where ideas converge. Thoughtful writing on technology, science, history, and the ideas that shape our world.</p>
           </div>
           <div>
             <h3 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Topics</h3>
             <ul class="space-y-2">
               <li v-for="cat in blog.categories" :key="cat.id">
-                <RouterLink :to="`/category/${cat.slug}`" class="text-slate-500 hover:text-violet-400 text-sm transition-colors flex items-center gap-2">
+                <RouterLink :to="`/category/${cat.slug}`" class="text-slate-400 hover:text-violet-400 text-sm transition-colors flex items-center gap-2">
                   <span>{{ cat.icon }}</span> {{ cat.name }}
                 </RouterLink>
               </li>
@@ -327,15 +327,15 @@ function ago(d) {
           <div>
             <h3 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Quick Links</h3>
             <ul class="space-y-2">
-              <li><RouterLink to="/" class="text-slate-500 hover:text-violet-400 text-sm transition-colors">Home</RouterLink></li>
-              <li><RouterLink to="/blog" class="text-slate-500 hover:text-violet-400 text-sm transition-colors">All Posts</RouterLink></li>
-              <li><RouterLink to="/search" class="text-slate-500 hover:text-violet-400 text-sm transition-colors">Search</RouterLink></li>
-              <li><RouterLink to="/about" class="text-slate-500 hover:text-violet-400 text-sm transition-colors">About</RouterLink></li>
-              <li><RouterLink to="/admin" class="text-slate-500 hover:text-violet-400 text-sm transition-colors">Admin Panel</RouterLink></li>
+              <li><RouterLink to="/" class="text-slate-400 hover:text-violet-400 text-sm transition-colors">Home</RouterLink></li>
+              <li><RouterLink to="/blog" class="text-slate-400 hover:text-violet-400 text-sm transition-colors">All Posts</RouterLink></li>
+              <li><RouterLink to="/search" class="text-slate-400 hover:text-violet-400 text-sm transition-colors">Search</RouterLink></li>
+              <li><RouterLink to="/about" class="text-slate-400 hover:text-violet-400 text-sm transition-colors">About</RouterLink></li>
+              <li><RouterLink to="/admin" class="text-slate-400 hover:text-violet-400 text-sm transition-colors">Admin Panel</RouterLink></li>
             </ul>
           </div>
         </div>
-        <div class="border-t border-[#1a1a2e] mt-12 pt-8 text-center text-sm text-slate-600">
+        <div class="border-t border-[#1e2d44] mt-12 pt-8 text-center text-sm text-slate-400">
           <p>&copy; {{ new Date().getFullYear() }} Meridian. Built with Vue.js &amp; NestJS.</p>
         </div>
       </div>

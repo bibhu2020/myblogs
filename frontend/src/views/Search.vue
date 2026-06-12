@@ -81,18 +81,18 @@ function submitSearch(e) {
 </script>
 
 <template>
-  <div :class="layout.variant === 'b' ? 'min-h-screen bg-[#080810]' : 'min-h-screen bg-gray-50'">
+  <div :class="layout.variant === 'b' ? 'min-h-screen bg-[#0f172a]' : 'min-h-screen bg-gray-50'">
     <Navbar />
     <main id="main-content" tabindex="-1" class="outline-none">
 
     <!-- Search Header -->
-    <div :class="layout.variant === 'b' ? 'bg-[#0d0d1a] border-b border-[#1e1e3a]' : 'bg-white border-b border-gray-200'">
+    <div :class="layout.variant === 'b' ? 'bg-[#111d35] border-b border-[#2d3f5f]' : 'bg-white border-b border-gray-200'">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <h1 class="text-3xl font-bold mb-6" :class="layout.variant === 'b' ? 'text-slate-100' : 'text-gray-900'" style="font-family:'Playfair Display',serif">
           Search Articles
         </h1>
         <form @submit="submitSearch" class="relative max-w-3xl">
-          <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 pointer-events-none" :class="layout.variant === 'b' ? 'text-slate-500' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 pointer-events-none" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
           </svg>
           <input
@@ -102,7 +102,7 @@ function submitSearch(e) {
             aria-label="Search posts by topic, keyword, or author"
             class="w-full pl-12 pr-32 py-3.5 text-base rounded-lg focus:outline-none shadow-sm"
             :class="layout.variant === 'b'
-              ? 'bg-[#13132a] border border-[#1e1e3a] text-slate-200 placeholder-slate-500 focus:ring-2 focus:ring-violet-500 focus:border-transparent'
+              ? 'bg-[#1c2d44] border border-[#2d3f5f] text-slate-200 placeholder-slate-500 focus:ring-2 focus:ring-violet-500 focus:border-transparent'
               : 'border border-gray-300 bg-white focus:ring-2 focus:ring-primary-500 focus:border-transparent'"
             autofocus
           />
@@ -119,8 +119,8 @@ function submitSearch(e) {
 
         <!-- Sidebar Filters -->
         <aside class="hidden lg:block w-60 flex-shrink-0">
-          <div class="rounded-xl shadow-sm p-5 sticky top-24" :class="layout.variant === 'b' ? 'bg-[#0f0f1e] border border-[#1e1e3a]' : 'bg-white border border-gray-200'">
-            <h2 class="text-xs font-bold uppercase tracking-widest mb-4" :class="layout.variant === 'b' ? 'text-slate-500' : 'text-gray-500'">Filter by Topic</h2>
+          <div class="rounded-xl shadow-sm p-5 sticky top-24" :class="layout.variant === 'b' ? 'bg-[#162236] border border-[#2d3f5f]' : 'bg-white border border-gray-200'">
+            <h2 class="text-xs font-bold uppercase tracking-widest mb-4" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">Filter by Topic</h2>
             <ul class="space-y-1">
               <li>
                 <button
@@ -175,7 +175,7 @@ function submitSearch(e) {
 
           <!-- Loading skeleton -->
           <div v-if="loading" class="space-y-4">
-            <div v-for="n in 3" :key="n" class="rounded-xl shadow-sm p-5 flex gap-5 animate-pulse" :class="layout.variant === 'b' ? 'bg-[#0f0f1e] border border-[#1e1e3a]' : 'bg-white border border-gray-200'">
+            <div v-for="n in 3" :key="n" class="rounded-xl shadow-sm p-5 flex gap-5 animate-pulse" :class="layout.variant === 'b' ? 'bg-[#162236] border border-[#2d3f5f]' : 'bg-white border border-gray-200'">
               <div class="w-44 h-28 rounded-lg flex-shrink-0" :class="layout.variant === 'b' ? 'bg-slate-800' : 'bg-gray-200'"></div>
               <div class="flex-1 space-y-3">
                 <div class="h-3 rounded w-24" :class="layout.variant === 'b' ? 'bg-slate-800' : 'bg-gray-200'"></div>
@@ -195,7 +195,7 @@ function submitSearch(e) {
               :to="`/blog/${post.slug}`"
               class="group flex gap-5 rounded-xl shadow-sm transition-all duration-200 p-5 overflow-hidden"
               :class="layout.variant === 'b'
-                ? 'bg-[#0f0f1e] border border-[#1e1e3a] hover:border-violet-800 hover:bg-[#13132a]'
+                ? 'bg-[#162236] border border-[#2d3f5f] hover:border-violet-600 hover:bg-[#1c2d44]'
                 : 'bg-white border border-gray-200 hover:shadow-md hover:border-primary-200'"
             >
               <!-- Thumbnail -->
@@ -243,18 +243,18 @@ function submitSearch(e) {
                 </div>
 
                 <!-- Meta -->
-                <div class="flex items-center gap-3 mt-3 text-xs" :class="layout.variant === 'b' ? 'text-slate-500' : 'text-gray-400'">
+                <div class="flex items-center gap-3 mt-3 text-xs" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">
                   <div class="flex items-center gap-1.5">
                     <div class="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0" :class="layout.variant === 'b' ? 'bg-violet-700' : 'bg-primary-600'">
                       <span class="text-white font-bold text-[10px]">{{ (post.authorName || 'A').charAt(0) }}</span>
                     </div>
                     <span class="font-medium" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-600'">{{ post.authorName }}</span>
                   </div>
-                  <span :class="layout.variant === 'b' ? 'text-slate-700' : 'text-gray-300'">·</span>
+                  <span :class="layout.variant === 'b' ? 'text-slate-500' : 'text-gray-300'">·</span>
                   <span>{{ formatDate(post.createdAt) }}</span>
-                  <span :class="layout.variant === 'b' ? 'text-slate-700' : 'text-gray-300'">·</span>
+                  <span :class="layout.variant === 'b' ? 'text-slate-500' : 'text-gray-300'">·</span>
                   <span>{{ post.readTime || 5 }} min read</span>
-                  <span v-if="post.views" :class="layout.variant === 'b' ? 'text-slate-700' : 'text-gray-300'">·</span>
+                  <span v-if="post.views" :class="layout.variant === 'b' ? 'text-slate-500' : 'text-gray-300'">·</span>
                   <span v-if="post.views" class="flex items-center gap-1">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -268,20 +268,20 @@ function submitSearch(e) {
           </div>
 
           <!-- No results -->
-          <div v-else-if="searched && !loading" class="rounded-xl shadow-sm py-20 text-center" :class="layout.variant === 'b' ? 'bg-[#0f0f1e] border border-[#1e1e3a]' : 'bg-white border border-gray-200'">
+          <div v-else-if="searched && !loading" class="rounded-xl shadow-sm py-20 text-center" :class="layout.variant === 'b' ? 'bg-[#162236] border border-[#2d3f5f]' : 'bg-white border border-gray-200'">
             <div class="text-5xl mb-4">🔍</div>
             <p class="text-lg font-semibold mb-1" :class="layout.variant === 'b' ? 'text-slate-200' : 'text-gray-800'">No results found</p>
-            <p class="text-sm" :class="layout.variant === 'b' ? 'text-slate-500' : 'text-gray-500'">
+            <p class="text-sm" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">
               <span v-if="query">Try different keywords for <span class="font-medium">"{{ query }}"</span></span>
               <span v-else>No posts in this category yet</span>
             </p>
           </div>
 
           <!-- Empty state (not yet searched) -->
-          <div v-else class="rounded-xl shadow-sm py-20 text-center" :class="layout.variant === 'b' ? 'bg-[#0f0f1e] border border-[#1e1e3a]' : 'bg-white border border-gray-200'">
+          <div v-else class="rounded-xl shadow-sm py-20 text-center" :class="layout.variant === 'b' ? 'bg-[#162236] border border-[#2d3f5f]' : 'bg-white border border-gray-200'">
             <div class="text-5xl mb-4">✍️</div>
             <p class="text-base font-semibold mb-1" :class="layout.variant === 'b' ? 'text-slate-200' : 'text-gray-700'">Start typing to search</p>
-            <p class="text-sm" :class="layout.variant === 'b' ? 'text-slate-500' : 'text-gray-400'">Search across all articles, or filter by topic on the left</p>
+            <p class="text-sm" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">Search across all articles, or filter by topic on the left</p>
 
             <!-- Quick category browse -->
             <div class="flex flex-wrap justify-center gap-2 mt-6">

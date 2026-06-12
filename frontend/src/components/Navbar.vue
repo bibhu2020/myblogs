@@ -44,12 +44,12 @@ const isB = () => layout.variant === 'b'
   <!-- Layout B: Holiday banner -->
   <template v-else>
     <!-- HOLIDAY-BANNER-B-START -->
-    <div class="bg-[#0d0d1a] border-b border-[#4ade80]/20 text-[#4ade80] text-center text-sm py-1">⚽ The FIFA World Cup 2026 is here — the world plays as one! 🌍 <span class="opacity-60 ml-1">Jun 11 – Jul 19</span></div>
+    <div class="bg-[#111d35] border-b border-[#4ade80]/20 text-[#4ade80] text-center text-sm py-1">⚽ The FIFA World Cup 2026 is here — the world plays as one! 🌍 <span class="opacity-60 ml-1">Jun 11 – Jul 19</span></div>
     <!-- HOLIDAY-BANNER-B-END -->
   </template>
 
   <nav :class="layout.variant === 'b'
-    ? 'lb-nav bg-[#0d0d1a] border-b border-[#1e1e3a] sticky top-0 z-50'
+    ? 'lb-nav bg-[#111d35] border-b border-[#2d3f5f] sticky top-0 z-50'
     : 'bg-white border-b border-gray-100 sticky top-0 z-50 shadow-sm'">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex justify-between h-16 items-center gap-6">
@@ -107,7 +107,7 @@ const isB = () => layout.variant === 'b'
               id="topics-dropdown"
               role="menu"
               class="absolute top-full left-0 mt-2 w-56 rounded-xl shadow-lg py-2 z-50"
-              :class="layout.variant === 'b' ? 'bg-[#0f0f1e] border border-[#1e1e3a]' : 'bg-white border border-gray-100'"
+              :class="layout.variant === 'b' ? 'bg-[#162236] border border-[#2d3f5f]' : 'bg-white border border-gray-100'"
             >
               <RouterLink
                 v-for="cat in blog.categories" :key="cat.id"

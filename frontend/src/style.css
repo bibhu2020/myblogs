@@ -74,19 +74,19 @@
 }
 
 /* ── Layout B — Dark Magazine ────────────────────────────────────────────── */
-[data-layout="b"] .lb-page        { background: #080810; color: #e2e8f0; min-height: 100vh; }
-[data-layout="b"] .lb-nav         { background: #0d0d1a; border-color: #1e1e3a; }
+[data-layout="b"] .lb-page        { background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+[data-layout="b"] .lb-nav         { background: #111d35; border-color: #2d3f5f; }
 [data-layout="b"] .lb-nav-link    { color: #94a3b8; }
 [data-layout="b"] .lb-nav-link:hover { color: #a78bfa; }
-[data-layout="b"] .lb-surface     { background: #0f0f1e; border: 1px solid #1e1e3a; }
-[data-layout="b"] .lb-surface-2   { background: #13132a; }
+[data-layout="b"] .lb-surface     { background: #162236; border: 1px solid #2d3f5f; }
+[data-layout="b"] .lb-surface-2   { background: #1c2d44; }
 /* LB-ACCENT-START */
 [data-layout="b"] .lb-accent      { color: #4ade80; }
 [data-layout="b"] .lb-accent-bg   { background: #15803d; }
 [data-layout="b"] .lb-accent-bg:hover { background: #166534; }
-[data-layout="b"] .lb-muted       { color: #64748b; }
-[data-layout="b"] .lb-heading     { color: #f8fafc; }
-[data-layout="b"] .lb-card-hover:hover { background: #0a1f0e; border-color: #14532d; }
+[data-layout="b"] .lb-muted       { color: #94a3b8; }
+[data-layout="b"] .lb-heading     { color: #f1f5f9; }
+[data-layout="b"] .lb-card-hover:hover { background: #1c2d44; border-color: #3d5a8a; }
 /* LB-ACCENT-END */
 
 /* HOLIDAY-CSS-START */
@@ -110,6 +110,7 @@ h1, h2 { text-wrap: balance; }
   50%       { box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.25), 0 4px 18px rgba(74, 222, 128, 0.22); }
 }
 :focus-visible { outline: 2px solid #15803d; outline-offset: 2px; }
+[data-layout="b"] :focus-visible { outline: 2px solid #818cf8; outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
   .holiday-badge, .holiday-badge-b {
