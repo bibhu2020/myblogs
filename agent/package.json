@@ -1,0 +1,18 @@
+{
+  "name": "meridian-ai-agent",
+  "version": "1.0.0",
+  "description": "AI agent that researches trending AI topics and publishes rich blog posts to Meridian",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "node-cron": "^3.0.3",
+    "openai": "^4.85.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
