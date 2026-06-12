@@ -20,56 +20,92 @@ const galleryOpen = ref(false)
 const galleryIndex = ref(0)
 
 // ── TTS player ────────────────────────────────────────────────────────────────
-const ttsState    = ref('idle')  // idle | loading | playing
-const ttsProgress = ref(0)       // 0–1
+const ttsState       = ref('idle')  // idle | loading | playing | paused
+const ttsProgress    = ref(0)       // 0–1 across all chunks
 const ttsCurrentTime = ref(0)
 const ttsDuration    = ref(0)
 const playerOpen     = ref(false)
-let ttsAudio = null
-let blobUrl  = null
+let ttsAudio     = null
+let blobUrl      = null
+let playbackLive = false  // set false to abort the chunk loop
 
 function formatTime(s) {
   if (!s || isNaN(s)) return '0:00'
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 }
 
-async function openPlayer() {
-  playerOpen.value = true
-  if (ttsState.value !== 'idle') return
-  ttsState.value = 'loading'
-  ttsProgress.value = 0
-  ttsCurrentTime.value = 0
-  ttsDuration.value = 0
+// Split HTML into sentence-boundary text chunks (~500 chars each)
+function splitChunks(html, maxLen = 500) {
+  const div = document.createElement('div')
+  div.innerHTML = html
+  const full = (div.textContent || div.innerText || '').trim()
+  const chunks = []
+  let remaining = full
+  while (remaining.length > 0) {
+    if (remaining.length <= maxLen) { chunks.push(remaining); break }
+    let cut = remaining.lastIndexOf('. ', maxLen)
+    if (cut < maxLen * 0.4) cut = remaining.lastIndexOf(' ', maxLen)
+    if (cut < 0) cut = maxLen
+    else cut += 1
+    chunks.push(remaining.slice(0, cut).trim())
+    remaining = remaining.slice(cut).trim()
+  }
+  return chunks.filter(Boolean)
+}
 
-  try {
-    const div = document.createElement('div')
-    div.innerHTML = post.value.content
-    const text = (div.textContent || div.innerText || '').trim()
-
-    const res = await api.post('/tts', { text }, { responseType: 'blob' })
-    blobUrl  = URL.createObjectURL(res.data)
-    ttsAudio = new Audio(blobUrl)
+// Play a single blob; resolves when the chunk ends or is interrupted
+function playChunk(blob, chunkIdx, total) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(blob)
+    blobUrl  = url
+    ttsAudio = new Audio(url)
 
     ttsAudio.onloadedmetadata = () => { ttsDuration.value = ttsAudio.duration }
     ttsAudio.ontimeupdate = () => {
+      if (!ttsAudio.duration) return
+      ttsProgress.value    = (chunkIdx + ttsAudio.currentTime / ttsAudio.duration) / total
       ttsCurrentTime.value = ttsAudio.currentTime
-      ttsProgress.value = ttsDuration.value ? ttsAudio.currentTime / ttsDuration.value : 0
     }
-    ttsAudio.onended = () => { ttsState.value = 'idle'; ttsProgress.value = 1 }
-    ttsAudio.onerror = () => { ttsState.value = 'idle' }
+    ttsAudio.onended  = () => { URL.revokeObjectURL(url); blobUrl = null; resolve() }
+    ttsAudio.onerror  = () => { URL.revokeObjectURL(url); blobUrl = null; resolve() }
+    ttsAudio.play().catch(() => resolve())
+  })
+}
 
-    await ttsAudio.play()
-    ttsState.value = 'playing'
-  } catch (e) {
-    console.error('TTS error', e)
-    ttsState.value = 'idle'
+async function openPlayer() {
+  playerOpen.value = true
+  if (ttsState.value !== 'idle') return
+
+  ttsState.value = 'loading'
+  ttsProgress.value = 0
+  playbackLive = true
+
+  const chunks = splitChunks(post.value.content)
+  if (!chunks.length) { ttsState.value = 'idle'; return }
+
+  // Kick off ALL chunk fetches concurrently so later chunks are pre-fetched
+  const fetches = chunks.map(text =>
+    api.post('/tts', { text }, { responseType: 'blob' })
+      .then(r => r.data)
+      .catch(() => null)
+  )
+
+  for (let i = 0; i < fetches.length; i++) {
+    if (!playbackLive) break
+    const blob = await fetches[i]
+    if (!blob || !playbackLive) break
+    if (i === 0) ttsState.value = 'playing'
+    await playChunk(blob, i, fetches.length)
   }
+
+  if (playbackLive) { ttsState.value = 'idle'; ttsProgress.value = 0 }
+  playbackLive = false
 }
 
 function togglePlayPause() {
   if (!ttsAudio) return
   if (ttsState.value === 'playing') { ttsAudio.pause(); ttsState.value = 'paused' }
-  else { ttsAudio.play(); ttsState.value = 'playing' }
+  else if (ttsState.value === 'paused') { ttsAudio.play(); ttsState.value = 'playing' }
 }
 
 function seek(e) {
@@ -79,6 +115,7 @@ function seek(e) {
 }
 
 function closePlayer() {
+  playbackLive = false
   ttsAudio?.pause()
   if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null }
   ttsAudio = null

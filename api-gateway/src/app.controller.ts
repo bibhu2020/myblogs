@@ -8,21 +8,6 @@ import { memoryStorage } from 'multer';
 import { ProxyService } from './proxy.service';
 import { Request as ExpressRequest, Response } from 'express';
 
-function chunkText(text: string, maxLen = 4000): string[] {
-  if (text.length <= maxLen) return [text];
-  const chunks: string[] = [];
-  let remaining = text.trim();
-  while (remaining.length > 0) {
-    if (remaining.length <= maxLen) { chunks.push(remaining); break; }
-    let cut = remaining.lastIndexOf('. ', maxLen);
-    if (cut < maxLen / 2) cut = remaining.lastIndexOf(' ', maxLen);
-    if (cut < 0) cut = maxLen;
-    else cut += 1;
-    chunks.push(remaining.slice(0, cut).trim());
-    remaining = remaining.slice(cut).trim();
-  }
-  return chunks;
-}
 
 @Controller('api')
 export class AppController {
@@ -205,32 +190,50 @@ export class AppController {
     return this.proxy.forward('media', `/media/${id}`, 'DELETE', null, { Authorization: this.getAuthHeader(req) });
   }
 
-  // TEXT-TO-SPEECH
+  // TEXT-TO-SPEECH — one small chunk per request; chunking handled client-side
   @Post('tts')
   async textToSpeech(@Body() body: { text: string }, @Res() res: Response) {
     const text = (body.text || '').trim();
     if (!text) { res.status(400).json({ message: 'text is required' }); return; }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) { res.status(503).json({ message: 'TTS not configured' }); return; }
+    const hfToken   = process.env.HF_TOKEN;
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!hfToken && !openaiKey) {
+      res.status(503).json({ message: 'TTS not configured: set HF_TOKEN or OPENAI_API_KEY' });
+      return;
+    }
 
     try {
-      const chunks = chunkText(text);
-      const buffers: Buffer[] = [];
+      let buf: Buffer;
+      let contentType: string;
 
-      for (const chunk of chunks) {
+      if (hfToken) {
+        // HF Inference API — facebook/mms-tts-eng (fast, lightweight)
+        const r = await fetch(
+          'https://api-inference.huggingface.co/models/facebook/mms-tts-eng',
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${hfToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ inputs: text }),
+          },
+        );
+        if (!r.ok) { res.status(502).json({ message: `HF TTS error: ${await r.text()}` }); return; }
+        contentType = r.headers.get('content-type') || 'audio/flac';
+        buf = Buffer.from(await r.arrayBuffer());
+      } else {
+        // Fallback: OpenAI TTS
         const r = await fetch('https://api.openai.com/v1/audio/speech', {
           method: 'POST',
-          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: 'tts-1', input: chunk, voice: 'alloy' }),
+          headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: 'tts-1', input: text.slice(0, 4096), voice: 'alloy' }),
         });
         if (!r.ok) { res.status(502).json({ message: `OpenAI error: ${await r.text()}` }); return; }
-        buffers.push(Buffer.from(await r.arrayBuffer()));
+        contentType = 'audio/mpeg';
+        buf = Buffer.from(await r.arrayBuffer());
       }
 
-      const audio = Buffer.concat(buffers);
-      res.set({ 'Content-Type': 'audio/mpeg', 'Content-Length': String(audio.length) });
-      res.send(audio);
+      res.set({ 'Content-Type': contentType, 'Content-Length': String(buf.length) });
+      res.send(buf);
     } catch (e) {
       res.status(500).json({ message: 'TTS failed' });
     }
