@@ -197,9 +197,9 @@ export class AppController {
     const text = (body.text || '').trim();
     if (!text) { res.status(400).json({ message: 'text is required' }); return; }
 
-    // SPACE_ID is always set on HuggingFace Spaces — use HF/OpenAI API there instead of local model
-    const onHFSpace = !!process.env.SPACE_ID;
-    const localTts  = !onHFSpace ? process.env.TTS_SERVICE_URL : undefined;
+    // Use local model everywhere when TTS_SERVICE_URL is configured (set by Dockerfile ENV).
+    // Local VITS inference is faster than the HF Inference API even on HF Spaces.
+    const localTts  = process.env.TTS_SERVICE_URL;
     const hfToken   = process.env.HF_TOKEN;
     const openaiKey = process.env.OPENAI_API_KEY;
 

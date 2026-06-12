@@ -20,21 +20,19 @@ const galleryOpen = ref(false)
 const galleryIndex = ref(0)
 
 // ── TTS player ────────────────────────────────────────────────────────────────
-const ttsState       = ref('idle')  // idle | loading | playing | paused
-const ttsProgress    = ref(0)       // 0–1 across all chunks
-const ttsCurrentTime = ref(0)
-const ttsDuration    = ref(0)
+const ttsState       = ref('idle')   // idle | loading | playing | paused
+const ttsProgress    = ref(0)        // 0–1 across all chunks
+const ttsChunkIdx    = ref(0)        // current chunk index (0-based)
+const ttsTotalChunks = ref(0)
 const playerOpen     = ref(false)
-let ttsAudio     = null
-let blobUrl      = null
-let playbackLive = false  // set false to abort the chunk loop
 
-function formatTime(s) {
-  if (!s || isNaN(s)) return '0:00'
-  return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
-}
+// Non-reactive internal state
+let sessionId     = 0         // incremented on each new playback/seek to invalidate old loops
+let currentAudio  = null      // currently playing Audio instance
+let currentBlobUrl = null     // blob URL to revoke on cleanup
+let resolveChunk  = null      // exposes the current playChunk resolver for instant cancellation
+let chunkFetches  = []        // pre-fetch promises — survive seeks so already-fetched chunks are reused
 
-// Split HTML into sentence-boundary text chunks (~500 chars each)
 function splitChunks(html, maxLen = 500) {
   const div = document.createElement('div')
   div.innerHTML = html
@@ -53,74 +51,125 @@ function splitChunks(html, maxLen = 500) {
   return chunks.filter(Boolean)
 }
 
-// Play a single blob; resolves when the chunk ends or is interrupted
-function playChunk(blob, chunkIdx, total) {
+// Plays one blob; resolves when the chunk ends, errors, or is externally cancelled
+// via resolveChunk('cancelled').
+function playChunk(blob, chunkIdx) {
   return new Promise(resolve => {
+    resolveChunk = resolve
     const url = URL.createObjectURL(blob)
-    blobUrl  = url
-    ttsAudio = new Audio(url)
+    currentBlobUrl = url
+    const audio = new Audio(url)
+    currentAudio = audio
 
-    ttsAudio.onloadedmetadata = () => { ttsDuration.value = ttsAudio.duration }
-    ttsAudio.ontimeupdate = () => {
-      if (!ttsAudio.duration) return
-      ttsProgress.value    = (chunkIdx + ttsAudio.currentTime / ttsAudio.duration) / total
-      ttsCurrentTime.value = ttsAudio.currentTime
+    audio.ontimeupdate = () => {
+      if (!audio.duration) return
+      ttsProgress.value = (chunkIdx + audio.currentTime / audio.duration) / ttsTotalChunks.value
     }
-    ttsAudio.onended  = () => { URL.revokeObjectURL(url); blobUrl = null; resolve() }
-    ttsAudio.onerror  = () => { URL.revokeObjectURL(url); blobUrl = null; resolve() }
-    ttsAudio.play().catch(() => resolve())
+    const cleanup = (reason) => {
+      URL.revokeObjectURL(url)
+      if (currentBlobUrl === url) currentBlobUrl = null
+      resolveChunk = null
+      resolve(reason)
+    }
+    audio.onended = () => cleanup('ended')
+    audio.onerror = () => cleanup('error')
+    audio.play().catch(() => cleanup('error'))
   })
+}
+
+// Core loop — runs from startIdx to end of chunks for the given session.
+async function runFrom(startIdx, session) {
+  for (let i = startIdx; i < ttsTotalChunks.value; i++) {
+    if (session !== sessionId) return   // a newer session (seek/stop) took over
+    ttsChunkIdx.value = i
+
+    const blob = await chunkFetches[i]
+    if (session !== sessionId) return
+    if (!blob) break
+
+    ttsState.value = 'playing'
+    await playChunk(blob, i)
+    if (session !== sessionId) return
+  }
+  // Natural end — reset to idle
+  ttsState.value = 'idle'
+  ttsProgress.value = 0
+  ttsChunkIdx.value = 0
+}
+
+// Cancels the current chunk immediately (unblocks the loop so it can check sessionId)
+function cancelCurrentChunk() {
+  currentAudio?.pause()
+  if (currentBlobUrl) { URL.revokeObjectURL(currentBlobUrl); currentBlobUrl = null }
+  currentAudio = null
+  if (resolveChunk) { resolveChunk('cancelled'); resolveChunk = null }
 }
 
 async function openPlayer() {
   playerOpen.value = true
   if (ttsState.value !== 'idle') return
 
-  ttsState.value = 'loading'
-  ttsProgress.value = 0
-  playbackLive = true
-
   const chunks = splitChunks(post.value.content)
-  if (!chunks.length) { ttsState.value = 'idle'; return }
+  if (!chunks.length) return
 
-  // Kick off ALL chunk fetches concurrently so later chunks are pre-fetched
-  const fetches = chunks.map(text =>
+  ttsTotalChunks.value = chunks.length
+  ttsProgress.value = 0
+  ttsChunkIdx.value = 0
+
+  // Kick off ALL fetches concurrently — later chunks are pre-fetched while the first plays
+  chunkFetches = chunks.map(text =>
     api.post('/tts', { text }, { responseType: 'blob' })
       .then(r => r.data)
       .catch(() => null)
   )
 
-  for (let i = 0; i < fetches.length; i++) {
-    if (!playbackLive) break
-    const blob = await fetches[i]
-    if (!blob || !playbackLive) break
-    if (i === 0) ttsState.value = 'playing'
-    await playChunk(blob, i, fetches.length)
-  }
-
-  if (playbackLive) { ttsState.value = 'idle'; ttsProgress.value = 0 }
-  playbackLive = false
+  ttsState.value = 'loading'
+  const session = ++sessionId
+  await runFrom(0, session)
 }
 
 function togglePlayPause() {
-  if (!ttsAudio) return
-  if (ttsState.value === 'playing') { ttsAudio.pause(); ttsState.value = 'paused' }
-  else if (ttsState.value === 'paused') { ttsAudio.play(); ttsState.value = 'playing' }
+  if (!currentAudio) return
+  if (ttsState.value === 'playing') { currentAudio.pause(); ttsState.value = 'paused' }
+  else if (ttsState.value === 'paused') { currentAudio.play(); ttsState.value = 'playing' }
 }
 
-function seek(e) {
-  if (!ttsAudio || !ttsDuration.value) return
-  const r = e.currentTarget.getBoundingClientRect()
-  ttsAudio.currentTime = ((e.clientX - r.left) / r.width) * ttsDuration.value
+// Stop: halt playback and reset to beginning — player stays open
+function stopPlayback() {
+  sessionId++             // invalidate running loop
+  cancelCurrentChunk()
+  ttsState.value = 'idle'
+  ttsProgress.value = 0
+  ttsChunkIdx.value = 0
+}
+
+// Seek: jump to any position (0–1) using already-prefetched blobs
+async function seekTo(fraction) {
+  if (!ttsTotalChunks.value || !chunkFetches.length) return
+  const target = Math.max(0, Math.min(Math.floor(fraction * ttsTotalChunks.value), ttsTotalChunks.value - 1))
+
+  const session = ++sessionId   // invalidate current loop
+  cancelCurrentChunk()
+
+  ttsProgress.value = target / ttsTotalChunks.value
+  ttsChunkIdx.value = target
+  ttsState.value = 'loading'
+
+  // Small yield so the old loop sees the new sessionId before we start the new one
+  await new Promise(r => setTimeout(r, 0))
+  if (session !== sessionId) return  // another seek happened in the meantime
+
+  await runFrom(target, session)
 }
 
 function closePlayer() {
-  playbackLive = false
-  ttsAudio?.pause()
-  if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null }
-  ttsAudio = null
+  sessionId++
+  cancelCurrentChunk()
+  chunkFetches = []
+  ttsTotalChunks.value = 0
   ttsState.value = 'idle'
   ttsProgress.value = 0
+  ttsChunkIdx.value = 0
   playerOpen.value = false
 }
 
@@ -205,35 +254,47 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
         <div v-if="!playerOpen">
           <button @click="openPlayer"
             class="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-semibold hover:bg-primary-700 transition-colors w-full justify-center">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M6 9v6l5-3-5-3z" fill="currentColor" stroke="none"/></svg>
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
             Listen to this article
           </button>
         </div>
         <div v-else class="bg-white rounded-2xl shadow-lg border border-gray-100 p-4">
-          <div class="flex items-center gap-3 mb-3">
-            <div class="flex items-end gap-0.5 h-6" aria-hidden="true">
+          <!-- Header row -->
+          <div class="flex items-center gap-2 mb-3">
+            <div class="flex items-end gap-0.5 h-5 flex-shrink-0" aria-hidden="true">
               <span v-for="i in 4" :key="i" class="w-1 bg-primary-500 rounded-full"
-                :class="ttsState === 'playing' ? 'tts-bar' : 'h-1'"
+                :class="ttsState === 'playing' ? 'tts-bar' : 'h-1 opacity-40'"
                 :style="ttsState === 'playing' ? `animation-delay:${i * 80}ms` : ''"></span>
             </div>
             <p class="text-sm font-semibold text-gray-800 truncate flex-1">{{ post.title }}</p>
-            <button @click="closePlayer" class="text-gray-400 hover:text-gray-600 flex-shrink-0">
+            <span v-if="ttsTotalChunks" class="text-xs text-gray-400 flex-shrink-0">{{ ttsChunkIdx + 1 }}/{{ ttsTotalChunks }}</span>
+            <button @click="closePlayer" class="text-gray-400 hover:text-gray-600 flex-shrink-0 ml-1">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
           </div>
-          <!-- progress bar -->
-          <div class="h-1.5 bg-gray-200 rounded-full cursor-pointer mb-2" @click="seek">
-            <div class="h-full bg-primary-500 rounded-full transition-all" :style="{ width: ttsProgress * 100 + '%' }"></div>
-          </div>
-          <div class="flex items-center justify-between">
-            <span class="text-xs text-gray-400">{{ formatTime(ttsCurrentTime) }} / {{ formatTime(ttsDuration) }}</span>
+          <!-- Seek slider -->
+          <input type="range" min="0" max="100"
+            :value="Math.round(ttsProgress * 100)"
+            :disabled="ttsState === 'loading'"
+            class="tts-slider w-full mb-3"
+            @change="seekTo($event.target.value / 100)" />
+          <!-- Controls -->
+          <div class="flex items-center gap-2">
+            <!-- Stop -->
+            <button @click="stopPlayback" :disabled="ttsState === 'idle' || ttsState === 'loading'"
+              class="flex items-center justify-center w-8 h-8 rounded-lg transition-colors"
+              :class="ttsState === 'idle' || ttsState === 'loading' ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'"
+              title="Stop">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+            </button>
+            <!-- Play / Pause -->
             <button @click="ttsState === 'loading' ? null : togglePlayPause()"
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-              :class="ttsState === 'loading' ? 'bg-gray-100 text-gray-400' : 'bg-primary-600 text-white hover:bg-primary-700'">
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex-1 justify-center"
+              :class="ttsState === 'loading' ? 'bg-gray-100 text-gray-400 cursor-wait' : 'bg-primary-600 text-white hover:bg-primary-700'">
               <svg v-if="ttsState === 'loading'" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
               <svg v-else-if="ttsState === 'playing'" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
               <svg v-else class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-              {{ ttsState === 'loading' ? 'Loading…' : ttsState === 'playing' ? 'Pause' : 'Play' }}
+              {{ ttsState === 'loading' ? 'Loading…' : ttsState === 'playing' ? 'Pause' : 'Resume' }}
             </button>
           </div>
         </div>
@@ -335,15 +396,16 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
 
         <!-- Sliding player panel -->
         <div class="overflow-hidden transition-all duration-300 ease-in-out"
-          :style="playerOpen ? 'width:280px' : 'width:0'">
-          <div class="w-[280px] h-full bg-white border-l border-gray-100 flex flex-col p-5 gap-4">
+          :style="playerOpen ? 'width:288px' : 'width:0'">
+          <div class="w-[288px] h-full bg-white border-l border-gray-100 flex flex-col p-5 gap-4">
+
             <!-- Header -->
             <div class="flex items-start justify-between gap-2">
               <div>
                 <p class="text-xs font-semibold text-primary-600 uppercase tracking-wider mb-0.5">Now reading</p>
                 <p class="text-sm font-bold text-gray-900 leading-snug line-clamp-2">{{ post.title }}</p>
               </div>
-              <button @click="closePlayer" class="text-gray-300 hover:text-gray-500 flex-shrink-0 mt-0.5">
+              <button @click="closePlayer" class="text-gray-300 hover:text-gray-600 flex-shrink-0 mt-0.5" title="Close">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
               </button>
             </div>
@@ -355,36 +417,55 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
                 :style="ttsState === 'playing' ? `animation-delay:${i * 60}ms` : ''"></span>
             </div>
 
-            <!-- Progress bar -->
+            <!-- Seek slider -->
             <div>
-              <div class="h-1.5 bg-gray-100 rounded-full cursor-pointer" @click="seek">
-                <div class="h-full bg-primary-500 rounded-full transition-all" :style="{ width: ttsProgress * 100 + '%' }"></div>
-              </div>
+              <input type="range" min="0" max="100"
+                :value="Math.round(ttsProgress * 100)"
+                :disabled="ttsState === 'loading' || ttsState === 'idle'"
+                class="tts-slider w-full"
+                @change="seekTo($event.target.value / 100)" />
               <div class="flex justify-between mt-1.5 text-xs text-gray-400">
-                <span>{{ formatTime(ttsCurrentTime) }}</span>
-                <span>{{ formatTime(ttsDuration) }}</span>
+                <span v-if="ttsTotalChunks">Segment {{ ttsChunkIdx + 1 }} / {{ ttsTotalChunks }}</span>
+                <span v-else>—</span>
+                <span>{{ Math.round(ttsProgress * 100) }}%</span>
               </div>
             </div>
 
-            <!-- Controls -->
-            <div class="flex items-center justify-center">
+            <!-- Controls: Stop + Play/Pause -->
+            <div class="flex items-center justify-center gap-3">
+              <!-- Stop button -->
+              <button @click="stopPlayback"
+                :disabled="ttsState === 'idle' || ttsState === 'loading'"
+                class="flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all"
+                :class="ttsState === 'idle' || ttsState === 'loading'
+                  ? 'border-gray-200 text-gray-300 cursor-not-allowed'
+                  : 'border-gray-300 text-gray-600 hover:border-gray-500 hover:text-gray-800'"
+                title="Stop (return to beginning)">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <rect x="4" y="4" width="16" height="16" rx="2"/>
+                </svg>
+              </button>
+
+              <!-- Play / Pause button -->
               <button @click="ttsState === 'loading' ? null : togglePlayPause()"
-                class="flex items-center justify-center w-12 h-12 rounded-full transition-all"
-                :class="ttsState === 'loading' ? 'bg-gray-100 text-gray-400 cursor-wait' : 'bg-primary-600 text-white hover:bg-primary-700 hover:scale-105'">
-                <svg v-if="ttsState === 'loading'" class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                class="flex items-center justify-center w-14 h-14 rounded-full transition-all"
+                :class="ttsState === 'loading'
+                  ? 'bg-gray-100 text-gray-400 cursor-wait'
+                  : 'bg-primary-600 text-white hover:bg-primary-700 hover:scale-105 active:scale-95'">
+                <svg v-if="ttsState === 'loading'" class="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
                 </svg>
-                <svg v-else-if="ttsState === 'playing'" class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <svg v-else-if="ttsState === 'playing'" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
                 </svg>
-                <svg v-else class="w-5 h-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                <svg v-else class="w-6 h-6 ml-1" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M8 5v14l11-7z"/>
                 </svg>
               </button>
             </div>
 
-            <p class="text-xs text-gray-400 text-center">Powered by OpenAI TTS</p>
+            <p class="text-xs text-gray-400 text-center">Powered by local AI</p>
           </div>
         </div>
       </div>
@@ -401,5 +482,52 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
 }
 .tts-bar {
   animation: tts-wave 0.8s ease-in-out infinite;
+}
+
+/* Range slider — cross-browser consistent styling */
+.tts-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 9999px;
+  background: #e5e7eb;
+  outline: none;
+  cursor: pointer;
+  background-image: linear-gradient(var(--color-primary-500, #3b82f6), var(--color-primary-500, #3b82f6));
+  background-size: v-bind("Math.round(ttsProgress * 100) + '% 100%'");
+  background-repeat: no-repeat;
+}
+.tts-slider:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.tts-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-primary-600, #2563eb);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+  transition: transform 0.1s;
+}
+.tts-slider:not(:disabled)::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+.tts-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-primary-600, #2563eb);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+}
+.tts-slider::-moz-range-progress {
+  background: var(--color-primary-500, #3b82f6);
+  height: 6px;
+  border-radius: 9999px;
 }
 </style>
