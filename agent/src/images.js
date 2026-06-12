@@ -21,15 +21,43 @@ function makeAgentJWT() {
   return `${header}.${body}.${sig}`;
 }
 
+// DALL-E 3 valid sizes: 1024x1024, 1792x1024, 1024x1792
+// DALL-E 2 valid sizes: 256x256, 512x512, 1024x1024
+const DALLE3_SIZES = new Set(['1024x1024', '1792x1024', '1024x1792']);
+
 async function generateDalleImage(prompt, size = '1792x1024') {
-  const response = await openai.images.generate({
-    model: 'dall-e-3',
-    prompt: `${prompt.slice(0, 900)}. Professional, high-quality, no text overlays, no watermarks.`,
-    size,
-    quality: 'hd',
-    n: 1,
-  });
-  return response.data[0].url;
+  const safePrompt = `${prompt.slice(0, 900)}. Professional, high-quality, no text overlays, no watermarks.`;
+
+  // Try DALL-E 3 first (requires Tier 1 — $5 cumulative spend)
+  try {
+    const resp = await openai.images.generate({
+      model: 'dall-e-3',
+      prompt: safePrompt,
+      size: DALLE3_SIZES.has(size) ? size : '1024x1024',
+      quality: 'hd',
+      n: 1,
+    });
+    return resp.data[0].url;
+  } catch (err) {
+    if (!err.message?.includes('does not exist') && !err.message?.includes('model')) throw err;
+    console.warn('  ⚠️  DALL-E 3 unavailable (Tier 1 required), falling back to DALL-E 2');
+  }
+
+  // DALL-E 2 fallback — only supports square sizes up to 1024
+  try {
+    const resp = await openai.images.generate({
+      model: 'dall-e-2',
+      prompt: safePrompt.slice(0, 1000),
+      size: '1024x1024',
+      n: 1,
+    });
+    return resp.data[0].url;
+  } catch (err) {
+    console.warn(`  ⚠️  DALL-E 2 also failed (${err.message}), using Unsplash fallback`);
+  }
+
+  // Both DALL-E models unavailable — return null so caller can skip image gracefully
+  return null;
 }
 
 async function uploadToMediaService(dalleUrl, altText, serverBase) {
@@ -69,6 +97,10 @@ async function uploadToMediaService(dalleUrl, altText, serverBase) {
 export async function generateFeaturedImage(prompt, serverBase) {
   console.log('🎨 Generating featured image (1792×1024)...');
   const dalleUrl = await generateDalleImage(prompt, '1792x1024');
+  if (!dalleUrl) {
+    console.warn('  ⚠️  No image model available — post will publish without a featured image');
+    return null;
+  }
   const url = await uploadToMediaService(dalleUrl, prompt.slice(0, 120), serverBase);
   console.log(`✅ Featured image: ${url}`);
   return url;
@@ -91,6 +123,11 @@ export async function processInlineImages(content, serverBase) {
     try {
       console.log(`  → "${alt.slice(0, 60)}..."`);
       const dalleUrl = await generateDalleImage(prompt.trim(), '1024x1024');
+      if (!dalleUrl) {
+        console.warn('  ⚠️  No image model available — removing placeholder');
+        processed = processed.replace(fullMatch, '');
+        continue;
+      }
       const url = await uploadToMediaService(dalleUrl, alt, serverBase);
 
       const tag =

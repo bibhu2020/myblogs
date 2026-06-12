@@ -158,16 +158,18 @@ export async function runAgent() {
 
   // 8. Publish via MCP
   console.log('\n📡 Publishing post...');
-  const rawPublished = await mcpCall('create_blog', {
+  const createArgs = {
     title: post.title,
     content: finalContent,
     excerpt: post.excerpt,
     category_id: categoryId,
     tag_ids: tagIds,
-    featured_image: featuredImage,
     status: 'published',
     author_name: authorName,
-  });
+  };
+  if (featuredImage) createArgs.featured_image = featuredImage;
+
+  const rawPublished = await mcpCall('create_blog', createArgs);
   const published = parsePublishedPost(rawPublished);
 
   const elapsed = Math.round((Date.now() - t0) / 1000);
@@ -179,7 +181,7 @@ export async function runAgent() {
   console.log(`  Title:   ${post.title}`);
   console.log(`  Slug:    ${slug}`);
   console.log(`  Author:  ${authorName}`);
-  console.log(`  Image:   ${featuredImage}`);
+  if (featuredImage) console.log(`  Image:   ${featuredImage}`);
   console.log(`  Time:    ${elapsed}s\n`);
 
   return published;
