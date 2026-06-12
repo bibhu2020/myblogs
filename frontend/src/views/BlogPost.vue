@@ -19,33 +19,72 @@ const commentSubmitted = ref(false)
 const galleryOpen = ref(false)
 const galleryIndex = ref(0)
 
-const ttsState = ref('idle') // idle | loading | playing
+// ── TTS player ────────────────────────────────────────────────────────────────
+const ttsState    = ref('idle')  // idle | loading | playing
+const ttsProgress = ref(0)       // 0–1
+const ttsCurrentTime = ref(0)
+const ttsDuration    = ref(0)
+const playerOpen     = ref(false)
 let ttsAudio = null
+let blobUrl  = null
 
-async function toggleTTS() {
-  if (ttsState.value === 'playing') {
-    ttsAudio?.pause()
-    ttsAudio = null
-    ttsState.value = 'idle'
-    return
-  }
+function formatTime(s) {
+  if (!s || isNaN(s)) return '0:00'
+  return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+}
 
+async function openPlayer() {
+  playerOpen.value = true
+  if (ttsState.value !== 'idle') return
   ttsState.value = 'loading'
+  ttsProgress.value = 0
+  ttsCurrentTime.value = 0
+  ttsDuration.value = 0
+
   try {
     const div = document.createElement('div')
     div.innerHTML = post.value.content
-    const text = div.textContent || div.innerText || ''
+    const text = (div.textContent || div.innerText || '').trim()
 
     const res = await api.post('/tts', { text }, { responseType: 'blob' })
-    const url = URL.createObjectURL(res.data)
-    ttsAudio = new Audio(url)
-    ttsAudio.onended = () => { ttsState.value = 'idle'; URL.revokeObjectURL(url) }
+    blobUrl  = URL.createObjectURL(res.data)
+    ttsAudio = new Audio(blobUrl)
+
+    ttsAudio.onloadedmetadata = () => { ttsDuration.value = ttsAudio.duration }
+    ttsAudio.ontimeupdate = () => {
+      ttsCurrentTime.value = ttsAudio.currentTime
+      ttsProgress.value = ttsDuration.value ? ttsAudio.currentTime / ttsDuration.value : 0
+    }
+    ttsAudio.onended = () => { ttsState.value = 'idle'; ttsProgress.value = 1 }
     ttsAudio.onerror = () => { ttsState.value = 'idle' }
+
     await ttsAudio.play()
     ttsState.value = 'playing'
-  } catch {
+  } catch (e) {
+    console.error('TTS error', e)
     ttsState.value = 'idle'
   }
+}
+
+function togglePlayPause() {
+  if (!ttsAudio) return
+  if (ttsState.value === 'playing') { ttsAudio.pause(); ttsState.value = 'paused' }
+  else { ttsAudio.play(); ttsState.value = 'playing' }
+}
+
+function seek(e) {
+  if (!ttsAudio || !ttsDuration.value) return
+  const r = e.currentTarget.getBoundingClientRect()
+  ttsAudio.currentTime = ((e.clientX - r.left) / r.width) * ttsDuration.value
+}
+
+function closePlayer() {
+  ttsAudio?.pause()
+  if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null }
+  ttsAudio = null
+  ttsState.value = 'idle'
+  ttsProgress.value = 0
+  playerOpen.value = false
 }
 
 function applyHighlighting() {
@@ -121,25 +160,45 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
             {{ post.views }} views
           </span>
-          <span>·</span>
-          <button @click="toggleTTS" :disabled="ttsState === 'loading'"
-            class="flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium transition-colors"
-            :class="ttsState === 'playing' ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-600 hover:bg-primary-50 hover:text-primary-600'">
-            <!-- loading spinner -->
-            <svg v-if="ttsState === 'loading'" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-            </svg>
-            <!-- stop icon -->
-            <svg v-else-if="ttsState === 'playing'" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-              <rect x="6" y="6" width="12" height="12" rx="1"/>
-            </svg>
-            <!-- play/speaker icon -->
-            <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072M12 6v12m0 0l-3-3m3 3l3-3M9 9H6a1 1 0 00-1 1v4a1 1 0 001 1h3l4 4V5L9 9z"/>
-            </svg>
-            {{ ttsState === 'loading' ? 'Loading…' : ttsState === 'playing' ? 'Stop' : 'Listen' }}
+        </div>
+      </div>
+
+      <!-- Mobile TTS player — above hero image -->
+      <div class="sm:hidden mb-6">
+        <div v-if="!playerOpen">
+          <button @click="openPlayer"
+            class="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-semibold hover:bg-primary-700 transition-colors w-full justify-center">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M6 9v6l5-3-5-3z" fill="currentColor" stroke="none"/></svg>
+            Listen to this article
           </button>
+        </div>
+        <div v-else class="bg-white rounded-2xl shadow-lg border border-gray-100 p-4">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="flex items-end gap-0.5 h-6" aria-hidden="true">
+              <span v-for="i in 4" :key="i" class="w-1 bg-primary-500 rounded-full"
+                :class="ttsState === 'playing' ? 'tts-bar' : 'h-1'"
+                :style="ttsState === 'playing' ? `animation-delay:${i * 80}ms` : ''"></span>
+            </div>
+            <p class="text-sm font-semibold text-gray-800 truncate flex-1">{{ post.title }}</p>
+            <button @click="closePlayer" class="text-gray-400 hover:text-gray-600 flex-shrink-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <!-- progress bar -->
+          <div class="h-1.5 bg-gray-200 rounded-full cursor-pointer mb-2" @click="seek">
+            <div class="h-full bg-primary-500 rounded-full transition-all" :style="{ width: ttsProgress * 100 + '%' }"></div>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-gray-400">{{ formatTime(ttsCurrentTime) }} / {{ formatTime(ttsDuration) }}</span>
+            <button @click="ttsState === 'loading' ? null : togglePlayPause()"
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+              :class="ttsState === 'loading' ? 'bg-gray-100 text-gray-400' : 'bg-primary-600 text-white hover:bg-primary-700'">
+              <svg v-if="ttsState === 'loading'" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+              <svg v-else-if="ttsState === 'playing'" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
+              <svg v-else class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              {{ ttsState === 'loading' ? 'Loading…' : ttsState === 'playing' ? 'Pause' : 'Play' }}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -222,6 +281,88 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
       <button @click="galleryIndex = (galleryIndex + 1) % getGallery().length" class="absolute right-4 text-white text-3xl p-2">&#8250;</button>
     </div>
 
+    <!-- Desktop TTS sliding panel — fixed right side, hidden on mobile -->
+    <Teleport to="body">
+      <div v-if="post" class="hidden sm:flex fixed right-0 top-1/2 -translate-y-1/2 z-50 items-stretch drop-shadow-2xl">
+        <!-- Always-visible tab -->
+        <button @click="playerOpen ? closePlayer() : openPlayer()"
+          class="flex flex-col items-center justify-center gap-2 w-10 rounded-l-2xl py-5 transition-colors"
+          :class="playerOpen ? 'bg-primary-700 text-white' : 'bg-primary-600 text-white hover:bg-primary-700'">
+          <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+          </svg>
+          <span class="text-[10px] font-bold tracking-wider" style="writing-mode:vertical-lr;transform:rotate(180deg)">
+            {{ playerOpen ? 'CLOSE' : 'LISTEN' }}
+          </span>
+        </button>
+
+        <!-- Sliding player panel -->
+        <div class="overflow-hidden transition-all duration-300 ease-in-out"
+          :style="playerOpen ? 'width:280px' : 'width:0'">
+          <div class="w-[280px] h-full bg-white border-l border-gray-100 flex flex-col p-5 gap-4">
+            <!-- Header -->
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <p class="text-xs font-semibold text-primary-600 uppercase tracking-wider mb-0.5">Now reading</p>
+                <p class="text-sm font-bold text-gray-900 leading-snug line-clamp-2">{{ post.title }}</p>
+              </div>
+              <button @click="closePlayer" class="text-gray-300 hover:text-gray-500 flex-shrink-0 mt-0.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+
+            <!-- Waveform animation -->
+            <div class="flex items-end justify-center gap-1 h-10" aria-hidden="true">
+              <span v-for="i in 12" :key="i" class="w-1.5 bg-primary-400 rounded-full"
+                :class="ttsState === 'playing' ? 'tts-bar' : 'h-1.5 opacity-30'"
+                :style="ttsState === 'playing' ? `animation-delay:${i * 60}ms` : ''"></span>
+            </div>
+
+            <!-- Progress bar -->
+            <div>
+              <div class="h-1.5 bg-gray-100 rounded-full cursor-pointer" @click="seek">
+                <div class="h-full bg-primary-500 rounded-full transition-all" :style="{ width: ttsProgress * 100 + '%' }"></div>
+              </div>
+              <div class="flex justify-between mt-1.5 text-xs text-gray-400">
+                <span>{{ formatTime(ttsCurrentTime) }}</span>
+                <span>{{ formatTime(ttsDuration) }}</span>
+              </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="flex items-center justify-center">
+              <button @click="ttsState === 'loading' ? null : togglePlayPause()"
+                class="flex items-center justify-center w-12 h-12 rounded-full transition-all"
+                :class="ttsState === 'loading' ? 'bg-gray-100 text-gray-400 cursor-wait' : 'bg-primary-600 text-white hover:bg-primary-700 hover:scale-105'">
+                <svg v-if="ttsState === 'loading'" class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+                <svg v-else-if="ttsState === 'playing'" class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+                </svg>
+                <svg v-else class="w-5 h-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+              </button>
+            </div>
+
+            <p class="text-xs text-gray-400 text-center">Powered by OpenAI TTS</p>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <Footer />
   </div>
 </template>
+
+<style scoped>
+@keyframes tts-wave {
+  0%, 100% { height: 4px; }
+  50%       { height: 24px; }
+}
+.tts-bar {
+  animation: tts-wave 0.8s ease-in-out infinite;
+}
+</style>
