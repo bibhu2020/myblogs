@@ -28,6 +28,12 @@ function formatDate(d) { return format(new Date(d), 'MMM d, yyyy') }
   <div class="min-h-screen bg-white">
     <Navbar />
 
+    <!-- HOLIDAY-HERO-START -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 text-center">
+      <span class="holiday-badge bg-primary-50 text-primary-800 border border-primary-200 rounded-full px-4 py-1 text-sm inline-block">Honoring Juneteenth: freedom, resilience, and community ✊🎉</span>
+    </div>
+    <!-- HOLIDAY-HERO-END -->
+
     <!-- Hero -->
     <section v-if="blog.featured.length" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-16">
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">

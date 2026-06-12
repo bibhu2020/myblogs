@@ -72,3 +72,10 @@
   background: #484f58;
   color: #e6edf3;
 }
+
+/* HOLIDAY-CSS-START */
+/* Juneteenth: warm red/gold festive accents */
+body { background: linear-gradient(180deg, #fffaf5 0%, #ffffff 240px); }
+h1, h2 { text-wrap: balance; }
+.holiday-badge { box-shadow: 0 1px 8px rgba(220, 38, 38, 0.18); }
+/* HOLIDAY-CSS-END */

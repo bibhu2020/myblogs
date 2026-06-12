@@ -44,6 +44,9 @@ const blog = useBlogStore()
         </div>
       </div>
       <div class="border-t border-gray-800 mt-12 pt-8 text-center text-sm">
+        <!-- HOLIDAY-FOOTER-START -->
+        <p class="text-primary-400 mb-2">Wishing our readers a meaningful Juneteenth ✊</p>
+        <!-- HOLIDAY-FOOTER-END -->
         <p>&copy; {{ new Date().getFullYear() }} Meridian. Built with Vue.js &amp; NestJS.</p>
       </div>
     </div>

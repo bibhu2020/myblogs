@@ -32,7 +32,7 @@ function submitSearch(e) {
 
 <template>
   <!-- HOLIDAY-BANNER-START -->
-  <div class="bg-primary-700 text-white text-center text-sm py-1">Celebrating Juneteenth — Freedom Day ✊</div>
+  <div class="bg-gradient-to-r from-primary-700 via-primary-600 to-primary-800 text-white text-center text-sm py-1">Celebrating Juneteenth — Freedom Day ✊ June 19</div>
   <!-- HOLIDAY-BANNER-END -->
   <nav class="bg-white border-b border-gray-100 sticky top-0 z-50 shadow-sm">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
