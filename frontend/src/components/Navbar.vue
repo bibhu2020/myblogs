@@ -41,6 +41,12 @@ const isB = () => layout.variant === 'b'
     <div class="bg-gradient-to-r from-primary-700 via-primary-600 to-primary-700 text-white text-center text-sm py-1">⚽ The FIFA World Cup 2026 is here — the world plays as one! 🌍 <span class="opacity-75 ml-1">Jun 11 – Jul 19</span></div>
     <!-- HOLIDAY-BANNER-END -->
   </template>
+  <!-- Layout B: Holiday banner -->
+  <template v-else>
+    <!-- HOLIDAY-BANNER-B-START -->
+    <div class="bg-[#0d0d1a] border-b border-[#4ade80]/20 text-[#4ade80] text-center text-sm py-1">⚽ The FIFA World Cup 2026 is here — the world plays as one! 🌍 <span class="opacity-60 ml-1">Jun 11 – Jul 19</span></div>
+    <!-- HOLIDAY-BANNER-B-END -->
+  </template>
 
   <nav :class="layout.variant === 'b'
     ? 'lb-nav bg-[#0d0d1a] border-b border-[#1e1e3a] sticky top-0 z-50'

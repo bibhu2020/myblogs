@@ -156,8 +156,15 @@ function ago(d) {
   <!-- ══════════════════════════════════════════════════════════════════════ -->
   <!--  LAYOUT B — Dark Magazine                                             -->
   <!-- ══════════════════════════════════════════════════════════════════════ -->
-  <div v-else class="min-h-screen bg-[#080810] text-slate-200">
+  <div v-else id="main-content-b" class="min-h-screen bg-[#080810] text-slate-200">
     <Navbar />
+
+    <!-- Layout B holiday badge -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 text-center">
+      <!-- HOLIDAY-HERO-B-START -->
+      <span class="holiday-badge-b bg-[#13132a] border border-[#4ade80]/30 text-[#4ade80] rounded-full px-4 py-1 text-sm inline-block">⚽ World Cup 2026 Season — Ideas That Score</span>
+      <!-- HOLIDAY-HERO-B-END -->
+    </div>
 
     <!-- Full-bleed hero: the single latest post dominates -->
     <section v-if="hero" class="relative">
