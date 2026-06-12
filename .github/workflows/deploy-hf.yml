@@ -12,6 +12,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ── Sync GitHub secrets → HF Space secrets ────────────────────────────
+      # Each secret is pushed via the HF API so the Space container sees the
+      # same values as the local .env without any manual HF UI steps.
+      - name: Sync secrets to HF Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          MCP_API_KEY: ${{ secrets.MCP_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_TOKEN_SECRET: ${{ secrets.GITHUB_TOKEN_SECRET }}
+        run: |
+          SPACE="mishrabp/myblogs"
+          HF_API="https://huggingface.co/api/spaces/${SPACE}/secrets"
+
+          push_secret() {
+            local key="$1" val="$2"
+            [ -z "$val" ] && return
+            curl -s -X PUT "$HF_API" \
+              -H "Authorization: Bearer ${HF_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "{\"key\":\"${key}\",\"value\":\"${val}\"}" | grep -v '"error"' || true
+            echo "  pushed ${key}"
+          }
+
+          echo "Syncing secrets to HF Space ${SPACE}..."
+          push_secret DATABASE_URL    "$DATABASE_URL"
+          push_secret MCP_API_KEY     "$MCP_API_KEY"
+          push_secret OPENAI_API_KEY  "$OPENAI_API_KEY"
+          push_secret GITHUB_TOKEN    "$GITHUB_TOKEN_SECRET"
+          echo "Done."
+
+      # ── Push code to HF Spaces ────────────────────────────────────────────
+      # Orphan commit strips git history so HF never sees old binary files
+      # (db files, media uploads) that were previously committed.
       - name: Push to Hugging Face Spaces
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -19,8 +53,6 @@ jobs:
           git config user.email "ci@github.com"
           git config user.name "GitHub Actions"
 
-          # Create an orphan commit (no history) so HF never sees old commits
-          # that contained binary files (db files, media uploads).
           git checkout --orphan hf-deploy
 
           # Remove db and upload files from the index before committing
