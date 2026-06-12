@@ -39,6 +39,11 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
+# agent — no compile step, just install deps
+WORKDIR /app/agent
+COPY agent/package*.json ./
+RUN npm ci --omit=dev
+
 # ── Production ────────────────────────────────────────────────────────────────
 FROM node:20-slim
 
@@ -97,6 +102,13 @@ COPY api-gateway/package.json                     /app/api-gateway/
 
 # Frontend static files
 COPY --from=builder /app/frontend/dist /app/frontend/dist
+
+# agent
+COPY --from=builder /app/agent/node_modules /app/agent/node_modules
+COPY agent/package.json  /app/agent/
+COPY agent/index.js      /app/agent/
+COPY agent/schedule.js   /app/agent/
+COPY agent/src/          /app/agent/src/
 
 # nginx: remove Debian defaults, install our config
 RUN rm -f /etc/nginx/sites-enabled/default /etc/nginx/conf.d/default.conf
