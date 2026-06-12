@@ -133,9 +133,9 @@ export async function runAgent() {
   console.log();
 
   // 3. Research
-  const trend = await discoverTrend();
+  const trendResult = await discoverTrend();
   console.log();
-  const research = await deepResearch(trend);
+  const research = await deepResearch(trendResult);
   console.log();
 
   // 4. Write post

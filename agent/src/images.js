@@ -93,7 +93,7 @@ async function tryGemini(prompt) {
   if (!apiKey) throw new Error('GEMINI_API_KEY not set');
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-preview-image-generation' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-image' });
 
   const response = await model.generateContent({
     contents: [{ role: 'user', parts: [{ text: prompt.slice(0, 1000) }] }],
