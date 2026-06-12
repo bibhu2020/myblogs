@@ -1,14 +1,13 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
 import { useBlogStore } from '../stores/blog'
+import { useLayoutStore } from '../stores/layout'
 import Navbar from '../components/Navbar.vue'
 import Footer from '../components/Footer.vue'
 import PostCard from '../components/PostCard.vue'
 
 const blog = useBlogStore()
-const route = useRoute()
-const router = useRouter()
+const layout = useLayoutStore()
 const page = ref(1)
 
 onMounted(async () => {
@@ -24,19 +23,19 @@ watch(page, loadPosts)
 </script>
 
 <template>
-  <div class="min-h-screen bg-white">
+  <div :class="layout.variant === 'b' ? 'min-h-screen bg-[#080810]' : 'min-h-screen bg-white'">
     <Navbar />
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div class="mb-10">
-        <h1 class="text-4xl font-bold text-gray-900 mb-3" style="font-family:'Playfair Display',serif">All Posts</h1>
-        <p class="text-gray-500">{{ blog.pagination.total }} articles on technology, travel, and more</p>
+        <h1 class="text-4xl font-bold mb-3" :class="layout.variant === 'b' ? 'text-slate-100' : 'text-gray-900'" style="font-family:'Playfair Display',serif">All Posts</h1>
+        <p :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">{{ blog.pagination.total }} articles on technology, travel, and more</p>
       </div>
 
       <div v-if="blog.loading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <div v-for="i in 6" :key="i" class="animate-pulse">
-          <div class="bg-gray-200 rounded-2xl aspect-[16/10] mb-4"></div>
-          <div class="h-4 bg-gray-200 rounded mb-2"></div>
-          <div class="h-4 bg-gray-200 rounded w-2/3"></div>
+          <div class="rounded-2xl aspect-[16/10] mb-4" :class="layout.variant === 'b' ? 'bg-slate-800' : 'bg-gray-200'"></div>
+          <div class="h-4 rounded mb-2" :class="layout.variant === 'b' ? 'bg-slate-800' : 'bg-gray-200'"></div>
+          <div class="h-4 rounded w-2/3" :class="layout.variant === 'b' ? 'bg-slate-800' : 'bg-gray-200'"></div>
         </div>
       </div>
 
@@ -52,7 +51,9 @@ watch(page, loadPosts)
             :key="p"
             @click="page = p"
             class="w-10 h-10 rounded-full text-sm font-medium transition-colors"
-            :class="p === page ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+            :class="p === page
+              ? (layout.variant === 'b' ? 'bg-violet-600 text-white' : 'bg-primary-600 text-white')
+              : (layout.variant === 'b' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')"
           >{{ p }}</button>
         </div>
       </div>
