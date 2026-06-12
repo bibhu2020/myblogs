@@ -2,9 +2,15 @@ import OpenAI from 'openai';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+// TOPIC_MODE env var controls category selection:
+//   'ai_trending'    — always pick AI (used Saturday 3am)
+//   'random_general' — random from non-AI pool (used Sunday 3am)
+//   (unset)          — random from all categories
+
 const CATEGORIES = [
   {
     name: 'AI',
+    pool: 'ai',
     discoverPrompt: (date) =>
       `Today is ${date}. Search the web for the single most exciting or surprising AI / machine learning ` +
       `discovery, breakthrough, or development from the past 7 days. Consider: new model releases with ` +
@@ -16,6 +22,7 @@ const CATEGORIES = [
   },
   {
     name: 'Technology',
+    pool: 'general',
     discoverPrompt: (date) =>
       `Today is ${date}. Search the web for the single most interesting technology development from the past 7 days — ` +
       `outside of pure AI/ML. Consider: major software releases, hardware breakthroughs, cybersecurity events, ` +
@@ -26,6 +33,7 @@ const CATEGORIES = [
   },
   {
     name: 'Science',
+    pool: 'general',
     discoverPrompt: (date) =>
       `Today is ${date}. Search the web for the most fascinating scientific discovery or research finding ` +
       `published in the past 2 weeks. Consider: physics, astronomy, biology, climate science, medicine, ` +
@@ -36,6 +44,7 @@ const CATEGORIES = [
   },
   {
     name: 'History',
+    pool: 'general',
     discoverPrompt: (date) =>
       `Today is ${date}. Pick a fascinating, lesser-known historical event, figure, or turning point ` +
       `that most people don't know about — something that genuinely changed the world or reveals a surprising ` +
@@ -46,7 +55,19 @@ const CATEGORIES = [
     researchStyle: 'history and historical analysis',
   },
   {
+    name: 'Travel',
+    pool: 'general',
+    discoverPrompt: (date) =>
+      `Today is ${date}. Search the web for the most buzzworthy travel destination, hidden gem, or travel ` +
+      `experience gaining attention right now. Look for places newly discovered, recently gone viral, ` +
+      `newly accessible, or featured in major travel media this week. ` +
+      `Focus on the "why now" — what makes this destination or experience compelling TODAY. ` +
+      `Return: the specific destination or trend, why it's getting buzz, 3–5 concrete facts, and source URLs.`,
+    researchStyle: 'travel and destinations',
+  },
+  {
     name: 'Knowledge',
+    pool: 'general',
     discoverPrompt: (date) =>
       `Today is ${date}. Pick one genuinely fascinating concept, phenomenon, or "how does that actually work" ` +
       `question from any field — psychology, economics, mathematics, philosophy, linguistics, or everyday life. ` +
@@ -96,14 +117,23 @@ async function webSearch(prompt) {
 }
 
 function pickCategory() {
+  const mode = process.env.TOPIC_MODE || '';
+  if (mode === 'ai_trending') {
+    return CATEGORIES.find((c) => c.pool === 'ai');
+  }
+  if (mode === 'random_general') {
+    const pool = CATEGORIES.filter((c) => c.pool === 'general');
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
   return CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
 }
 
 export async function discoverTrend() {
   const category = pickCategory();
   const today = new Date().toISOString().split('T')[0];
+  const modeLabel = process.env.TOPIC_MODE ? ` | mode: ${process.env.TOPIC_MODE}` : '';
 
-  console.log(`🔍 Discovering trending topic [category: ${category.name}]...`);
+  console.log(`🔍 Discovering trending topic [category: ${category.name}${modeLabel}]...`);
   const result = await webSearch(category.discoverPrompt(today));
   console.log(`📌 Trend: ${result.slice(0, 150)}...`);
   return { trend: result, category };
