@@ -183,7 +183,7 @@ async function save(status = null) {
           <h3 class="font-semibold text-gray-900 mb-3 text-sm">Featured Image</h3>
           <input v-model="form.featuredImage" type="url" placeholder="Image URL" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-primary-400" />
           <div v-if="form.featuredImage" class="mt-3 rounded-xl overflow-hidden aspect-video">
-            <img :src="form.featuredImage" class="w-full h-full object-cover" />
+            <img :src="form.featuredImage" :alt="form.title || 'Featured image preview'" class="w-full h-full object-cover" />
           </div>
         </div>
 
@@ -217,7 +217,7 @@ async function save(status = null) {
           <h3 class="font-semibold text-gray-900 mb-3 text-sm">Photo Gallery</h3>
           <div class="space-y-2">
             <div v-for="(img, idx) in form.gallery" :key="idx" class="flex items-center gap-2">
-              <img :src="img" class="w-10 h-10 object-cover rounded-lg flex-shrink-0" />
+              <img :src="img" alt="Gallery image thumbnail" class="w-10 h-10 object-cover rounded-lg flex-shrink-0" />
               <input :value="img" @input="form.gallery[idx] = $event.target.value" type="url" class="flex-1 px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-primary-400" />
               <button @click="form.gallery.splice(idx,1)" class="text-red-400 hover:text-red-600 text-sm">×</button>
             </div>

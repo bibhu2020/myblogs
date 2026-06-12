@@ -38,7 +38,7 @@ const isB = () => layout.variant === 'b'
   <!-- Layout A: Holiday banner -->
   <template v-if="layout.variant === 'a'">
     <!-- HOLIDAY-BANNER-START -->
-    <div class="bg-gradient-to-r from-primary-700 via-primary-600 to-primary-800 text-white text-center text-sm py-1">Celebrating Juneteenth — Freedom Day ✊ June 19</div>
+    <div class="bg-gradient-to-r from-primary-700 via-primary-600 to-primary-700 text-white text-center text-sm py-1">⚽ The FIFA World Cup 2026 is here — the world plays as one! 🌍 <span class="opacity-75 ml-1">Jun 11 – Jul 19</span></div>
     <!-- HOLIDAY-BANNER-END -->
   </template>
 
@@ -116,7 +116,7 @@ const isB = () => layout.variant === 'b'
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
             </svg>
             <input
-              v-model="searchQuery" type="text" placeholder="Search…"
+              v-model="searchQuery" type="text" placeholder="Search…" aria-label="Search posts"
               class="pl-9 pr-4 py-2 text-sm rounded-lg focus:outline-none w-44 focus:w-56 transition-all duration-200"
               :class="layout.variant === 'b'
                 ? 'bg-slate-900 border border-slate-700 text-slate-200 placeholder-slate-500 focus:border-violet-500 focus:ring-1 focus:ring-violet-500'

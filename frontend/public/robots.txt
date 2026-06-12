@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://bibhu2020.github.io/myblogs/sitemap.xml

@@ -38,13 +38,13 @@ function ago(d) {
   <!-- ══════════════════════════════════════════════════════════════════════ -->
   <!--  LAYOUT A — Editorial Light                                           -->
   <!-- ══════════════════════════════════════════════════════════════════════ -->
-  <div v-if="layout.variant === 'a'" class="min-h-screen bg-white">
+  <div v-if="layout.variant === 'a'" id="main-content" class="min-h-screen bg-white">
     <Navbar />
 
     <!-- Holiday badge -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 text-center">
       <!-- HOLIDAY-HERO-START -->
-      <span class="holiday-badge bg-primary-50 text-primary-800 border border-primary-200 rounded-full px-4 py-1 text-sm inline-block">Honoring Juneteenth: freedom, resilience, and community ✊🎉</span>
+      <span class="holiday-badge bg-primary-50 text-primary-800 border border-primary-200 rounded-full px-4 py-1 text-sm inline-block">⚽ World Cup 2026 Season — Ideas That Score</span>
       <!-- HOLIDAY-HERO-END -->
     </div>
 

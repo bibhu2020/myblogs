@@ -351,7 +351,7 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
         <h3 class="text-xl font-bold mb-4" :class="layout.variant === 'b' ? 'text-slate-100' : 'text-gray-900'" style="font-family:'Playfair Display',serif">Photo Gallery</h3>
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div v-for="(img, idx) in getGallery()" :key="idx" class="aspect-square rounded-xl overflow-hidden cursor-pointer group" @click="galleryOpen = true; galleryIndex = idx">
-            <img :src="img" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+            <img :src="img" alt="Gallery image" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
           </div>
         </div>
       </div>
@@ -417,7 +417,7 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
     <div v-if="galleryOpen" class="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" @click.self="galleryOpen=false">
       <button @click="galleryOpen=false" class="absolute top-4 right-4 text-white text-3xl">&times;</button>
       <button @click="galleryIndex = (galleryIndex - 1 + getGallery().length) % getGallery().length" class="absolute left-4 text-white text-3xl p-2">&#8249;</button>
-      <img :src="getGallery()[galleryIndex]" class="max-h-[90vh] max-w-full rounded-2xl object-contain" />
+      <img :src="getGallery()[galleryIndex]" alt="Gallery image enlarged" class="max-h-[90vh] max-w-full rounded-2xl object-contain" />
       <button @click="galleryIndex = (galleryIndex + 1) % getGallery().length" class="absolute right-4 text-white text-3xl p-2">&#8250;</button>
     </div>
 

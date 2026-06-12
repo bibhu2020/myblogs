@@ -98,6 +98,7 @@ function submitSearch(e) {
             v-model="query"
             type="text"
             placeholder="Search by topic, keyword, or author…"
+            aria-label="Search posts by topic, keyword, or author"
             class="w-full pl-12 pr-32 py-3.5 text-base rounded-lg focus:outline-none shadow-sm"
             :class="layout.variant === 'b'
               ? 'bg-[#13132a] border border-[#1e1e3a] text-slate-200 placeholder-slate-500 focus:ring-2 focus:ring-violet-500 focus:border-transparent'

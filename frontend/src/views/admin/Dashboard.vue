@@ -60,7 +60,7 @@ onMounted(async () => {
         <div class="space-y-3">
           <div v-for="post in recentPosts" :key="post.id" class="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors">
             <div class="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
-              <img v-if="post.featuredImage" :src="post.featuredImage" class="w-full h-full object-cover" />
+              <img v-if="post.featuredImage" :src="post.featuredImage" :alt="post.title || 'Post featured image'" class="w-full h-full object-cover" />
               <div v-else class="w-full h-full flex items-center justify-center text-xl">{{ post.category?.icon || '📝' }}</div>
             </div>
             <div class="flex-1 min-w-0">

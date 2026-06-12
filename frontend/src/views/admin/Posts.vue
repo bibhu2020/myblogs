@@ -69,7 +69,7 @@ async function toggleStatus(post) {
             <td class="px-6 py-4">
               <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
-                  <img v-if="post.featuredImage" :src="post.featuredImage" class="w-full h-full object-cover" />
+                  <img v-if="post.featuredImage" :src="post.featuredImage" :alt="post.title || 'Post featured image'" class="w-full h-full object-cover" />
                   <div v-else class="w-full h-full flex items-center justify-center text-lg">{{ post.category?.icon || '📝' }}</div>
                 </div>
                 <div class="min-w-0">
