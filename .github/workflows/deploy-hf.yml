@@ -23,6 +23,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GITHUB_TOKEN_SECRET: ${{ secrets.GITHUB_TOKEN_SECRET }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
         run: |
           SPACE="mishrabp/myblogs"
           HF_API="https://huggingface.co/api/spaces/${SPACE}/secrets"
@@ -42,7 +43,8 @@ jobs:
           push_secret MCP_API_KEY     "$MCP_API_KEY"
           push_secret OPENAI_API_KEY  "$OPENAI_API_KEY"
           push_secret GITHUB_TOKEN    "$GITHUB_TOKEN_SECRET"
-          push_secret GEMINI_API_KEY  "$GEMINI_API_KEY"
+          push_secret GEMINI_API_KEY      "$GEMINI_API_KEY"
+          push_secret UNSPLASH_ACCESS_KEY "$UNSPLASH_ACCESS_KEY"
           echo "Done."
 
       # ── Push code to HF Spaces ────────────────────────────────────────────

@@ -23,8 +23,8 @@ function makeAgentJWT() {
   return `${header}.${body}.${sig}`;
 }
 
-// ── Image generation: DALL-E 3 → DALL-E 2 → Gemini Imagen ───────────────────
-// Returns { buffer: Buffer, mimeType: string } or null
+// ── Image generation: DALL-E 3 → DALL-E 2 → FLUX.1-schnell → Gemini → Unsplash
+// All try* functions return { buffer: Buffer, mimeType: string }
 
 async function tryDalle3(prompt, size) {
   const VALID_SIZES = new Set(['1024x1024', '1792x1024', '1024x1792']);
@@ -54,14 +54,46 @@ async function tryDalle2(prompt) {
   return { buffer: Buffer.from(await imgRes.arrayBuffer()), mimeType: 'image/png' };
 }
 
+async function tryFlux(prompt) {
+  const token = process.env.HF_TOKEN;
+  if (!token) throw new Error('HF_TOKEN not set');
+
+  const call = async () =>
+    fetch('https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inputs: prompt.slice(0, 500) }),
+      signal: AbortSignal.timeout(120_000),
+    });
+
+  let res = await call();
+
+  // Model cold-start: HF returns 503 with estimated_time — wait and retry once
+  if (res.status === 503) {
+    const json = await res.json().catch(() => ({}));
+    const wait = Math.min((json.estimated_time ?? 20) * 1000, 30_000);
+    console.log(`  ⏳ FLUX model loading, retrying in ${Math.round(wait / 1000)}s...`);
+    await new Promise((r) => setTimeout(r, wait));
+    res = await call();
+  }
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`HF API ${res.status}: ${text.slice(0, 200)}`);
+  }
+
+  const mimeType = (res.headers.get('content-type') || 'image/jpeg').split(';')[0];
+  if (!mimeType.startsWith('image/')) throw new Error(`HF returned non-image: ${mimeType}`);
+
+  return { buffer: Buffer.from(await res.arrayBuffer()), mimeType };
+}
+
 async function tryGemini(prompt) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY not set');
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash-preview-image-generation',
-  });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-preview-image-generation' });
 
   const response = await model.generateContent({
     contents: [{ role: 'user', parts: [{ text: prompt.slice(0, 1000) }] }],
@@ -78,36 +110,83 @@ async function tryGemini(prompt) {
   };
 }
 
-async function generateImage(prompt, size = '1024x1024') {
-  const safePrompt = `${prompt}. Professional, high-quality illustration, no text overlays, no watermarks.`;
+async function tryUnsplash(topic) {
+  const key = process.env.UNSPLASH_ACCESS_KEY;
+  if (!key) throw new Error('UNSPLASH_ACCESS_KEY not set');
 
-  // 1. DALL-E 3 (requires OpenAI Tier 1 — $5 cumulative spend)
+  // Keep only the first 5 meaningful words for the search query
+  const query = topic.replace(/[^\w\s]/g, ' ').split(/\s+/).slice(0, 5).join(' ');
+
+  const searchRes = await fetch(
+    `https://api.unsplash.com/photos/random?query=${encodeURIComponent(query)}&orientation=landscape&content_filter=high`,
+    {
+      headers: { Authorization: `Client-ID ${key}` },
+      signal: AbortSignal.timeout(30_000),
+    },
+  );
+  if (!searchRes.ok) throw new Error(`Unsplash ${searchRes.status}: ${await searchRes.text().then(t => t.slice(0, 150))}`);
+
+  const data = await searchRes.json();
+  const imgUrl = data.urls?.regular;
+  if (!imgUrl) throw new Error('Unsplash returned no image URL');
+
+  const imgRes = await fetch(imgUrl, { signal: AbortSignal.timeout(60_000) });
+  if (!imgRes.ok) throw new Error(`Unsplash download failed: ${imgRes.status}`);
+
+  const mimeType = (imgRes.headers.get('content-type') || 'image/jpeg').split(';')[0];
+  return { buffer: Buffer.from(await imgRes.arrayBuffer()), mimeType, credit: data.user?.name };
+}
+
+async function generateImage(originalPrompt, size = '1024x1024') {
+  const aiPrompt = `${originalPrompt}. Professional, high-quality illustration, no text overlays, no watermarks.`;
+
+  // 1. DALL-E 3 (OpenAI Tier 1 — $5 cumulative spend required)
   try {
-    const result = await tryDalle3(safePrompt, size);
+    const result = await tryDalle3(aiPrompt, size);
     console.log('  ✓ DALL-E 3');
     return result;
   } catch (err) {
-    const isDalleMissing = err.message?.includes('does not exist') || err.message?.includes('model');
-    if (!isDalleMissing) console.warn(`  ⚠️  DALL-E 3 error: ${err.message}`);
-    else console.warn('  ⚠️  DALL-E 3 unavailable (Tier 1 required), trying DALL-E 2...');
+    const missing = err.message?.includes('does not exist') || err.message?.includes('model');
+    console.warn(missing
+      ? '  ⚠️  DALL-E 3 unavailable (Tier 1 required), trying DALL-E 2...'
+      : `  ⚠️  DALL-E 3: ${err.message}`);
   }
 
-  // 2. DALL-E 2 (available on all paid tiers)
+  // 2. DALL-E 2
   try {
-    const result = await tryDalle2(safePrompt);
+    const result = await tryDalle2(aiPrompt);
     console.log('  ✓ DALL-E 2');
     return result;
   } catch (err) {
-    console.warn(`  ⚠️  DALL-E 2 failed (${err.message}), trying Gemini...`);
+    console.warn(`  ⚠️  DALL-E 2: ${err.message}`);
   }
 
-  // 3. Gemini Imagen (requires GEMINI_API_KEY)
+  // 3. FLUX.1-schnell via HF Inference API (uses existing HF_TOKEN)
   try {
-    const result = await tryGemini(safePrompt);
+    const result = await tryFlux(aiPrompt);
+    console.log('  ✓ FLUX.1-schnell');
+    return result;
+  } catch (err) {
+    console.warn(`  ⚠️  FLUX: ${err.message}`);
+  }
+
+  // 4. Gemini Imagen (requires GEMINI_API_KEY)
+  try {
+    const result = await tryGemini(aiPrompt);
     console.log('  ✓ Gemini');
     return result;
   } catch (err) {
-    console.warn(`  ⚠️  Gemini failed (${err.message})`);
+    console.warn(`  ⚠️  Gemini: ${err.message}`);
+  }
+
+  // 5. Unsplash stock photo (requires UNSPLASH_ACCESS_KEY)
+  try {
+    const result = await tryUnsplash(originalPrompt);
+    const credit = result.credit ? ` (photo by ${result.credit} on Unsplash)` : ' (Unsplash)';
+    console.log(`  ✓ Unsplash${credit}`);
+    return result;
+  } catch (err) {
+    console.warn(`  ⚠️  Unsplash: ${err.message}`);
   }
 
   return null;
