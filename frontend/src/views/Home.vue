@@ -330,6 +330,7 @@ function ago(d) {
               <li><RouterLink to="/" class="text-slate-500 hover:text-violet-400 text-sm transition-colors">Home</RouterLink></li>
               <li><RouterLink to="/blog" class="text-slate-500 hover:text-violet-400 text-sm transition-colors">All Posts</RouterLink></li>
               <li><RouterLink to="/search" class="text-slate-500 hover:text-violet-400 text-sm transition-colors">Search</RouterLink></li>
+              <li><RouterLink to="/about" class="text-slate-500 hover:text-violet-400 text-sm transition-colors">About</RouterLink></li>
               <li><RouterLink to="/admin" class="text-slate-500 hover:text-violet-400 text-sm transition-colors">Admin Panel</RouterLink></li>
             </ul>
           </div>

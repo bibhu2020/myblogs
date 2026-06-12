@@ -7,6 +7,7 @@ const routes = [
   { path: '/blog/:slug', component: () => import('../views/BlogPost.vue'), meta: { title: 'Post' } },
   { path: '/category/:slug', component: () => import('../views/CategoryView.vue'), meta: { title: 'Category' } },
   { path: '/search', component: () => import('../views/Search.vue'), meta: { title: 'Search' } },
+  { path: '/about', component: () => import('../views/About.vue'), meta: { title: 'About' } },
   { path: '/admin/login', component: () => import('../views/admin/Login.vue'), meta: { title: 'Admin Login' } },
   {
     path: '/admin',

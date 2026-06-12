@@ -41,6 +41,7 @@ const layout = useLayoutStore()
           <ul class="space-y-2">
             <li><RouterLink to="/" class="text-sm transition-colors" :class="layout.variant === 'b' ? 'text-slate-400 hover:text-violet-400' : 'text-primary-200 hover:text-white'">Home</RouterLink></li>
             <li><RouterLink to="/search" class="text-sm transition-colors" :class="layout.variant === 'b' ? 'text-slate-400 hover:text-violet-400' : 'text-primary-200 hover:text-white'">Search</RouterLink></li>
+            <li><RouterLink to="/about" class="text-sm transition-colors" :class="layout.variant === 'b' ? 'text-slate-400 hover:text-violet-400' : 'text-primary-200 hover:text-white'">About</RouterLink></li>
             <li><RouterLink to="/admin" class="text-sm transition-colors" :class="layout.variant === 'b' ? 'text-slate-400 hover:text-violet-400' : 'text-primary-200 hover:text-white'">Admin Panel</RouterLink></li>
           </ul>
         </div>
