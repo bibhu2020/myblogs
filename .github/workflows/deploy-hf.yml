@@ -18,5 +18,18 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          git config user.email "ci@github.com"
+          git config user.name "GitHub Actions"
+
+          # Drop db and upload files from the deployment commit only.
+          # This only affects the CI runner's checkout — GitHub repo is untouched.
+          git rm --cached --ignore-unmatch \
+            auth-service/auth.db \
+            blog-service/blog.db \
+            media-service/media.db
+          git rm --cached -r --ignore-unmatch media-service/uploads/
+
+          git commit -m "ci: deploy to HuggingFace (db and media files excluded)" --allow-empty
+
           git remote add hf https://mishrabp:${HF_TOKEN}@huggingface.co/spaces/mishrabp/myblogs
-          git push hf main --force
+          git push hf HEAD:main --force

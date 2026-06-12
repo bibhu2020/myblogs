@@ -4,4 +4,5 @@ node_modules
 .git
 .claude
 *.db
+media-service/uploads/
 migrate_to_pg.py
