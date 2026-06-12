@@ -28,24 +28,25 @@ export class MediaService {
 
   async save(file: Express.Multer.File, userId: number, alt?: string) {
     const content = fs.readFileSync(file.path).toString('base64');
-    const headers = this.ghHeaders();
 
-    const res = await fetch(`${API_BASE}/${file.filename}`, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify({
-        message: `Upload ${file.filename}`,
-        content,
-        branch: GH_BRANCH,
-      }),
-    });
-
-    // Always clean up the local temp file
-    if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-
-    if (!res.ok) {
-      const body = await res.text();
-      throw new InternalServerErrorException(`GitHub upload failed (${res.status}): ${body}`);
+    // Try GitHub upload; on failure keep the local copy and serve it from /uploads/
+    let url = `/uploads/${file.filename}`;
+    try {
+      const headers = this.ghHeaders();
+      const res = await fetch(`${API_BASE}/${file.filename}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ message: `Upload ${file.filename}`, content, branch: GH_BRANCH }),
+      });
+      if (res.ok) {
+        url = `${RAW_BASE}/${file.filename}`;
+        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+      } else {
+        const body = await res.text();
+        console.warn(`GitHub upload failed (${res.status}) — using local storage: ${body.slice(0, 200)}`);
+      }
+    } catch (err) {
+      console.warn(`GitHub upload error — using local storage: ${err.message}`);
     }
 
     const media = this.mediaRepo.create({
@@ -53,7 +54,7 @@ export class MediaService {
       originalName: file.originalname,
       mimetype: file.mimetype,
       size: file.size,
-      url: `${RAW_BASE}/${file.filename}`,
+      url,
       alt: alt || file.originalname,
       uploadedBy: userId,
     });
