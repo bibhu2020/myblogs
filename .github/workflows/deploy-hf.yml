@@ -11,8 +11,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Push to Hugging Face Spaces
         env:
@@ -21,15 +19,18 @@ jobs:
           git config user.email "ci@github.com"
           git config user.name "GitHub Actions"
 
-          # Drop db and upload files from the deployment commit only.
-          # This only affects the CI runner's checkout — GitHub repo is untouched.
+          # Create an orphan commit (no history) so HF never sees old commits
+          # that contained binary files (db files, media uploads).
+          git checkout --orphan hf-deploy
+
+          # Remove db and upload files from the index before committing
           git rm --cached --ignore-unmatch \
             auth-service/auth.db \
             blog-service/blog.db \
             media-service/media.db
           git rm --cached -r --ignore-unmatch media-service/uploads/
 
-          git commit -m "ci: deploy to HuggingFace (db and media files excluded)" --allow-empty
+          git commit -m "Deploy to HuggingFace Spaces"
 
           git remote add hf https://mishrabp:${HF_TOKEN}@huggingface.co/spaces/mishrabp/myblogs
-          git push hf HEAD:main --force
+          git push hf hf-deploy:main --force
