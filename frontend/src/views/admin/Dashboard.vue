@@ -31,7 +31,7 @@ onMounted(async () => {
       <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
         <div class="text-3xl font-bold text-gray-900 mb-1">{{ stats.total }}</div>
         <div class="text-sm text-gray-500">Total Posts</div>
-        <div class="w-8 h-1 bg-blue-500 rounded-full mt-3"></div>
+        <div class="w-8 h-1 bg-primary-500 rounded-full mt-3"></div>
       </div>
       <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
         <div class="text-3xl font-bold text-green-600 mb-1">{{ stats.published }}</div>
@@ -55,7 +55,7 @@ onMounted(async () => {
       <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div class="flex items-center justify-between mb-5">
           <h2 class="font-bold text-gray-900">Recent Posts</h2>
-          <RouterLink to="/admin/posts" class="text-sm text-blue-600 hover:underline">View all</RouterLink>
+          <RouterLink to="/admin/posts" class="text-sm text-primary-600 hover:underline">View all</RouterLink>
         </div>
         <div class="space-y-3">
           <div v-for="post in recentPosts" :key="post.id" class="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors">
@@ -71,7 +71,7 @@ onMounted(async () => {
                 <span>{{ post.views }} views</span>
               </div>
             </div>
-            <RouterLink :to="`/admin/posts/${post.id}/edit`" class="text-xs text-blue-600 hover:underline flex-shrink-0">Edit</RouterLink>
+            <RouterLink :to="`/admin/posts/${post.id}/edit`" class="text-xs text-primary-600 hover:underline flex-shrink-0">Edit</RouterLink>
           </div>
         </div>
       </div>
@@ -81,7 +81,7 @@ onMounted(async () => {
         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <h2 class="font-bold text-gray-900 mb-4">Quick Actions</h2>
           <div class="space-y-2">
-            <RouterLink to="/admin/posts/new" class="flex items-center gap-3 w-full px-4 py-3 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors">
+            <RouterLink to="/admin/posts/new" class="flex items-center gap-3 w-full px-4 py-3 bg-primary-600 text-white rounded-xl text-sm font-medium hover:bg-primary-700 transition-colors">
               <span>✏️</span> Write New Post
             </RouterLink>
             <RouterLink to="/admin/media" class="flex items-center gap-3 w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors">
@@ -102,7 +102,7 @@ onMounted(async () => {
               <span class="ml-auto text-gray-400 text-xs">{{ cat.slug }}</span>
             </div>
           </div>
-          <RouterLink to="/admin/categories" class="text-xs text-blue-600 hover:underline mt-3 block">Manage categories →</RouterLink>
+          <RouterLink to="/admin/categories" class="text-xs text-primary-600 hover:underline mt-3 block">Manage categories →</RouterLink>
         </div>
       </div>
     </div>

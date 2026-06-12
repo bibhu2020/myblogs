@@ -46,15 +46,15 @@ function submitSearch(e) {
 
         <!-- Desktop nav -->
         <div class="hidden md:flex items-center gap-1 flex-1">
-          <RouterLink to="/" class="px-3 py-2 text-gray-600 hover:text-blue-600 text-sm font-medium transition-colors rounded-lg hover:bg-gray-50" :class="{ 'text-blue-600 bg-blue-50': route.path === '/' }">Home</RouterLink>
-          <RouterLink to="/blog" class="px-3 py-2 text-gray-600 hover:text-blue-600 text-sm font-medium transition-colors rounded-lg hover:bg-gray-50" :class="{ 'text-blue-600 bg-blue-50': route.path === '/blog' }">All Posts</RouterLink>
+          <RouterLink to="/" class="px-3 py-2 text-gray-600 hover:text-primary-600 text-sm font-medium transition-colors rounded-lg hover:bg-gray-50" :class="{ 'text-primary-600 bg-primary-50': route.path === '/' }">Home</RouterLink>
+          <RouterLink to="/blog" class="px-3 py-2 text-gray-600 hover:text-primary-600 text-sm font-medium transition-colors rounded-lg hover:bg-gray-50" :class="{ 'text-primary-600 bg-primary-50': route.path === '/blog' }">All Posts</RouterLink>
 
           <!-- Topics dropdown -->
           <div class="relative" ref="topicsRef">
             <button
               @click="topicsOpen = !topicsOpen"
               class="flex items-center gap-1 px-3 py-2 text-sm font-medium transition-colors rounded-lg hover:bg-gray-50"
-              :class="topicsOpen ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:text-blue-600'"
+              :class="topicsOpen ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600'"
             >
               Topics
               <svg class="w-4 h-4 transition-transform" :class="{ 'rotate-180': topicsOpen }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -71,8 +71,8 @@ function submitSearch(e) {
                 :key="cat.id"
                 :to="`/category/${cat.slug}`"
                 @click="topicsOpen = false"
-                class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition-colors"
-                :class="{ 'text-blue-600 bg-blue-50 font-medium': route.params.slug === cat.slug }"
+                class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-600 transition-colors"
+                :class="{ 'text-primary-600 bg-primary-50 font-medium': route.params.slug === cat.slug }"
               >
                 <span class="text-base w-5 text-center">{{ cat.icon }}</span>
                 {{ cat.name }}
@@ -91,12 +91,12 @@ function submitSearch(e) {
               v-model="searchQuery"
               type="text"
               placeholder="Search…"
-              class="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 bg-gray-50 w-44 focus:w-56 transition-all duration-200"
+              class="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-primary-400 focus:ring-1 focus:ring-primary-400 bg-gray-50 w-44 focus:w-56 transition-all duration-200"
             />
           </div>
         </form>
 
-        <RouterLink to="/admin" class="hidden md:block bg-blue-600 text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-blue-700 transition-colors flex-shrink-0">Admin</RouterLink>
+        <RouterLink to="/admin" class="hidden md:block bg-primary-600 text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-primary-700 transition-colors flex-shrink-0">Admin</RouterLink>
 
         <!-- Mobile menu button -->
         <button @click="mobileOpen = !mobileOpen" class="md:hidden p-2 rounded-md text-gray-600">
@@ -109,13 +109,13 @@ function submitSearch(e) {
 
       <!-- Mobile menu -->
       <div v-if="mobileOpen" class="md:hidden py-4 border-t border-gray-100 space-y-1">
-        <RouterLink to="/" @click="mobileOpen=false" class="block px-4 py-2.5 text-gray-700 hover:text-blue-600 font-medium rounded-lg hover:bg-gray-50">Home</RouterLink>
-        <RouterLink to="/blog" @click="mobileOpen=false" class="block px-4 py-2.5 text-gray-700 hover:text-blue-600 font-medium rounded-lg hover:bg-gray-50">All Posts</RouterLink>
+        <RouterLink to="/" @click="mobileOpen=false" class="block px-4 py-2.5 text-gray-700 hover:text-primary-600 font-medium rounded-lg hover:bg-gray-50">Home</RouterLink>
+        <RouterLink to="/blog" @click="mobileOpen=false" class="block px-4 py-2.5 text-gray-700 hover:text-primary-600 font-medium rounded-lg hover:bg-gray-50">All Posts</RouterLink>
         <div class="px-4 pt-2 pb-1 text-xs font-bold text-gray-400 uppercase tracking-wider">Topics</div>
-        <RouterLink v-for="cat in blog.categories" :key="cat.id" :to="`/category/${cat.slug}`" @click="mobileOpen=false" class="flex items-center gap-2 px-4 py-2.5 text-gray-700 hover:text-blue-600 font-medium rounded-lg hover:bg-gray-50">{{ cat.icon }} {{ cat.name }}</RouterLink>
+        <RouterLink v-for="cat in blog.categories" :key="cat.id" :to="`/category/${cat.slug}`" @click="mobileOpen=false" class="flex items-center gap-2 px-4 py-2.5 text-gray-700 hover:text-primary-600 font-medium rounded-lg hover:bg-gray-50">{{ cat.icon }} {{ cat.name }}</RouterLink>
         <div class="border-t border-gray-100 mt-2 pt-2">
-          <RouterLink to="/search" @click="mobileOpen=false" class="block px-4 py-2.5 text-gray-700 hover:text-blue-600 font-medium rounded-lg hover:bg-gray-50">🔍 Search</RouterLink>
-          <RouterLink to="/admin" @click="mobileOpen=false" class="block px-4 py-2.5 text-blue-600 font-medium rounded-lg hover:bg-blue-50">Admin Panel</RouterLink>
+          <RouterLink to="/search" @click="mobileOpen=false" class="block px-4 py-2.5 text-gray-700 hover:text-primary-600 font-medium rounded-lg hover:bg-gray-50">🔍 Search</RouterLink>
+          <RouterLink to="/admin" @click="mobileOpen=false" class="block px-4 py-2.5 text-primary-600 font-medium rounded-lg hover:bg-primary-50">Admin Panel</RouterLink>
         </div>
       </div>
     </div>

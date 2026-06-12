@@ -80,7 +80,7 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
         <h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 leading-tight mb-6" style="font-family:'Playfair Display',serif">{{ post.title }}</h1>
         <div class="flex flex-wrap items-center gap-4 text-sm text-gray-500">
           <div class="flex items-center gap-2">
-            <div class="w-9 h-9 bg-blue-600 rounded-full flex items-center justify-center"><span class="text-white font-bold">{{ (post.authorName||'A').charAt(0) }}</span></div>
+            <div class="w-9 h-9 bg-primary-600 rounded-full flex items-center justify-center"><span class="text-white font-bold">{{ (post.authorName||'A').charAt(0) }}</span></div>
             <div><div class="font-semibold text-gray-800">{{ post.authorName }}</div></div>
           </div>
           <span>·</span>
@@ -101,11 +101,11 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
       </div>
 
       <!-- Content -->
-      <div class="prose prose-lg prose-gray max-w-none prose-headings:font-bold prose-headings:text-gray-900 prose-a:text-blue-600 prose-img:rounded-2xl post-content" v-html="post.content" style="font-family:'Inter',sans-serif"></div>
+      <div class="prose prose-lg prose-gray max-w-none prose-headings:font-bold prose-headings:text-gray-900 prose-a:text-primary-600 prose-img:rounded-2xl post-content" v-html="post.content" style="font-family:'Inter',sans-serif"></div>
 
       <!-- Tags -->
       <div v-if="post.tags?.length" class="flex flex-wrap gap-2 mt-10 pt-8 border-t border-gray-100">
-        <span v-for="tag in post.tags" :key="tag.id" class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm font-medium hover:bg-blue-100 hover:text-blue-700 transition-colors cursor-pointer">#{{ tag.name }}</span>
+        <span v-for="tag in post.tags" :key="tag.id" class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm font-medium hover:bg-primary-100 hover:text-primary-700 transition-colors cursor-pointer">#{{ tag.name }}</span>
       </div>
 
       <!-- Photo Gallery -->
@@ -123,7 +123,7 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
         <p class="text-sm font-semibold text-gray-700 mb-3">Share this article</p>
         <div class="flex gap-3">
           <button class="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors">𝕏 Twitter</button>
-          <button class="flex items-center gap-2 px-4 py-2 bg-blue-700 text-white rounded-lg text-sm font-medium hover:bg-blue-800 transition-colors">in LinkedIn</button>
+          <button class="flex items-center gap-2 px-4 py-2 bg-primary-700 text-white rounded-lg text-sm font-medium hover:bg-primary-800 transition-colors">in LinkedIn</button>
           <button @click="navigator.clipboard.writeText(window.location.href)" class="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors">🔗 Copy Link</button>
         </div>
       </div>
@@ -144,7 +144,7 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
       <div class="space-y-4 mb-10">
         <div v-for="c in comments" :key="c.id" class="bg-gray-50 rounded-2xl p-5">
           <div class="flex items-center gap-3 mb-3">
-            <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center"><span class="text-blue-600 font-bold text-sm">{{ c.authorName.charAt(0) }}</span></div>
+            <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center"><span class="text-primary-600 font-bold text-sm">{{ c.authorName.charAt(0) }}</span></div>
             <div><div class="font-semibold text-gray-800 text-sm">{{ c.authorName }}</div><div class="text-xs text-gray-400">{{ format(new Date(c.createdAt), 'MMM d, yyyy') }}</div></div>
           </div>
           <p class="text-gray-600 text-sm">{{ c.content }}</p>
@@ -158,11 +158,11 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
       <form v-else @submit.prevent="submitComment" class="bg-gray-50 rounded-2xl p-6">
         <h3 class="font-bold text-gray-900 mb-4">Leave a Comment</h3>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-          <input v-model="commentForm.authorName" type="text" placeholder="Your Name *" required class="px-4 py-3 bg-white rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-blue-400" />
-          <input v-model="commentForm.authorEmail" type="email" placeholder="Your Email" class="px-4 py-3 bg-white rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-blue-400" />
+          <input v-model="commentForm.authorName" type="text" placeholder="Your Name *" required class="px-4 py-3 bg-white rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-primary-400" />
+          <input v-model="commentForm.authorEmail" type="email" placeholder="Your Email" class="px-4 py-3 bg-white rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-primary-400" />
         </div>
-        <textarea v-model="commentForm.content" rows="4" placeholder="Write your comment..." required class="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-blue-400 resize-none mb-4"></textarea>
-        <button type="submit" class="bg-blue-600 text-white px-6 py-3 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors">Post Comment</button>
+        <textarea v-model="commentForm.content" rows="4" placeholder="Write your comment..." required class="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-primary-400 resize-none mb-4"></textarea>
+        <button type="submit" class="bg-primary-600 text-white px-6 py-3 rounded-xl text-sm font-semibold hover:bg-primary-700 transition-colors">Post Comment</button>
       </form>
     </section>
 

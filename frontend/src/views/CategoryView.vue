@@ -52,7 +52,7 @@ watch(page, loadPosts)
           <PostCard v-for="post in blog.posts" :key="post.id" :post="post" />
         </div>
         <div v-if="blog.pagination.pages > 1" class="flex justify-center gap-2 mt-12">
-          <button v-for="p in blog.pagination.pages" :key="p" @click="page = p" class="w-10 h-10 rounded-full text-sm font-medium transition-colors" :class="p === page ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'">{{ p }}</button>
+          <button v-for="p in blog.pagination.pages" :key="p" @click="page = p" class="w-10 h-10 rounded-full text-sm font-medium transition-colors" :class="p === page ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'">{{ p }}</button>
         </div>
       </div>
     </div>

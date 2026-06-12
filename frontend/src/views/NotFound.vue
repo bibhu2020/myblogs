@@ -9,7 +9,7 @@ import Navbar from '../components/Navbar.vue'
       <div class="text-8xl mb-6">404</div>
       <h1 class="text-3xl font-bold text-gray-900 mb-4" style="font-family:'Playfair Display',serif">Page Not Found</h1>
       <p class="text-gray-500 mb-8">The page you're looking for doesn't exist or has been moved.</p>
-      <RouterLink to="/" class="bg-blue-600 text-white px-8 py-3 rounded-full font-medium hover:bg-blue-700 transition-colors">Go Home</RouterLink>
+      <RouterLink to="/" class="bg-primary-600 text-white px-8 py-3 rounded-full font-medium hover:bg-primary-700 transition-colors">Go Home</RouterLink>
     </div>
   </div>
 </template>

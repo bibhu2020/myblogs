@@ -96,10 +96,10 @@ function submitSearch(e) {
             v-model="query"
             type="text"
             placeholder="Search by topic, keyword, or author…"
-            class="w-full pl-12 pr-32 py-3.5 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
+            class="w-full pl-12 pr-32 py-3.5 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white shadow-sm"
             autofocus
           />
-          <button type="submit" class="absolute right-2 top-1/2 -translate-y-1/2 px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700 transition-colors">
+          <button type="submit" class="absolute right-2 top-1/2 -translate-y-1/2 px-5 py-2 bg-primary-600 text-white text-sm font-semibold rounded-md hover:bg-primary-700 transition-colors">
             Search
           </button>
         </form>
@@ -118,24 +118,24 @@ function submitSearch(e) {
                 <button
                   @click="toggleCategory('')"
                   class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left"
-                  :class="activeCategorySlug === '' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'"
+                  :class="activeCategorySlug === '' ? 'bg-primary-50 text-primary-700' : 'text-gray-700 hover:bg-gray-50'"
                 >
                   <span class="text-base">🌐</span>
                   <span>All Topics</span>
-                  <span v-if="activeCategorySlug === '' && searched" class="ml-auto text-xs font-semibold text-blue-600 bg-blue-100 rounded-full px-2 py-0.5">{{ total }}</span>
+                  <span v-if="activeCategorySlug === '' && searched" class="ml-auto text-xs font-semibold text-primary-600 bg-primary-100 rounded-full px-2 py-0.5">{{ total }}</span>
                 </button>
               </li>
               <li v-for="cat in blog.categories" :key="cat.id">
                 <button
                   @click="toggleCategory(cat.slug)"
                   class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left"
-                  :class="activeCategorySlug === cat.slug ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'"
+                  :class="activeCategorySlug === cat.slug ? 'bg-primary-50 text-primary-700' : 'text-gray-700 hover:bg-gray-50'"
                 >
                   <span class="text-base">{{ cat.icon }}</span>
                   <span>{{ cat.name }}</span>
                   <span
                     v-if="activeCategorySlug === cat.slug && searched"
-                    class="ml-auto text-xs font-semibold text-blue-600 bg-blue-100 rounded-full px-2 py-0.5"
+                    class="ml-auto text-xs font-semibold text-primary-600 bg-primary-100 rounded-full px-2 py-0.5"
                   >{{ total }}</span>
                 </button>
               </li>
@@ -179,7 +179,7 @@ function submitSearch(e) {
               v-for="post in results"
               :key="post.id"
               :to="`/blog/${post.slug}`"
-              class="group flex gap-5 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-200 transition-all duration-200 p-5 overflow-hidden"
+              class="group flex gap-5 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-primary-200 transition-all duration-200 p-5 overflow-hidden"
             >
               <!-- Thumbnail -->
               <div class="w-44 h-32 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100">
@@ -190,7 +190,7 @@ function submitSearch(e) {
                   class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   loading="lazy"
                 />
-                <div v-else class="w-full h-full bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+                <div v-else class="w-full h-full bg-gradient-to-br from-primary-50 to-indigo-100 flex items-center justify-center">
                   <span class="text-4xl">{{ post.category?.icon || '📝' }}</span>
                 </div>
               </div>
@@ -211,7 +211,7 @@ function submitSearch(e) {
 
                   <!-- Title -->
                   <h3
-                    class="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2 mb-2 leading-snug"
+                    class="text-lg font-bold text-gray-900 group-hover:text-primary-600 transition-colors line-clamp-2 mb-2 leading-snug"
                     style="font-family:'Playfair Display',serif"
                   >
                     {{ post.title }}
@@ -226,7 +226,7 @@ function submitSearch(e) {
                 <!-- Meta -->
                 <div class="flex items-center gap-3 mt-3 text-xs text-gray-400">
                   <div class="flex items-center gap-1.5">
-                    <div class="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                    <div class="w-5 h-5 bg-primary-600 rounded-full flex items-center justify-center flex-shrink-0">
                       <span class="text-white font-bold text-[10px]">{{ (post.authorName || 'A').charAt(0) }}</span>
                     </div>
                     <span class="font-medium text-gray-600">{{ post.authorName }}</span>

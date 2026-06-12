@@ -47,7 +47,7 @@ function copyUrl(url) {
       </div>
       <div>
         <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="upload" />
-        <button @click="fileInput.click()" :disabled="uploading" class="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-60">
+        <button @click="fileInput.click()" :disabled="uploading" class="bg-primary-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary-700 transition-colors disabled:opacity-60">
           {{ uploading ? 'Uploading...' : '+ Upload Image' }}
         </button>
       </div>
@@ -56,7 +56,7 @@ function copyUrl(url) {
     <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
       <div v-for="item in media" :key="item.id" @click="selected = item"
         class="aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all hover:opacity-80"
-        :class="selected?.id === item.id ? 'border-blue-500' : 'border-transparent'">
+        :class="selected?.id === item.id ? 'border-primary-500' : 'border-transparent'">
         <img :src="item.url" :alt="item.alt" class="w-full h-full object-cover" />
       </div>
     </div>

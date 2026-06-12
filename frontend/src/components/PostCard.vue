@@ -23,7 +23,7 @@ function formatDate(d) {
           class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           loading="lazy"
         />
-        <div v-else class="w-full h-full bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
+        <div v-else class="w-full h-full bg-gradient-to-br from-primary-100 to-purple-100 flex items-center justify-center">
           <span class="text-4xl">{{ post.category?.icon || '📝' }}</span>
         </div>
         <div v-if="post.category" class="absolute top-3 left-3">
@@ -44,7 +44,7 @@ function formatDate(d) {
           </span>
         </div>
 
-        <h3 class="font-bold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2 mb-2" :class="featured ? 'text-xl' : 'text-lg'" style="font-family: 'Playfair Display', serif">
+        <h3 class="font-bold text-gray-900 group-hover:text-primary-600 transition-colors line-clamp-2 mb-2" :class="featured ? 'text-xl' : 'text-lg'" style="font-family: 'Playfair Display', serif">
           {{ post.title }}
         </h3>
 
@@ -53,7 +53,7 @@ function formatDate(d) {
         </p>
 
         <div class="flex items-center gap-2 mt-3">
-          <div class="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+          <div class="w-6 h-6 bg-primary-600 rounded-full flex items-center justify-center flex-shrink-0">
             <span class="text-white text-xs font-bold">{{ (post.authorName || 'A').charAt(0) }}</span>
           </div>
           <span class="text-xs font-medium text-gray-700">{{ post.authorName }}</span>

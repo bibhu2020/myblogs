@@ -41,14 +41,14 @@ const navItems = [
           :key="item.path"
           :to="item.path"
           class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
-          :class="route.path === item.path ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'"
+          :class="route.path === item.path ? 'bg-primary-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'"
         >
           <span>{{ item.icon }}</span> {{ item.label }}
         </RouterLink>
       </nav>
       <div class="p-4 border-t border-gray-800">
         <div class="flex items-center gap-3 px-4 py-3 mb-2">
-          <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center"><span class="text-white font-bold text-sm">{{ (auth.user?.name||'A').charAt(0) }}</span></div>
+          <div class="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center"><span class="text-white font-bold text-sm">{{ (auth.user?.name||'A').charAt(0) }}</span></div>
           <div class="flex-1 min-w-0">
             <div class="text-white text-sm font-medium truncate">{{ auth.user?.name }}</div>
             <div class="text-gray-500 text-xs capitalize">{{ auth.user?.role }}</div>
@@ -72,7 +72,7 @@ const navItems = [
           <button @click="sidebarOpen=false" class="text-gray-400">&times;</button>
         </div>
         <nav class="flex-1 p-4 space-y-1">
-          <RouterLink v-for="item in navItems" :key="item.path" :to="item.path" @click="sidebarOpen=false" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors" :class="route.path === item.path ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'">
+          <RouterLink v-for="item in navItems" :key="item.path" :to="item.path" @click="sidebarOpen=false" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors" :class="route.path === item.path ? 'bg-primary-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'">
             <span>{{ item.icon }}</span> {{ item.label }}
           </RouterLink>
         </nav>
@@ -87,7 +87,7 @@ const navItems = [
         </button>
         <div class="flex items-center gap-3 ml-auto">
           <span class="text-sm text-gray-500">Welcome, <strong>{{ auth.user?.name }}</strong></span>
-          <RouterLink to="/admin/posts/new" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">+ New Post</RouterLink>
+          <RouterLink to="/admin/posts/new" class="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 transition-colors">+ New Post</RouterLink>
         </div>
       </header>
       <main class="flex-1 p-6">

@@ -42,15 +42,15 @@ async function remove(id) {
   <div>
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold text-gray-900" style="font-family:'Playfair Display',serif">Categories</h1>
-      <button @click="showForm=!showForm; editing=null; form={name:'',description:'',color:'#3B82F6',icon:'📁'}" class="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors">+ New Category</button>
+      <button @click="showForm=!showForm; editing=null; form={name:'',description:'',color:'#3B82F6',icon:'📁'}" class="bg-primary-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary-700 transition-colors">+ New Category</button>
     </div>
 
     <div v-if="showForm" class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
       <h3 class="font-semibold text-gray-900 mb-4">{{ editing ? 'Edit Category' : 'New Category' }}</h3>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <input v-model="form.name" type="text" placeholder="Category Name" required class="px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400" />
-        <input v-model="form.icon" type="text" placeholder="Icon (emoji)" class="px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400" />
-        <input v-model="form.description" type="text" placeholder="Description" class="px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400" />
+        <input v-model="form.name" type="text" placeholder="Category Name" required class="px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-primary-400" />
+        <input v-model="form.icon" type="text" placeholder="Icon (emoji)" class="px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-primary-400" />
+        <input v-model="form.description" type="text" placeholder="Description" class="px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-primary-400" />
         <div class="flex items-center gap-3">
           <label class="text-sm text-gray-600">Color:</label>
           <input v-model="form.color" type="color" class="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer" />
@@ -58,7 +58,7 @@ async function remove(id) {
         </div>
       </div>
       <div class="flex gap-3 mt-4">
-        <button @click="save" class="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors">Save</button>
+        <button @click="save" class="bg-primary-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary-700 transition-colors">Save</button>
         <button @click="showForm=false" class="px-5 py-2.5 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors">Cancel</button>
       </div>
     </div>
@@ -77,7 +77,7 @@ async function remove(id) {
         </div>
         <p v-if="cat.description" class="text-sm text-gray-500 mb-4">{{ cat.description }}</p>
         <div class="flex gap-2">
-          <button @click="edit(cat)" class="text-xs text-blue-600 hover:underline">Edit</button>
+          <button @click="edit(cat)" class="text-xs text-primary-600 hover:underline">Edit</button>
           <button @click="remove(cat.id)" class="text-xs text-red-500 hover:underline">Delete</button>
         </div>
       </div>

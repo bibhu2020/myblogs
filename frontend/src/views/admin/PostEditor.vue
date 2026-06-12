@@ -117,7 +117,7 @@ async function save(status = null) {
       <h1 class="text-2xl font-bold text-gray-900" style="font-family:'Playfair Display',serif">{{ isEdit ? 'Edit Post' : 'New Post' }}</h1>
       <div class="flex gap-2">
         <button @click="save('draft')" :disabled="saving" class="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-60">Save Draft</button>
-        <button @click="save('published')" :disabled="saving" class="px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-60">Publish</button>
+        <button @click="save('published')" :disabled="saving" class="px-4 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-medium hover:bg-primary-700 transition-colors disabled:opacity-60">Publish</button>
       </div>
     </div>
 
@@ -146,14 +146,14 @@ async function save(status = null) {
             <button @click="editor.chain().focus().toggleBlockquote().run()" :class="editor.isActive('blockquote') ? 'bg-gray-900 text-white' : 'hover:bg-gray-200'" class="px-3 py-1.5 rounded-lg text-sm transition-colors">" Quote</button>
             <div class="w-px bg-gray-200 mx-1"></div>
             <div class="flex items-center gap-1">
-              <select v-model="codeLanguage" class="px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-400 bg-white">
+              <select v-model="codeLanguage" class="px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-primary-400 bg-white">
                 <option v-for="lang in CODE_LANGUAGES" :key="lang" :value="lang">{{ lang }}</option>
               </select>
               <button @click="insertCodeBlock" :class="editor.isActive('codeBlock') ? 'bg-gray-900 text-white' : 'hover:bg-gray-200'" class="px-3 py-1.5 rounded-lg text-sm font-mono transition-colors">{ } Code</button>
             </div>
             <div class="w-px bg-gray-200 mx-1"></div>
             <div class="flex items-center gap-1">
-              <input v-model="imageUrl" type="url" placeholder="Image URL" class="px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-400 w-40" />
+              <input v-model="imageUrl" type="url" placeholder="Image URL" class="px-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-primary-400 w-40" />
               <button @click="insertImage" class="px-3 py-1.5 rounded-lg text-sm hover:bg-gray-200 transition-colors">🖼️ Insert</button>
             </div>
           </div>
@@ -170,10 +170,10 @@ async function save(status = null) {
           <h3 class="font-semibold text-gray-900 mb-3 text-sm">Publish Settings</h3>
           <div class="space-y-2">
             <label class="flex items-center gap-2 cursor-pointer">
-              <input type="radio" v-model="form.status" value="draft" class="text-blue-600" /> <span class="text-sm text-gray-700">Draft</span>
+              <input type="radio" v-model="form.status" value="draft" class="text-primary-600" /> <span class="text-sm text-gray-700">Draft</span>
             </label>
             <label class="flex items-center gap-2 cursor-pointer">
-              <input type="radio" v-model="form.status" value="published" class="text-blue-600" /> <span class="text-sm text-gray-700">Published</span>
+              <input type="radio" v-model="form.status" value="published" class="text-primary-600" /> <span class="text-sm text-gray-700">Published</span>
             </label>
           </div>
         </div>
@@ -181,7 +181,7 @@ async function save(status = null) {
         <!-- Featured Image -->
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <h3 class="font-semibold text-gray-900 mb-3 text-sm">Featured Image</h3>
-          <input v-model="form.featuredImage" type="url" placeholder="Image URL" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400" />
+          <input v-model="form.featuredImage" type="url" placeholder="Image URL" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-primary-400" />
           <div v-if="form.featuredImage" class="mt-3 rounded-xl overflow-hidden aspect-video">
             <img :src="form.featuredImage" class="w-full h-full object-cover" />
           </div>
@@ -190,7 +190,7 @@ async function save(status = null) {
         <!-- Category -->
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <h3 class="font-semibold text-gray-900 mb-3 text-sm">Category</h3>
-          <select v-model="form.categoryId" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400 bg-white">
+          <select v-model="form.categoryId" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-primary-400 bg-white">
             <option :value="null">No category</option>
             <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.icon }} {{ cat.name }}</option>
           </select>
@@ -201,13 +201,13 @@ async function save(status = null) {
           <h3 class="font-semibold text-gray-900 mb-3 text-sm">Tags</h3>
           <div class="flex flex-wrap gap-2 mb-3">
             <button v-for="tag in tags" :key="tag.id" @click="toggleTag(tag.id)"
-              :class="form.tagIds.includes(tag.id) ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+              :class="form.tagIds.includes(tag.id) ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
               class="px-3 py-1 rounded-full text-xs font-medium transition-colors">
               {{ tag.name }}
             </button>
           </div>
           <div class="flex gap-2">
-            <input v-model="newTag" type="text" placeholder="New tag..." class="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-blue-400" @keydown.enter.prevent="addTag" />
+            <input v-model="newTag" type="text" placeholder="New tag..." class="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-primary-400" @keydown.enter.prevent="addTag" />
             <button @click="addTag" class="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-xs hover:bg-gray-200 transition-colors">Add</button>
           </div>
         </div>
@@ -218,10 +218,10 @@ async function save(status = null) {
           <div class="space-y-2">
             <div v-for="(img, idx) in form.gallery" :key="idx" class="flex items-center gap-2">
               <img :src="img" class="w-10 h-10 object-cover rounded-lg flex-shrink-0" />
-              <input :value="img" @input="form.gallery[idx] = $event.target.value" type="url" class="flex-1 px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-blue-400" />
+              <input :value="img" @input="form.gallery[idx] = $event.target.value" type="url" class="flex-1 px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-primary-400" />
               <button @click="form.gallery.splice(idx,1)" class="text-red-400 hover:text-red-600 text-sm">×</button>
             </div>
-            <button @click="form.gallery.push('')" class="text-xs text-blue-600 hover:underline">+ Add photo URL</button>
+            <button @click="form.gallery.push('')" class="text-xs text-primary-600 hover:underline">+ Add photo URL</button>
           </div>
         </div>
       </div>

@@ -52,7 +52,7 @@ watch(page, loadPosts)
             :key="p"
             @click="page = p"
             class="w-10 h-10 rounded-full text-sm font-medium transition-colors"
-            :class="p === page ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+            :class="p === page ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
           >{{ p }}</button>
         </div>
       </div>

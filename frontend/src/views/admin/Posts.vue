@@ -41,14 +41,14 @@ async function toggleStatus(post) {
         <h1 class="text-2xl font-bold text-gray-900" style="font-family:'Playfair Display',serif">Posts</h1>
         <p class="text-sm text-gray-500 mt-1">{{ pagination.total }} total posts</p>
       </div>
-      <RouterLink to="/admin/posts/new" class="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors">+ New Post</RouterLink>
+      <RouterLink to="/admin/posts/new" class="bg-primary-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary-700 transition-colors">+ New Post</RouterLink>
     </div>
 
     <!-- Filters -->
     <div class="flex gap-2 mb-5">
-      <button @click="statusFilter=''; page=1; loadPosts()" :class="!statusFilter ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200'" class="px-4 py-2 rounded-xl text-sm font-medium transition-colors">All</button>
-      <button @click="statusFilter='published'; page=1; loadPosts()" :class="statusFilter==='published' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200'" class="px-4 py-2 rounded-xl text-sm font-medium transition-colors">Published</button>
-      <button @click="statusFilter='draft'; page=1; loadPosts()" :class="statusFilter==='draft' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200'" class="px-4 py-2 rounded-xl text-sm font-medium transition-colors">Drafts</button>
+      <button @click="statusFilter=''; page=1; loadPosts()" :class="!statusFilter ? 'bg-primary-600 text-white' : 'bg-white text-gray-600 border border-gray-200'" class="px-4 py-2 rounded-xl text-sm font-medium transition-colors">All</button>
+      <button @click="statusFilter='published'; page=1; loadPosts()" :class="statusFilter==='published' ? 'bg-primary-600 text-white' : 'bg-white text-gray-600 border border-gray-200'" class="px-4 py-2 rounded-xl text-sm font-medium transition-colors">Published</button>
+      <button @click="statusFilter='draft'; page=1; loadPosts()" :class="statusFilter==='draft' ? 'bg-primary-600 text-white' : 'bg-white text-gray-600 border border-gray-200'" class="px-4 py-2 rounded-xl text-sm font-medium transition-colors">Drafts</button>
     </div>
 
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -90,7 +90,7 @@ async function toggleStatus(post) {
             <td class="px-6 py-4 text-xs text-gray-400 hidden lg:table-cell">{{ format(new Date(post.createdAt), 'MMM d, yyyy') }}</td>
             <td class="px-6 py-4">
               <div class="flex items-center gap-2">
-                <RouterLink :to="`/admin/posts/${post.id}/edit`" class="text-xs text-blue-600 hover:underline font-medium">Edit</RouterLink>
+                <RouterLink :to="`/admin/posts/${post.id}/edit`" class="text-xs text-primary-600 hover:underline font-medium">Edit</RouterLink>
                 <RouterLink :to="`/blog/${post.slug}`" target="_blank" class="text-xs text-gray-400 hover:text-gray-600">View</RouterLink>
                 <button @click="deletePost(post.id)" class="text-xs text-red-500 hover:text-red-700">Delete</button>
               </div>
@@ -100,7 +100,7 @@ async function toggleStatus(post) {
       </table>
 
       <div v-if="pagination.pages > 1" class="px-6 py-4 border-t border-gray-100 flex gap-2">
-        <button v-for="p in pagination.pages" :key="p" @click="page = p; loadPosts()" :class="p === pagination.page ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'" class="w-8 h-8 rounded-lg text-sm font-medium transition-colors">{{ p }}</button>
+        <button v-for="p in pagination.pages" :key="p" @click="page = p; loadPosts()" :class="p === pagination.page ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600'" class="w-8 h-8 rounded-lg text-sm font-medium transition-colors">{{ p }}</button>
       </div>
     </div>
   </div>
