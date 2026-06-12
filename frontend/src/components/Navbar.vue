@@ -140,6 +140,8 @@ const isB = () => layout.variant === 'b'
 
         <!-- Mobile toggle -->
         <button @click="mobileOpen = !mobileOpen" class="md:hidden p-2 rounded-md"
+          :aria-expanded="mobileOpen.toString()"
+          aria-label="Toggle navigation"
           :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-600'">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path v-if="!mobileOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>

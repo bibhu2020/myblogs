@@ -91,6 +91,7 @@ function ago(d) {
         </RouterLink>
 
         <!-- Side panel: next 3 recent + newsletter -->
+          <h2 class="sr-only">Recent Posts &amp; Newsletter</h2>
         <div class="lg:col-span-5 flex flex-col gap-4">
           <RouterLink v-for="post in sidePanel" :key="post.id" :to="`/blog/${post.slug}`"
             class="group flex gap-4 bg-gray-50 rounded-2xl p-4 hover:bg-primary-50 transition-colors">
@@ -113,10 +114,10 @@ function ago(d) {
 
           <!-- Newsletter -->
           <div class="bg-gradient-to-br from-primary-600 to-primary-800 rounded-2xl p-6 text-white">
-            <h3 class="font-bold text-lg mb-2" style="font-family:'Playfair Display',serif">Stay in the Loop</h3>
+            <h2 class="font-bold text-lg mb-2" style="font-family:'Playfair Display',serif">Stay in the Loop</h2>
             <p class="text-primary-100 text-sm mb-4">Get the latest stories delivered to your inbox.</p>
             <div class="flex gap-2">
-              <input type="email" placeholder="your@email.com"
+              <input type="email" placeholder="your@email.com" aria-label="Email address for newsletter"
                 class="flex-1 px-3 py-2 rounded-lg bg-white/20 text-white placeholder-primary-200 text-sm border border-white/30 focus:outline-none focus:border-white" />
               <button class="bg-white text-primary-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-50 transition-colors">Subscribe</button>
             </div>
@@ -156,7 +157,7 @@ function ago(d) {
   <!-- ══════════════════════════════════════════════════════════════════════ -->
   <!--  LAYOUT B — Dark Magazine                                             -->
   <!-- ══════════════════════════════════════════════════════════════════════ -->
-  <div v-else id="main-content-b" class="min-h-screen bg-[#080810] text-slate-200">
+  <div v-else id="main-content" class="min-h-screen bg-[#080810] text-slate-200">
     <Navbar />
 
     <!-- Layout B holiday badge -->
@@ -280,7 +281,7 @@ function ago(d) {
             <h3 class="font-bold text-white text-lg mb-2" style="font-family:'Playfair Display',serif">Stay Ahead</h3>
             <p class="text-slate-400 text-sm mb-4">Daily dispatches from AI, science, and beyond.</p>
             <div class="flex gap-2">
-              <input type="email" placeholder="your@email.com"
+              <input type="email" placeholder="your@email.com" aria-label="Email address for newsletter"
                 class="flex-1 px-3 py-2 rounded-lg bg-slate-900 text-slate-200 placeholder-slate-600 text-sm border border-slate-700 focus:outline-none focus:border-violet-500" />
               <button class="bg-violet-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-violet-700 transition-colors">Go</button>
             </div>
@@ -310,7 +311,7 @@ function ago(d) {
             <p class="text-slate-500 leading-relaxed text-sm max-w-xs">Where ideas converge. Thoughtful writing on technology, science, history, and the ideas that shape our world.</p>
           </div>
           <div>
-            <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Topics</h4>
+            <h3 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Topics</h3>
             <ul class="space-y-2">
               <li v-for="cat in blog.categories" :key="cat.id">
                 <RouterLink :to="`/category/${cat.slug}`" class="text-slate-500 hover:text-violet-400 text-sm transition-colors flex items-center gap-2">
@@ -320,7 +321,7 @@ function ago(d) {
             </ul>
           </div>
           <div>
-            <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Quick Links</h4>
+            <h3 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Quick Links</h3>
             <ul class="space-y-2">
               <li><RouterLink to="/" class="text-slate-500 hover:text-violet-400 text-sm transition-colors">Home</RouterLink></li>
               <li><RouterLink to="/blog" class="text-slate-500 hover:text-violet-400 text-sm transition-colors">All Posts</RouterLink></li>

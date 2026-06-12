@@ -18,9 +18,9 @@ const layout = useLayoutStore()
           </div>
           <p class="leading-relaxed text-sm max-w-xs" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-primary-200'">Where ideas converge. Thoughtful writing on technology, science, history, and the ideas that shape our world.</p>
           <div class="flex gap-4 mt-6">
-            <a href="#" class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-violet-600 transition-colors text-sm" :class="layout.variant === 'b' ? 'bg-slate-800' : 'bg-gray-800'">𝕏</a>
-            <a href="#" class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-violet-600 transition-colors text-sm" :class="layout.variant === 'b' ? 'bg-slate-800' : 'bg-gray-800'">in</a>
-            <a href="#" class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-violet-600 transition-colors text-sm" :class="layout.variant === 'b' ? 'bg-slate-800' : 'bg-gray-800'">📷</a>
+            <a href="#" class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-violet-600 transition-colors text-sm" :class="layout.variant === 'b' ? 'bg-slate-800' : 'bg-gray-800'" aria-label="Twitter">𝕏</a>
+            <a href="#" class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-violet-600 transition-colors text-sm" :class="layout.variant === 'b' ? 'bg-slate-800' : 'bg-gray-800'" aria-label="LinkedIn">in</a>
+            <a href="#" class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-violet-600 transition-colors text-sm" :class="layout.variant === 'b' ? 'bg-slate-800' : 'bg-gray-800'" aria-label="Instagram">📷</a>
           </div>
         </div>
 
