@@ -8,11 +8,8 @@ import time
 from io import BytesIO
 
 import requests
-from openai import OpenAI
 
 from ..state import AgentState
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
 
 
 def _make_agent_jwt() -> str:
@@ -63,29 +60,6 @@ def _upload_image(buf: bytes, mime: str, alt: str, server_base: str) -> str:
     if not url:
         raise RuntimeError(f"Upload response missing url: {res.text[:300]}")
     return url
-
-
-def _try_dalle3(prompt: str, size: str) -> tuple[bytes, str]:
-    valid = {"1024x1024", "1792x1024", "1024x1792"}
-    resp = client.images.generate(
-        model="dall-e-3",
-        prompt=prompt[:900],
-        size=size if size in valid else "1024x1024",
-        quality="hd",
-        n=1,
-    )
-    url = resp.data[0].url
-    r = requests.get(url, timeout=60)
-    r.raise_for_status()
-    return r.content, "image/png"
-
-
-def _try_dalle2(prompt: str) -> tuple[bytes, str]:
-    resp = client.images.generate(model="dall-e-2", prompt=prompt[:1000], size="1024x1024", n=1)
-    url = resp.data[0].url
-    r = requests.get(url, timeout=60)
-    r.raise_for_status()
-    return r.content, "image/png"
 
 
 _HF_BASE = "https://router.huggingface.co/hf-inference/models"
@@ -153,26 +127,64 @@ def _try_flux(prompt: str) -> tuple[bytes, str]:
     return res.content, mime
 
 
-def _try_gemini(prompt: str) -> tuple[bytes, str]:
+_IMAGEN_ASPECT = {
+    "1792x1024": "16:9",
+    "1024x1792": "9:16",
+    "1024x1024": "1:1",
+}
+
+
+def _try_gemini(prompt: str, size: str = "1024x1024") -> tuple[bytes, str]:
+    """Two-step Gemini pipeline: Gemini Flash enhances the prompt, Imagen 3 renders it.
+
+    Step 1 is best-effort — if Flash is unavailable the original prompt is used.
+    Step 2 tries imagen-3.0-generate-002 then imagen-3.0-fast-generate-001.
+    """
     api_key = os.getenv("GEMINI_API_KEY", "")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY not set")
-    import warnings
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        import google.generativeai as genai
-    genai.configure(api_key=api_key)
-    # Try Imagen 3 model variants in order; raise on all failures so the
-    # caller can fall through to the next provider (Unsplash).
+
+    from google import genai  # google-genai package
+    client = genai.Client(api_key=api_key)
+
+    # ── Step 1: enhance prompt with Gemini Flash ───────────────────────────
+    imagen_prompt = prompt
+    try:
+        text_resp = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=(
+                "Rewrite the following as a vivid, specific image generation prompt for Imagen 3. "
+                "Focus on visual details: lighting, composition, colour palette, style, mood. "
+                "Return ONLY the improved prompt — no explanation, no preamble.\n\n"
+                f"{prompt[:600]}"
+            ),
+        )
+        if text_resp.text and text_resp.text.strip():
+            imagen_prompt = text_resp.text.strip()
+            print(f"  ✦ Gemini enhanced prompt: {imagen_prompt[:80]}…")
+    except Exception as e:
+        print(f"  ℹ️  Gemini prompt enhancement skipped ({e}) — using original")
+
+    # ── Step 2: generate image with Imagen 3 ──────────────────────────────
+    aspect_ratio = _IMAGEN_ASPECT.get(size, "1:1")
     last_exc: Exception = RuntimeError("No Imagen model succeeded")
-    for model_name in ("imagen-3.0-generate-002", "imagen-3.0-fast-generate-001"):
+    for model_name in ("imagen-4.0-generate-001", "imagen-4.0-fast-generate-001"):
         try:
-            model = genai.ImageGenerationModel(model_name)
-            result = model.generate_images(prompt=prompt[:800], number_of_images=1)
-            return result.images[0]._image_bytes, "image/png"
+            result = client.models.generate_images(
+                model=model_name,
+                prompt=imagen_prompt[:1000],
+                config=dict(
+                    number_of_images=1,
+                    aspect_ratio=aspect_ratio,
+                    output_mime_type="image/jpeg",
+                ),
+            )
+            if result.generated_images:
+                return result.generated_images[0].image.image_bytes, "image/jpeg"
+            last_exc = RuntimeError("Imagen returned 0 images")
         except Exception as exc:
             last_exc = exc
-    raise RuntimeError(f"Gemini: {last_exc}")
+    raise RuntimeError(f"Gemini Imagen: {last_exc}")
 
 
 def _try_unsplash(topic: str) -> tuple[bytes, str, str | None]:
@@ -211,13 +223,11 @@ def _generate_image(
         except Exception as e:
             print(f"  ⚠️  Unsplash (travel): {e} — falling back to AI generation")
 
-    ai_prompt = f"{prompt}. Professional, high-quality illustration, no text overlays, no watermarks."
+    ai_prompt = f"{prompt}. Professional, high-quality, no text overlays, no watermarks."
     providers: list[tuple[str, object]] = [
-        ("DALL-E 3",      lambda: _try_dalle3(ai_prompt, size)),
-        ("FLUX.1-dev",    lambda: _try_flux_dev(ai_prompt)),   # DSLR-quality HF fallback
-        ("DALL-E 2",      lambda: _try_dalle2(ai_prompt)),
-        ("FLUX.1-schnell",lambda: _try_flux(ai_prompt)),
-        ("Gemini",        lambda: _try_gemini(ai_prompt)),
+        ("Gemini",         lambda: _try_gemini(ai_prompt, size)),  # Imagen 3 via Gemini Flash
+        ("FLUX.1-dev",     lambda: _try_flux_dev(ai_prompt)),      # DSLR HF fallback
+        ("FLUX.1-schnell", lambda: _try_flux(ai_prompt)),          # fast HF fallback
     ]
     for name, fn in providers:
         try:
