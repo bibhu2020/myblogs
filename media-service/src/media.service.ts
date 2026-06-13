@@ -16,8 +16,8 @@ export class MediaService {
   constructor(@InjectRepository(Media) private mediaRepo: Repository<Media>) {}
 
   private ghHeaders() {
-    const token = process.env.GITHUB_TOKEN;
-    if (!token) throw new InternalServerErrorException('GITHUB_TOKEN is not configured');
+    const token = process.env.SECRET_TOKEN_GITHUB;
+    if (!token) throw new InternalServerErrorException('SECRET_TOKEN_GITHUB is not configured');
     return {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',

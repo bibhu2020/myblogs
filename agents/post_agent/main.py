@@ -5,7 +5,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).parent.parent / ".env")
+load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 from .graph import build_graph  # noqa: E402 — must load .env before importing graph
 from .tracer import complete_run, start_run  # noqa: E402

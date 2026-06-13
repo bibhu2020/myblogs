@@ -13,7 +13,7 @@ if len(sys.argv) >= 2 and sys.argv[1] == "schedule":
 
     from dotenv import load_dotenv
 
-    load_dotenv(Path(__file__).parent.parent / ".env")
+    load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
     from croniter import croniter
     from datetime import datetime

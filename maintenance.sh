@@ -31,7 +31,7 @@ Required (set in .env or export):
 Optional:
   MAINTENANCE_MODEL  Model to use (default: gpt-5)
   SERVER_BASE        Meridian API base URL (default: https://mishrabP-myblogs.hf.space)
-  GITHUB_TOKEN       GitHub personal access token (for Dependabot PR analysis)
+  SECRET_TOKEN_GITHUB  GitHub personal access token (for Dependabot PR analysis)
   GITHUB_REPO        GitHub repo in owner/repo format (e.g. bibhu2020/myblogs)
 USAGE
   exit 1
@@ -50,7 +50,7 @@ fi
 case "$1" in
   run)
     cd "$ROOT_DIR"
-    python3 -m maintenance_agent
+    python3 -m agents.maintenance_agent
     ;;
   schedule)
     if [ -z "${2:-}" ]; then
@@ -59,7 +59,7 @@ case "$1" in
       usage
     fi
     cd "$ROOT_DIR"
-    python3 -m maintenance_agent schedule "$2"
+    python3 -m agents.maintenance_agent schedule "$2"
     ;;
   *)
     echo "Unknown command: $1"

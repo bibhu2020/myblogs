@@ -1,0 +1,31 @@
+name: Run Maintenance Agent
+
+on:
+  schedule:
+    - cron: '0 0 1 * *'  # 1st of each month at 00:00 UTC
+  workflow_dispatch:
+
+jobs:
+  maintenance-agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[maintenance]" --quiet
+
+      - name: Run maintenance agent
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SECRET_TOKEN_GITHUB: ${{ secrets.GITHUB_TOKEN_SECRET }}
+          SERVER_BASE: ${{ vars.HF_SPACE_URL }}
+          GITHUB_REPO: ${{ github.repository }}
+          MAINTENANCE_MODEL: ${{ vars.MAINTENANCE_MODEL }}
+        run: python3 -m agents.maintenance_agent

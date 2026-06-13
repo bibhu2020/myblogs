@@ -1,0 +1,75 @@
+name: Run Rebranding Agent
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'  # Every Sunday 03:00 UTC — agent enforces first-Sunday-only guard
+  workflow_dispatch:      # Allow manual trigger (guard is bypassed for manual runs)
+
+permissions:
+  contents: write         # Required: the agent commits and pushes the rebrand
+
+jobs:
+  rebranding-agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # Fast guard — skip setup/install cost on non-first Sundays.
+      # The agent also checks internally for standalone compatibility.
+      - name: First-Sunday guard
+        id: guard
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual trigger — bypassing first-Sunday guard."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            day=$(printf '%d' "$(date -u +%d)")
+            if [ "$day" -gt 7 ]; then
+              echo "Not the first Sunday of the month (day $day). Skipping."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "First Sunday confirmed (day $day). Proceeding."
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.guard.outputs.skip != 'true'
+        with:
+          persist-credentials: true  # Allows the agent to git push
+
+      - name: Configure git identity
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          git config user.name "Claude Theme Bot"
+          git config user.email "bm80177@gmail.com"
+
+      - uses: actions/setup-python@v5
+        if: steps.guard.outputs.skip != 'true'
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      # Node.js is needed for the frontend build verification step
+      - uses: actions/setup-node@v4
+        if: steps.guard.outputs.skip != 'true'
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        if: steps.guard.outputs.skip != 'true'
+        run: npm ci --prefix frontend --silent
+
+      - name: Install Python dependencies
+        if: steps.guard.outputs.skip != 'true'
+        run: pip install -e ".[rebranding]" --quiet
+
+      - name: Run rebranding agent
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SERVER_BASE: ${{ vars.HF_SPACE_URL }}
+          # GITHUB_WORKSPACE is set automatically by the runner
+        run: python3 -m agents.rebranding_agent

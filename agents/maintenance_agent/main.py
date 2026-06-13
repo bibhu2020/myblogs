@@ -5,12 +5,12 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).parent.parent / ".env")
+load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 from .agents import run_team  # noqa: E402
 from .tracer import complete_run, start_run  # noqa: E402
 
-REPO_ROOT = str(Path(__file__).parent.parent)
+REPO_ROOT = str(Path(__file__).parent.parent.parent)
 SERVER_BASE = os.getenv("SERVER_BASE", "https://mishrabP-myblogs.hf.space")
 
 

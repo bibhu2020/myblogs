@@ -144,3 +144,9 @@ vite.config.ts.timestamp-*
 
 # NestJS build output
 */dist/
+
+# Python build artifacts
+__pycache__/
+*.pyc
+*.egg-info/
+.eggs/

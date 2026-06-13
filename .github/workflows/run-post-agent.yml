@@ -1,0 +1,60 @@
+name: Run Post Agent
+
+on:
+  schedule:
+    - cron: '0 3 * * 6'  # Saturday 03:00 UTC — ai_trending
+    - cron: '0 3 * * 0'  # Sunday   03:00 UTC — random_general
+  workflow_dispatch:
+    inputs:
+      topic_mode:
+        description: 'Topic mode override'
+        required: false
+        default: 'random_general'
+        type: choice
+        options:
+          - random_general
+          - ai_trending
+          - AI
+          - Technology
+          - Science
+          - History
+          - Travel
+          - Knowledge
+
+jobs:
+  post-agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[post_agent]" --quiet
+
+      - name: Resolve topic mode
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "TOPIC_MODE=${{ inputs.topic_mode }}" >> "$GITHUB_ENV"
+          elif [ "${{ github.event.schedule }}" = "0 3 * * 6" ]; then
+            echo "TOPIC_MODE=ai_trending" >> "$GITHUB_ENV"
+          else
+            echo "TOPIC_MODE=random_general" >> "$GITHUB_ENV"
+          fi
+
+      - name: Run post agent
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          MCP_API_KEY: ${{ secrets.MCP_API_KEY }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
+          SERVER_BASE: ${{ vars.HF_SPACE_URL }}
+          MCP_URL: ${{ vars.HF_SPACE_URL }}/api/mcp
+          # TOPIC_MODE set by "Resolve topic mode" step above
+        run: python3 -m agents.post_agent

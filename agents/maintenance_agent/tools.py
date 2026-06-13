@@ -8,7 +8,7 @@ from pathlib import Path
 import requests
 
 SERVER_BASE = os.getenv("SERVER_BASE", "https://mishrabP-myblogs.hf.space")
-REPO_ROOT = str(Path(__file__).parent.parent)
+REPO_ROOT = str(Path(__file__).parent.parent.parent)
 
 
 # ---------------------------------------------------------------------------
@@ -496,13 +496,13 @@ def fetch_post_html(slug: str) -> str:
 def list_github_prs(owner: str, repo: str) -> str:
     """List open pull requests on a GitHub repository.
 
-    Uses the GITHUB_TOKEN environment variable for authentication.
+    Uses the SECRET_TOKEN_GITHUB environment variable for authentication.
 
     Args:
         owner: GitHub repository owner/org, e.g. 'bibhu2020'.
         repo: Repository name, e.g. 'myblogs'.
     """
-    token = os.getenv("GITHUB_TOKEN", "")
+    token = os.getenv("SECRET_TOKEN_GITHUB", "")
     headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -541,14 +541,14 @@ def list_github_prs(owner: str, repo: str) -> str:
 def get_pr_details(owner: str, repo: str, pr_number: int) -> str:
     """Get details of a specific GitHub PR including files changed.
 
-    Uses the GITHUB_TOKEN environment variable for authentication.
+    Uses the SECRET_TOKEN_GITHUB environment variable for authentication.
 
     Args:
         owner: GitHub repository owner/org.
         repo: Repository name.
         pr_number: Pull request number.
     """
-    token = os.getenv("GITHUB_TOKEN", "")
+    token = os.getenv("SECRET_TOKEN_GITHUB", "")
     headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -600,3 +600,212 @@ def get_pr_details(owner: str, repo: str, pr_number: int) -> str:
         })
     except Exception as exc:
         return json.dumps({"error": str(exc)})
+
+
+# ---------------------------------------------------------------------------
+# CodePatcher tools
+# ---------------------------------------------------------------------------
+
+
+def apply_file_patch(file_path: str, old_string: str, new_string: str) -> str:
+    """Apply a surgical text replacement to a source file in the myblogs project.
+
+    The old_string must appear exactly once in the file. Changes are written in-place.
+    Always call read_source_file first to see the exact current content before patching.
+
+    Args:
+        file_path: File path relative to /home/azure/myblogs/ (e.g. 'frontend/index.html').
+        old_string: Exact text to replace — must appear exactly once in the file.
+        new_string: Replacement text. Can be empty string to delete the old_string.
+    """
+    full_path = (Path(REPO_ROOT) / file_path.lstrip("/")).resolve()
+    repo_path = Path(REPO_ROOT).resolve()
+    if not str(full_path).startswith(str(repo_path) + "/"):
+        return json.dumps({"success": False, "error": "Path traversal rejected — must be within repo root"})
+    if not full_path.exists():
+        return json.dumps({"success": False, "error": f"File not found: {file_path}"})
+    try:
+        content = full_path.read_text(encoding="utf-8")
+        count = content.count(old_string)
+        if count == 0:
+            return json.dumps({
+                "success": False,
+                "error": f"old_string not found in {file_path}. Use read_source_file to verify exact content.",
+            })
+        if count > 1:
+            return json.dumps({
+                "success": False,
+                "error": (
+                    f"old_string found {count} times in {file_path} — must be unique. "
+                    "Add more surrounding context to make it unambiguous."
+                ),
+            })
+        full_path.write_text(content.replace(old_string, new_string, 1), encoding="utf-8")
+        return json.dumps({"success": True, "file": file_path, "message": f"Replaced 1 occurrence in {file_path}"})
+    except Exception as exc:
+        return json.dumps({"success": False, "error": str(exc)})
+
+
+def revert_file(file_path: str) -> str:
+    """Revert a specific file to its last committed state (git checkout HEAD -- <file>).
+
+    Use this to undo a patch that caused a build failure before retrying with a corrected patch.
+
+    Args:
+        file_path: File path relative to /home/azure/myblogs/ (e.g. 'frontend/index.html').
+    """
+    full_path = (Path(REPO_ROOT) / file_path.lstrip("/")).resolve()
+    if not str(full_path).startswith(str(Path(REPO_ROOT).resolve()) + "/"):
+        return json.dumps({"success": False, "error": "Path traversal rejected"})
+    try:
+        result = subprocess.run(
+            ["git", "checkout", "HEAD", "--", file_path],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            return json.dumps({"success": True, "message": f"Reverted {file_path} to HEAD"})
+        return json.dumps({"success": False, "error": result.stderr or result.stdout})
+    except Exception as exc:
+        return json.dumps({"success": False, "error": str(exc)})
+
+
+# ---------------------------------------------------------------------------
+# BuildValidator tools
+# ---------------------------------------------------------------------------
+
+
+def run_frontend_build() -> str:
+    """Run the Vite frontend build (npm run build) to verify the frontend compiles without errors.
+
+    Returns JSON with: success (bool), returnCode, stdout (last 3000 chars),
+    stderr (last 2000 chars), durationSeconds, and verdict ('BUILD PASSED' or 'BUILD FAILED').
+    Chunk-size warnings do NOT indicate failure — only returnCode != 0 means failure.
+    """
+    import time
+    frontend_dir = os.path.join(REPO_ROOT, "frontend")
+    try:
+        t0 = time.time()
+        result = subprocess.run(
+            ["npm", "run", "build"],
+            cwd=frontend_dir,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        elapsed = round(time.time() - t0, 1)
+        success = result.returncode == 0
+        return json.dumps({
+            "success": success,
+            "returnCode": result.returncode,
+            "stdout": result.stdout[-3000:] if result.stdout else "",
+            "stderr": result.stderr[-2000:] if result.stderr else "",
+            "durationSeconds": elapsed,
+            "verdict": "BUILD PASSED" if success else "BUILD FAILED",
+        })
+    except subprocess.TimeoutExpired:
+        return json.dumps({"success": False, "error": "Build timed out after 300s", "verdict": "BUILD FAILED"})
+    except Exception as exc:
+        return json.dumps({"success": False, "error": str(exc), "verdict": "BUILD FAILED"})
+
+
+def git_diff_changes() -> str:
+    """Show all changes (staged and unstaged) relative to HEAD in the myblogs repository.
+
+    Returns a unified diff so the team can review exactly what code has been modified.
+    Output is truncated at 15000 characters if the diff is very large.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "diff", "HEAD"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        diff = result.stdout
+        if not diff.strip():
+            return json.dumps({"diff": "", "message": "No changes compared to HEAD — working tree is clean"})
+        if len(diff) > 15000:
+            diff = diff[:15000] + "\n... (truncated at 15000 chars)"
+        return json.dumps({"diff": diff, "charCount": len(result.stdout)})
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
+
+
+# ---------------------------------------------------------------------------
+# GitPublisher tools
+# ---------------------------------------------------------------------------
+
+
+def git_status_short() -> str:
+    """Get the short git status showing which files are modified, staged, or untracked."""
+    try:
+        result = subprocess.run(
+            ["git", "status", "--short"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return json.dumps({
+            "output": result.stdout.strip() or "(working tree clean)",
+            "returnCode": result.returncode,
+        })
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
+
+
+def git_commit_and_push(message: str) -> str:
+    """Stage all modified tracked files (git add -u), commit with message, and push to origin.
+
+    Only stages files already tracked by git that were modified — never adds new untracked files.
+    IMPORTANT: Only call this after BuildValidator has confirmed BUILD PASSED in this session.
+
+    Args:
+        message: Commit message. Should start with 'maint: ' prefix, e.g.
+                 'maint: fix aria-labels and OG meta tags (monthly maintenance)'.
+    """
+    try:
+        # Check for changes
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=REPO_ROOT, capture_output=True, text=True, timeout=30,
+        )
+        if not status.stdout.strip():
+            return json.dumps({"success": False, "message": "Nothing to commit — working tree is clean"})
+
+        # Stage only modified tracked files
+        add = subprocess.run(
+            ["git", "add", "-u"],
+            cwd=REPO_ROOT, capture_output=True, text=True, timeout=30,
+        )
+        if add.returncode != 0:
+            return json.dumps({"success": False, "error": f"git add -u failed: {add.stderr}"})
+
+        # Commit
+        commit = subprocess.run(
+            ["git", "commit", "-m", message],
+            cwd=REPO_ROOT, capture_output=True, text=True, timeout=60,
+        )
+        if commit.returncode != 0:
+            return json.dumps({"success": False, "error": f"git commit failed: {commit.stderr or commit.stdout}"})
+
+        # Push
+        push = subprocess.run(
+            ["git", "push", "origin", "HEAD"],
+            cwd=REPO_ROOT, capture_output=True, text=True, timeout=120,
+        )
+        push_ok = push.returncode == 0
+        return json.dumps({
+            "success": push_ok,
+            "commitOutput": commit.stdout.strip(),
+            "pushOutput": push.stdout.strip() if push_ok else "",
+            "pushError": push.stderr.strip() if not push_ok else "",
+            "message": "Changes committed and pushed to GitHub" if push_ok
+                       else f"Committed but push failed: {push.stderr[:400]}",
+        })
+    except Exception as exc:
+        return json.dumps({"success": False, "error": str(exc)})

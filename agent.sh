@@ -58,7 +58,7 @@ fi
 case "$1" in
   run)
     cd "$ROOT_DIR"
-    python3 -m post_agent
+    python3 -m agents.post_agent
     ;;
   schedule)
     if [ -z "${2:-}" ]; then
@@ -67,7 +67,7 @@ case "$1" in
       usage
     fi
     cd "$ROOT_DIR"
-    python3 -m post_agent schedule "$2"
+    python3 -m agents.post_agent schedule "$2"
     ;;
   *)
     echo "❌ Unknown command: $1"
