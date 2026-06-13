@@ -2,8 +2,14 @@ name: Run Maintenance Agent
 
 on:
   schedule:
-    - cron: '0 0 1 * *'  # 1st of each month at 00:00 UTC
+    - cron: '0 0 1 * *'  # 1st of each month at 00:00 UTC — agent enforces first-of-month guard
   workflow_dispatch:
+    inputs:
+      force_maintenance:
+        description: 'Force maintenance regardless of schedule (bypass first-of-month guard)'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   maintenance-agent:
@@ -11,21 +17,49 @@ jobs:
     timeout-minutes: 60
 
     steps:
+      # Fast guard — skip all setup cost on non-first-of-month runs unless forced.
+      # The agent also enforces this internally for standalone compatibility.
+      - name: First-of-month guard
+        id: guard
+        run: |
+          FORCE="${{ inputs.force_maintenance }}"
+          if [ "$FORCE" = "true" ]; then
+            echo "Manual trigger with force_maintenance=true — bypassing first-of-month guard."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual trigger without force flag — bypassing first-of-month guard."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            day=$(printf '%d' "$(date -u +%d)")
+            if [ "$day" -ne 1 ]; then
+              echo "Not the first of the month (day $day). Skipping."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "First of the month confirmed (day $day). Proceeding."
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.guard.outputs.skip != 'true'
 
       - uses: actions/setup-python@v5
+        if: steps.guard.outputs.skip != 'true'
         with:
           python-version: '3.11'
           cache: pip
 
       - name: Install dependencies
+        if: steps.guard.outputs.skip != 'true'
         run: pip install -e ".[maintenance]" --quiet
 
       - name: Run maintenance agent
+        if: steps.guard.outputs.skip != 'true'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           SECRET_TOKEN_GITHUB: ${{ secrets.GITHUB_TOKEN_SECRET }}
           SERVER_BASE: ${{ vars.HF_SPACE_URL }}
           GITHUB_REPO: ${{ github.repository }}
           MAINTENANCE_MODEL: ${{ vars.MAINTENANCE_MODEL || 'gpt-4o' }}
+          FORCE_MAINTENANCE: ${{ inputs.force_maintenance || 'false' }}
         run: python3 -m meridian_agents.maintenance_agent
