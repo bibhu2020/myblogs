@@ -1,0 +1,45 @@
+name: Close Dependabot PRs
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'   # Every Sunday at 03:00 UTC
+  workflow_dispatch:       # Allow manual trigger
+
+permissions:
+  pull-requests: write
+
+jobs:
+  close-dependabot-prs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close all open Dependabot pull requests
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pulls } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+
+            const dependabotPRs = pulls.filter(
+              pr => pr.user.login === 'dependabot[bot]'
+            );
+
+            if (dependabotPRs.length === 0) {
+              core.info('No open Dependabot PRs found.');
+              return;
+            }
+
+            for (const pr of dependabotPRs) {
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                state: 'closed',
+              });
+              core.info(`Closed PR #${pr.number}: ${pr.title}`);
+            }
+
+            core.info(`Done — closed ${dependabotPRs.length} Dependabot PR(s).`);

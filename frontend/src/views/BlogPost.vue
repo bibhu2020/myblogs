@@ -349,10 +349,10 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
 
       <!-- Photo Gallery -->
       <div v-if="getGallery().length" class="mt-12">
-        <h3 class="text-xl font-bold mb-4" :class="layout.variant === 'b' ? 'text-slate-100' : 'text-gray-900'" style="font-family:'Playfair Display',serif">Photo Gallery</h3>
+        <h2 class="text-xl font-bold mb-4" :class="layout.variant === 'b' ? 'text-slate-100' : 'text-gray-900'" style="font-family:'Playfair Display',serif">Photo Gallery</h2>
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div v-for="(img, idx) in getGallery()" :key="idx" class="aspect-square rounded-xl overflow-hidden cursor-pointer group" @click="galleryOpen = true; galleryIndex = idx">
-            <img :src="img" alt="Gallery image" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+            <img :src="img" :alt="`Gallery image ${idx + 1} of ${getGallery().length}`" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
           </div>
         </div>
       </div>

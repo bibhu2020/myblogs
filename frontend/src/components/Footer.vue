@@ -18,14 +18,14 @@ const layout = useLayoutStore()
           </div>
           <p class="leading-relaxed text-sm max-w-xs" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-primary-200'">Where ideas converge. Thoughtful writing on technology, science, history, and the ideas that shape our world.</p>
           <div class="flex gap-4 mt-6">
-            <a href="#" class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-violet-600 transition-colors text-sm" :class="layout.variant === 'b' ? 'bg-slate-800' : 'bg-gray-800'" aria-label="Twitter">𝕏</a>
-            <a href="#" class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-violet-600 transition-colors text-sm" :class="layout.variant === 'b' ? 'bg-slate-800' : 'bg-gray-800'" aria-label="LinkedIn">in</a>
-            <a href="#" class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-violet-600 transition-colors text-sm" :class="layout.variant === 'b' ? 'bg-slate-800' : 'bg-gray-800'" aria-label="Instagram">📷</a>
+            <a href="#" class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-violet-600 transition-colors text-sm" :class="layout.variant === 'b' ? 'bg-slate-800' : 'bg-gray-800'" aria-label="Follow Meridian on Twitter (𝕏)">𝕏</a>
+            <a href="#" class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-violet-600 transition-colors text-sm" :class="layout.variant === 'b' ? 'bg-slate-800' : 'bg-gray-800'" aria-label="Follow Meridian on LinkedIn">in</a>
+            <a href="#" class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-violet-600 transition-colors text-sm" :class="layout.variant === 'b' ? 'bg-slate-800' : 'bg-gray-800'" aria-label="Follow Meridian on Instagram">📷</a>
           </div>
         </div>
 
         <div>
-          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Topics</h4>
+          <h3 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Topics</h3>
           <ul class="space-y-2">
             <li v-for="cat in blog.categories" :key="cat.id">
               <RouterLink :to="`/category/${cat.slug}`" class="text-sm transition-colors flex items-center gap-2" :class="layout.variant === 'b' ? 'text-slate-400 hover:text-violet-400' : 'text-primary-200 hover:text-white'">
@@ -37,7 +37,7 @@ const layout = useLayoutStore()
         </div>
 
         <div>
-          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Quick Links</h4>
+          <h3 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Quick Links</h3>
           <ul class="space-y-2">
             <li><RouterLink to="/" class="text-sm transition-colors" :class="layout.variant === 'b' ? 'text-slate-400 hover:text-violet-400' : 'text-primary-200 hover:text-white'">Home</RouterLink></li>
             <li><RouterLink to="/search" class="text-sm transition-colors" :class="layout.variant === 'b' ? 'text-slate-400 hover:text-violet-400' : 'text-primary-200 hover:text-white'">Search</RouterLink></li>

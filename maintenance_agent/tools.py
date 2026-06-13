@@ -10,6 +10,175 @@ import requests
 SERVER_BASE = os.getenv("SERVER_BASE", "https://mishrabP-myblogs.hf.space")
 REPO_ROOT = str(Path(__file__).parent.parent)
 
+
+# ---------------------------------------------------------------------------
+# Static frontend audit tool  (SEO + ADA)
+# ---------------------------------------------------------------------------
+
+def check_frontend_static(root: str = "") -> str:
+    """Audit the frontend source for SEO and ADA/WCAG AA requirements.
+
+    Checks index.html, robots.txt, router, App.vue, Home.vue, Footer.vue,
+    Navbar.vue, and BlogPost.vue against a known checklist.
+    Returns a JSON report with passed/failed items.
+
+    Args:
+        root: Repo root path. Defaults to the myblogs project root.
+    """
+    base = Path(root or REPO_ROOT)
+    passed: list[dict] = []
+    failed: list[dict] = []
+
+    def _read(rel: str) -> str:
+        p = base / rel
+        return p.read_text(encoding="utf-8") if p.exists() else ""
+
+    def ok(area: str, msg: str) -> None:
+        passed.append({"area": area, "message": msg})
+
+    def fail(area: str, severity: str, msg: str, detail: str = "") -> None:
+        failed.append({"area": area, "severity": severity, "message": msg, "detail": detail})
+
+    # ── index.html ───────────────────────────────────────────────────────────
+    html = _read("frontend/index.html")
+    if not html:
+        fail("seo", "critical", "frontend/index.html not found")
+    else:
+        if re.search(r'<html[^>]+lang=["\']en["\']', html):
+            ok("seo", "<html lang='en'> present")
+        else:
+            fail("seo", "high", "index.html missing lang='en' on <html>",
+                 "Add lang=\"en\" to the <html> tag.")
+        if re.search(r'<meta\s+name=["\']description["\']', html, re.I):
+            ok("seo", "<meta name='description'> present")
+        else:
+            fail("seo", "high", "index.html missing <meta name='description'>",
+                 "Add a concise site description meta tag.")
+        for tag in ("og:title", "og:description", "og:type", "og:url"):
+            if tag in html:
+                ok("seo", f"Open Graph tag {tag} present")
+            else:
+                fail("seo", "medium", f"index.html missing Open Graph tag {tag}")
+        for tag in ("twitter:card", "twitter:title"):
+            if tag in html:
+                ok("seo", f"Twitter Card tag {tag} present")
+            else:
+                fail("seo", "medium", f"index.html missing Twitter Card tag {tag}")
+        if re.search(r'<meta\s+name=["\']viewport["\']', html, re.I):
+            ok("seo", "<meta name='viewport'> present")
+        else:
+            fail("seo", "high", "index.html missing viewport meta tag")
+        if re.search(r'<link\s+rel=["\']canonical["\']', html, re.I):
+            ok("seo", "<link rel='canonical'> present")
+        else:
+            fail("seo", "medium", "index.html missing canonical link tag")
+
+    # ── robots.txt ───────────────────────────────────────────────────────────
+    robots = _read("frontend/public/robots.txt")
+    if robots:
+        if re.search(r"User-agent:\s*\*", robots) and "Allow:" in robots:
+            ok("seo", "robots.txt present and allows crawling")
+        else:
+            fail("seo", "medium", "robots.txt may be blocking crawlers",
+                 "Ensure 'User-agent: *' and 'Allow: /' are present.")
+    else:
+        fail("seo", "high", "frontend/public/robots.txt is missing",
+             "Create robots.txt with 'User-agent: *\\nAllow: /'.")
+
+    # ── router document.title ────────────────────────────────────────────────
+    router = _read("frontend/src/router/index.js")
+    if "afterEach" in router and "document.title" in router:
+        ok("seo", "Router afterEach sets document.title per route")
+    else:
+        fail("seo", "high", "Router does not set document.title per route",
+             "Add a router.afterEach hook that sets document.title from route.meta.title.")
+
+    # ── App.vue skip link ────────────────────────────────────────────────────
+    app = _read("frontend/src/App.vue")
+    if "skip" in app.lower() and "#main-content" in app:
+        ok("ada", "Skip-to-content link present in App.vue")
+    else:
+        fail("ada", "high", "App.vue missing skip-to-content link",
+             "Add <a href='#main-content' class='sr-only focus:not-sr-only ...'>Skip to content</a>.")
+
+    # ── Home.vue id=main-content ─────────────────────────────────────────────
+    home = _read("frontend/src/views/Home.vue")
+    main_ids = re.findall(r'id=["\']main-content["\']', home)
+    if len(main_ids) >= 2:
+        ok("ada", "id='main-content' present in both Home.vue layouts")
+    elif len(main_ids) == 1:
+        fail("ada", "medium", "id='main-content' only found once in Home.vue",
+             "Both Layout A and Layout B sections need id='main-content'.")
+    else:
+        fail("ada", "high", "id='main-content' missing from Home.vue",
+             "Add id='main-content' to the main content landmark in both layouts.")
+
+    # ── Home.vue newsletter aria-labels ─────────────────────────────────────
+    newsletter_labels = re.findall(r'aria-label=["\']Email address for newsletter["\']', home)
+    if len(newsletter_labels) >= 2:
+        ok("ada", "Newsletter inputs have aria-label in both Home.vue layouts")
+    else:
+        fail("ada", "medium", f"Newsletter email input missing aria-label (found {len(newsletter_labels)}/2)",
+             "Both Layout A and Layout B newsletter inputs need aria-label='Email address for newsletter'.")
+
+    # ── Navbar.vue mobile toggle ──────────────────────────────────────────────
+    nav = _read("frontend/src/components/Navbar.vue")
+    if "aria-label" in nav and "Toggle navigation" in nav:
+        ok("ada", "Mobile nav toggle has aria-label")
+    else:
+        fail("ada", "high", "Navbar mobile toggle button missing aria-label",
+             "Add aria-label='Toggle navigation' to the hamburger button.")
+    if "aria-expanded" in nav:
+        ok("ada", "Nav toggle has aria-expanded")
+    else:
+        fail("ada", "medium", "Navbar toggle missing :aria-expanded binding")
+
+    # ── Footer.vue social links & heading levels ─────────────────────────────
+    footer = _read("frontend/src/components/Footer.vue")
+    for label in ("Follow Meridian on Twitter", "Follow Meridian on LinkedIn", "Follow Meridian on Instagram"):
+        if label in footer:
+            ok("ada", f"Footer social link has descriptive aria-label: {label}")
+        else:
+            fail("ada", "medium", f"Footer social link missing descriptive aria-label",
+                 f"Expected aria-label like '{label}'.")
+    if "<h3" in footer and "<h4" not in footer:
+        ok("ada", "Footer section headings use h3 (not h4)")
+    elif "<h4" in footer:
+        fail("ada", "medium", "Footer uses h4 for section headings — should be h3",
+             "Change <h4> to <h3> for Topics and Quick Links in Footer.vue.")
+
+    # ── BlogPost.vue heading hierarchy ───────────────────────────────────────
+    post = _read("frontend/src/views/BlogPost.vue")
+    if re.search(r'<h2[^>]*>Photo Gallery', post):
+        ok("ada", "BlogPost Photo Gallery uses h2 (not h3)")
+    elif re.search(r'<h3[^>]*>Photo Gallery', post):
+        fail("ada", "medium", "BlogPost Photo Gallery uses h3 — risks skipping h2 if post content has no headings",
+             "Change to <h2> for guaranteed valid heading hierarchy.")
+
+    # ── style.css focus-visible ──────────────────────────────────────────────
+    css = _read("frontend/src/style.css")
+    if ":focus-visible" in css:
+        ok("ada", ":focus-visible outline rule present in style.css")
+    else:
+        fail("ada", "high", "style.css missing :focus-visible outline rule",
+             "Add ':focus-visible { outline: 2px solid ...; outline-offset: 2px; }'.")
+
+    # ── GitHub Actions workflow ──────────────────────────────────────────────
+    wf = _read(".github/workflows/close-dependabot-prs.yml")
+    if wf and "dependabot" in wf.lower():
+        ok("dependabot", "close-dependabot-prs.yml workflow present")
+    else:
+        fail("dependabot", "medium", ".github/workflows/close-dependabot-prs.yml missing",
+             "Create a weekly GitHub Actions workflow to close open Dependabot PRs.")
+
+    return json.dumps({
+        "checkedAt": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+        "passedCount": len(passed),
+        "failedCount": len(failed),
+        "passed": passed,
+        "failed": failed,
+    })
+
 # ---------------------------------------------------------------------------
 # SecurityScanner tools
 # ---------------------------------------------------------------------------

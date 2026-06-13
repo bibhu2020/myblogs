@@ -47,23 +47,36 @@ Format your final report as JSON findings list where each item has: area, severi
     seo_agent = AssistantAgent(
         name="SEOAnalyzer",
         model_client=model_client,
-        tools=[tools.fetch_all_posts, tools.analyze_post_seo],
-        system_message="""You are the SEO Analyzer for Meridian.
-First call fetch_all_posts to get all published posts.
-Then call analyze_post_seo for each post (use the post's title, excerpt, slug, and wordCount fields).
-Report posts with SEO issues — include the post title, slug, and specific issues found.
-Format your final report as JSON findings list where each item has: area="seo", severity, message, detail.""",
+        tools=[tools.fetch_all_posts, tools.analyze_post_seo, tools.check_frontend_static],
+        system_message="""You are the SEO and ADA Analyzer for Meridian.
+
+Step 1 — Static frontend audit: call check_frontend_static() with no arguments. This verifies
+index.html (lang, meta description, OG/Twitter tags, viewport, canonical), robots.txt,
+router document.title hooks, skip-to-content link, newsletter aria-labels, social link
+aria-labels, footer heading levels, focus-visible styles, and the Dependabot workflow file.
+Report every "failed" item from the result.
+
+Step 2 — Per-post SEO: call fetch_all_posts(), then call analyze_post_seo() for each post
+(pass title, excerpt, slug, and wordCount). Report every post with SEO issues.
+
+Format your final report as a JSON findings list where each item has:
+area ("seo" or "ada"), severity, message, detail.""",
     )
 
     ada_agent = AssistantAgent(
         name="ADAAnalyzer",
         model_client=model_client,
         tools=[tools.fetch_all_posts, tools.fetch_post_html, tools.analyze_html_fragment],
-        system_message="""You are the ADA/Accessibility Analyzer for Meridian.
-First call fetch_all_posts to get all published posts.
-Then for each post, call fetch_post_html to get its HTML content, then call analyze_html_fragment on that HTML.
-Report each accessibility violation with the specific element and remediation guidance.
-Format your final report as JSON findings list where each item has: area="ada", severity, message, detail.""",
+        system_message="""You are the post-content ADA Analyzer for Meridian.
+(Static frontend checks are handled by SEOAnalyzer — focus only on post HTML content.)
+
+Call fetch_all_posts() to get all published posts.
+For each post, call fetch_post_html(slug) to get its rendered HTML content,
+then call analyze_html_fragment(html, slug) to check for WCAG AA violations
+(missing alt attributes, empty buttons/links, heading level skips, tables without headers).
+
+Report each violation with the post slug, element, and remediation guidance.
+Format your final report as a JSON findings list: area="ada", severity, message, detail.""",
     )
 
     dependabot_agent = AssistantAgent(
@@ -95,8 +108,8 @@ GitHub repo: {github_repo if github_repo else "(GITHUB_REPO env var not set — 
 
 Run all checks:
 1. SecurityScanner: audit all 5 npm services (api-gateway, auth-service, blog-service, media-service, frontend) for vulnerabilities and outdated packages
-2. SEOAnalyzer: fetch all posts and analyze each for SEO issues
-3. ADAAnalyzer: fetch all posts and analyze each post's HTML for accessibility violations
+2. SEOAnalyzer: run check_frontend_static() for the static SEO/ADA audit (index.html, robots.txt, heading hierarchy, aria-labels, focus styles, Dependabot workflow), then check all posts for per-post SEO issues
+3. ADAAnalyzer: check each published post's HTML content for WCAG AA violations
 4. DependabotHandler: list all open GitHub PRs and assess their safety
 
 After all specialists report, the Orchestrator should synthesize findings and say MAINTENANCE_COMPLETE."""
