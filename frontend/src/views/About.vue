@@ -192,7 +192,7 @@ const approvalSteps = [
             <h3 class="text-lg font-bold text-gray-900 mb-1" style="font-family:'Playfair Display',serif">System Design Document</h3>
             <p class="text-gray-500 text-sm leading-relaxed">22-slide deep dive into Meridian's architecture — service topology, 14 annotated sequence diagrams covering every major user flow, technology stack, and future roadmap.</p>
           </div>
-          <a href="/meridian_sysdesign.pptx" download="meridian_sysdesign.pptx"
+          <a href="/myblogs.pdf" download="myblogs.pdf"
              class="flex-shrink-0 inline-flex items-center gap-2 bg-primary-600 text-white px-6 py-3 rounded-full text-sm font-semibold hover:bg-primary-700 transition-colors shadow-sm">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
@@ -398,7 +398,7 @@ const approvalSteps = [
             <h3 class="text-lg font-bold text-white mb-1" style="font-family:'Playfair Display',serif">System Design Document</h3>
             <p class="text-slate-400 text-sm leading-relaxed">22-slide deep dive into Meridian's architecture — service topology, 14 annotated sequence diagrams covering every major user flow, technology stack, and future roadmap.</p>
           </div>
-          <a href="/meridian_sysdesign.pptx" download="meridian_sysdesign.pptx"
+          <a href="/myblogs.pdf" download="myblogs.pdf"
              class="flex-shrink-0 inline-flex items-center gap-2 bg-violet-600 text-white px-6 py-3 rounded-full text-sm font-semibold hover:bg-violet-700 transition-colors">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
