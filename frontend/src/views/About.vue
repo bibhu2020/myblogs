@@ -184,6 +184,24 @@ const approvalSteps = [
         </div>
       </section>
 
+      <!-- System Design Download -->
+      <section>
+        <div class="bg-gradient-to-r from-primary-50 to-violet-50 border border-primary-100 rounded-2xl p-8 flex flex-col sm:flex-row items-center gap-6">
+          <div class="w-14 h-14 rounded-2xl bg-primary-600 flex items-center justify-center text-white text-2xl flex-shrink-0">📊</div>
+          <div class="flex-1 text-center sm:text-left">
+            <h3 class="text-lg font-bold text-gray-900 mb-1" style="font-family:'Playfair Display',serif">System Design Document</h3>
+            <p class="text-gray-500 text-sm leading-relaxed">22-slide deep dive into Meridian's architecture — service topology, 14 annotated sequence diagrams covering every major user flow, technology stack, and future roadmap.</p>
+          </div>
+          <a href="/meridian_sysdesign.pptx" download="meridian_sysdesign.pptx"
+             class="flex-shrink-0 inline-flex items-center gap-2 bg-primary-600 text-white px-6 py-3 rounded-full text-sm font-semibold hover:bg-primary-700 transition-colors shadow-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            Download PPTX
+          </a>
+        </div>
+      </section>
+
       <!-- Divider -->
       <div class="border-t border-gray-200"></div>
 
@@ -369,6 +387,24 @@ const approvalSteps = [
         </div>
         <div class="mt-6 bg-[#1a1500] border border-amber-900/40 rounded-xl p-4 text-sm text-slate-400 leading-relaxed">
           <span class="text-amber-400 font-semibold">Self-correcting loops:</span> If ReviewerAgent finds a WCAG AA contrast failure (ratio &lt; 4.5:1), it hands back to IdeationAgent for a palette revision. Markup or ARIA issues route to CodingAgent. Build failures send TesterAgent back to CodingAgent. The pipeline allows up to three revision cycles before committing.
+        </div>
+      </section>
+
+      <!-- System Design Download -->
+      <section>
+        <div class="bg-[#162236] border border-violet-900/40 rounded-2xl p-8 flex flex-col sm:flex-row items-center gap-6">
+          <div class="w-14 h-14 rounded-2xl bg-violet-700 flex items-center justify-center text-white text-2xl flex-shrink-0">📊</div>
+          <div class="flex-1 text-center sm:text-left">
+            <h3 class="text-lg font-bold text-white mb-1" style="font-family:'Playfair Display',serif">System Design Document</h3>
+            <p class="text-slate-400 text-sm leading-relaxed">22-slide deep dive into Meridian's architecture — service topology, 14 annotated sequence diagrams covering every major user flow, technology stack, and future roadmap.</p>
+          </div>
+          <a href="/meridian_sysdesign.pptx" download="meridian_sysdesign.pptx"
+             class="flex-shrink-0 inline-flex items-center gap-2 bg-violet-600 text-white px-6 py-3 rounded-full text-sm font-semibold hover:bg-violet-700 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            Download PPTX
+          </a>
         </div>
       </section>
 
