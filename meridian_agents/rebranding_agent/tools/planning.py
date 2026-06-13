@@ -21,6 +21,9 @@ def generate_rebrand_plan(ctx: RunContextWrapper[RebrandCtx]) -> str:
     Requires research_world_events to have run first.
     Stores the full plan dict in context and returns a brief confirmation.
     """
+    if not ctx.context.chosen_theme:
+        return "ERROR: No theme in context — call research_world_events before generate_rebrand_plan."
+
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     now = datetime.now(timezone.utc)
     month_year = now.strftime("%B %Y")
