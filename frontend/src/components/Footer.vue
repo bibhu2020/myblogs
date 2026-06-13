@@ -48,8 +48,8 @@ const layout = useLayoutStore()
       </div>
       <div class="mt-12 pt-8 text-center text-sm" :class="layout.variant === 'b' ? 'border-t border-slate-800' : 'border-t border-primary-800'">
         <!-- HOLIDAY-FOOTER-START -->
-        <p class="mb-2" :class="layout.variant === 'b' ? 'text-slate-500' : 'text-primary-300'">Celebrating the world's game — FIFA World Cup 2026 ⚽</p>
-        <!-- HOLIDAY-FOOTER-END -->
+<p class="mb-2" :class="layout.variant === 'b' ? 'text-slate-500' : 'text-primary-300'">Celebrate the joy of sports and unity! 🎊</p>
+<!-- HOLIDAY-FOOTER-END -->
         <p>&copy; {{ new Date().getFullYear() }} Meridian. Built with Vue.js &amp; NestJS.</p>
       </div>
     </div>

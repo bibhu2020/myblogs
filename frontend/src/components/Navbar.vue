@@ -38,14 +38,14 @@ const isB = () => layout.variant === 'b'
   <!-- Layout A: Holiday banner -->
   <template v-if="layout.variant === 'a'">
     <!-- HOLIDAY-BANNER-START -->
-    <div class="bg-gradient-to-r from-primary-700 via-primary-600 to-primary-700 text-white text-center text-sm py-1">⚽ The FIFA World Cup 2026 is here — the world plays as one! 🌍 <span class="opacity-75 ml-1">Jun 11 – Jul 19</span></div>
-    <!-- HOLIDAY-BANNER-END -->
+<div class="bg-gradient-to-r from-primary-700 to-primary-600 text-white text-center text-sm py-1.5 font-medium">🎉 Welcome to June 2026: Celebrating Sport and Unity!</div>
+<!-- HOLIDAY-BANNER-END -->
   </template>
   <!-- Layout B: Holiday banner -->
   <template v-else>
     <!-- HOLIDAY-BANNER-B-START -->
-    <div class="bg-[#111d35] border-b border-[#4ade80]/20 text-[#4ade80] text-center text-sm py-1">⚽ The FIFA World Cup 2026 is here — the world plays as one! 🌍 <span class="opacity-60 ml-1">Jun 11 – Jul 19</span></div>
-    <!-- HOLIDAY-BANNER-B-END -->
+<div class="bg-[#0d0d1a] border-b border-[#ffea70]/20 text-[#ffea70] text-center text-sm py-1.5">Global celebrations under the sporting spotlight!</div>
+<!-- HOLIDAY-BANNER-B-END -->
   </template>
 
   <nav :class="layout.variant === 'b'

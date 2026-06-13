@@ -2,11 +2,17 @@ name: Run Rebranding Agent
 
 on:
   schedule:
-    - cron: '0 3 * * 0'  # Every Sunday 03:00 UTC — agent enforces first-Sunday-only guard
-  workflow_dispatch:      # Allow manual trigger (guard is bypassed for manual runs)
+    - cron: '0 3 * * 0'   # Every Sunday 03:00 UTC — agent enforces first-Sunday-only guard
+  workflow_dispatch:
+    inputs:
+      force_rebrand:
+        description: 'Force rebrand regardless of schedule (bypass first-Sunday guard)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
-  contents: write         # Required: the agent commits and pushes the rebrand
+  contents: write           # Required: the agent commits and pushes the rebrand
 
 jobs:
   rebranding-agent:
@@ -14,13 +20,17 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      # Fast guard — skip setup/install cost on non-first Sundays.
-      # The agent also checks internally for standalone compatibility.
+      # Fast guard — skip all setup cost on non-first Sundays unless forced.
+      # The agent also enforces this internally for standalone compatibility.
       - name: First-Sunday guard
         id: guard
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Manual trigger — bypassing first-Sunday guard."
+          FORCE="${{ inputs.force_rebrand }}"
+          if [ "$FORCE" = "true" ]; then
+            echo "Manual trigger with force_rebrand=true — bypassing first-Sunday guard."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual trigger without force flag — bypassing first-Sunday guard."
             echo "skip=false" >> "$GITHUB_OUTPUT"
           else
             day=$(printf '%d' "$(date -u +%d)")
@@ -36,7 +46,7 @@ jobs:
       - uses: actions/checkout@v4
         if: steps.guard.outputs.skip != 'true'
         with:
-          persist-credentials: true  # Allows the agent to git push
+          persist-credentials: true   # Allows the agent to git push
 
       - name: Configure git identity
         if: steps.guard.outputs.skip != 'true'
@@ -71,5 +81,6 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           SERVER_BASE: ${{ vars.HF_SPACE_URL }}
+          FORCE_REBRAND: ${{ inputs.force_rebrand || 'false' }}
           # GITHUB_WORKSPACE is set automatically by the runner
-        run: python3 -m agents.rebranding_agent
+        run: python3 -m meridian_agents.rebranding_agent

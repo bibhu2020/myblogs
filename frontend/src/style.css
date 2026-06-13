@@ -3,16 +3,16 @@
 @plugin "@tailwindcss/typography";
 
 @theme {
-  --color-primary-50: #f0fdf4;
-  --color-primary-100: #dcfce7;
-  --color-primary-200: #bbf7d0;
-  --color-primary-300: #86efac;
-  --color-primary-400: #4ade80;
-  --color-primary-500: #22c55e;
-  --color-primary-600: #15803d;
-  --color-primary-700: #166534;
-  --color-primary-800: #14532d;
-  --color-primary-900: #052e16;
+  --color-primary-50: #fff8e1;
+  --color-primary-100: #ffe7b3;
+  --color-primary-200: #ffd380;
+  --color-primary-300: #ffbf4d;
+  --color-primary-400: #ffab1a;
+  --color-primary-500: #ff9600;
+  --color-primary-600: #cc7800;
+  --color-primary-700: #995900;
+  --color-primary-800: #663b00;
+  --color-primary-900: #331e00;
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-serif: 'Georgia', serif;
 }
@@ -90,31 +90,5 @@
 /* LB-ACCENT-END */
 
 /* HOLIDAY-CSS-START */
-/* FIFA World Cup 2026: fresh pitch-green page tint + badge glow */
-body { background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 200px); }
-h1, h2 { text-wrap: balance; }
-.holiday-badge {
-  box-shadow: 0 0 0 3px #bbf7d0, 0 2px 10px rgba(21, 128, 61, 0.22);
-  animation: badge-pulse 3s ease-in-out infinite;
-}
-.holiday-badge-b {
-  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.15), 0 2px 12px rgba(74, 222, 128, 0.12);
-  animation: badge-pulse-b 3s ease-in-out infinite;
-}
-@keyframes badge-pulse {
-  0%, 100% { box-shadow: 0 0 0 3px #bbf7d0, 0 2px 10px rgba(21, 128, 61, 0.22); }
-  50%       { box-shadow: 0 0 0 5px #86efac, 0 4px 16px rgba(21, 128, 61, 0.36); }
-}
-@keyframes badge-pulse-b {
-  0%, 100% { box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.15), 0 2px 12px rgba(74, 222, 128, 0.12); }
-  50%       { box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.25), 0 4px 18px rgba(74, 222, 128, 0.22); }
-}
-:focus-visible { outline: 2px solid #15803d; outline-offset: 2px; }
-[data-layout="b"] :focus-visible { outline: 2px solid #818cf8; outline-offset: 2px; }
-
-@media (prefers-reduced-motion: reduce) {
-  .holiday-badge, .holiday-badge-b {
-    animation: none;
-  }
-}
+:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; } [data-layout="a"] body, [data-layout="a"] #app { background-color: #fff8e1; } .holiday-badge { box-shadow: 0 0 12px #ffd38080; } .holiday-badge-b { box-shadow: 0 0 12px #ffea7040; }
 /* HOLIDAY-CSS-END */

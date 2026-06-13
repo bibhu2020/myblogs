@@ -1,4 +1,4 @@
-"""Entry point: python -m agents.rebranding_agent"""
+"""Entry point: python -m meridian_agents.rebranding_agent"""
 import sys
 from .main import run_rebranding
 

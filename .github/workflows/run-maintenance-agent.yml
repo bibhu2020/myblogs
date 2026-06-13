@@ -28,4 +28,4 @@ jobs:
           SERVER_BASE: ${{ vars.HF_SPACE_URL }}
           GITHUB_REPO: ${{ github.repository }}
           MAINTENANCE_MODEL: ${{ vars.MAINTENANCE_MODEL || 'gpt-4o' }}
-        run: python3 -m agents.maintenance_agent
+        run: python3 -m meridian_agents.maintenance_agent

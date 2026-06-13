@@ -45,8 +45,8 @@ function ago(d) {
     <main id="main-content" tabindex="-1" class="outline-none">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 text-center">
       <!-- HOLIDAY-HERO-START -->
-      <span class="holiday-badge bg-primary-50 text-primary-800 border border-primary-200 rounded-full px-4 py-1 text-sm inline-block">⚽ World Cup 2026 Season — Ideas That Score</span>
-      <!-- HOLIDAY-HERO-END -->
+<div class="holiday-badge bg-primary-50 text-primary-800 border border-primary-200 rounded-full px-4 py-1 text-sm inline-block mb-4">Excitement in the Air 🌍⚽</div>
+<!-- HOLIDAY-HERO-END -->
     </div>
 
     <!-- Hero: latest post dominates -->
@@ -166,8 +166,8 @@ function ago(d) {
     <!-- Layout B holiday badge -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 text-center">
       <!-- HOLIDAY-HERO-B-START -->
-      <span class="holiday-badge-b bg-[#1c2d44] border border-[#4ade80]/30 text-[#4ade80] rounded-full px-4 py-1 text-sm inline-block">⚽ World Cup 2026 Season — Ideas That Score</span>
-      <!-- HOLIDAY-HERO-B-END -->
+<div class="holiday-badge-b bg-[#13132a] border border-[#ffea70]/30 text-[#ffea70] rounded-full px-4 py-1 text-sm inline-block mb-4">Feel the Rush of Excitement!</div>
+<!-- HOLIDAY-HERO-B-END -->
     </div>
 
     <!-- Full-bleed hero: the single latest post dominates -->

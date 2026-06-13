@@ -57,4 +57,4 @@ jobs:
           SERVER_BASE: ${{ vars.HF_SPACE_URL }}
           MCP_URL: ${{ vars.HF_SPACE_URL }}/api/mcp
           # TOPIC_MODE set by "Resolve topic mode" step above
-        run: python3 -m agents.post_agent
+        run: python3 -m meridian_agents.post_agent

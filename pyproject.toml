@@ -37,8 +37,7 @@ maintenance = [
     "croniter>=2.0",
 ]
 rebranding = [
-    "langgraph>=1.0",
-    "langchain-core>=1.0",
+    "openai-agents>=0.1",
     "openai>=1.0",
     "python-dotenv>=1.0",
     "requests>=2.31",
@@ -46,4 +45,4 @@ rebranding = [
 all = ["meridian[post_agent,tts,maintenance,rebranding]"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["agents"]
+packages = ["meridian_agents"]
