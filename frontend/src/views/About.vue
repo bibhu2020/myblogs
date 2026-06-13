@@ -195,9 +195,7 @@ const approvalSteps = [
         </div>
         <div class="bg-gray-50 rounded-3xl border border-gray-100 p-8 sm:p-12 flex flex-col sm:flex-row gap-8 items-start">
           <div class="flex-shrink-0">
-            <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-primary-500 to-violet-600 flex items-center justify-center text-white text-4xl font-black select-none">
-              B
-            </div>
+            <img :src="'/uploads/bibhu.jpg'" alt="Bibhu Mishra" class="w-24 h-24 rounded-2xl object-cover object-top shadow-md" />
           </div>
           <div class="flex-1">
             <h3 class="text-2xl font-bold text-gray-900 mb-1" style="font-family:'Playfair Display',serif">Bibhu Mishra</h3>
