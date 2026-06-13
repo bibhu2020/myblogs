@@ -19,7 +19,7 @@ post_agent = [
     "requests>=2.31",
     "google-genai>=1.0",
     "Pillow>=10.0",
-    "croniter>=2.0",
+    "croniter>=6.2.2",
 ]
 tts = [
     "flask>=3.0",
@@ -34,7 +34,7 @@ maintenance = [
     "openai>=1.0",
     "python-dotenv>=1.0",
     "requests>=2.31",
-    "croniter>=2.0",
+    "croniter>=6.2.2",
 ]
 rebranding = [
     "openai-agents>=0.1",
