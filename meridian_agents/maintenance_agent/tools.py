@@ -163,13 +163,13 @@ def check_frontend_static(root: str = "") -> str:
         fail("ada", "high", "style.css missing :focus-visible outline rule",
              "Add ':focus-visible { outline: 2px solid ...; outline-offset: 2px; }'.")
 
-    # ── GitHub Actions workflow ──────────────────────────────────────────────
-    wf = _read(".github/workflows/close-dependabot-prs.yml")
-    if wf and "dependabot" in wf.lower():
-        ok("dependabot", "close-dependabot-prs.yml workflow present")
+    # ── Maintenance agent workflow ───────────────────────────────────────────
+    maint_wf = _read(".github/workflows/run-maintenance-agent.yml")
+    if maint_wf and "FORCE_MAINTENANCE" in maint_wf:
+        ok("dependabot", "Maintenance agent workflow present (handles Dependabot PRs)")
     else:
-        fail("dependabot", "medium", ".github/workflows/close-dependabot-prs.yml missing",
-             "Create a weekly GitHub Actions workflow to close open Dependabot PRs.")
+        fail("dependabot", "medium", ".github/workflows/run-maintenance-agent.yml missing or incomplete",
+             "The maintenance agent workflow must exist and include FORCE_MAINTENANCE support.")
 
     return json.dumps({
         "checkedAt": __import__("datetime").datetime.utcnow().isoformat() + "Z",
@@ -538,6 +538,108 @@ def list_github_prs(owner: str, repo: str) -> str:
         return json.dumps({"error": str(exc)})
 
 
+def merge_github_pr(owner: str, repo: str, pr_number: int, merge_method: str = "squash") -> str:
+    """Merge a GitHub pull request via the GitHub API.
+
+    Use this for Dependabot patch/minor PRs that are low-risk and mergeable.
+    Requires SECRET_TOKEN_GITHUB with contents:write and pull-requests:write permissions.
+
+    Args:
+        owner: GitHub repository owner/org.
+        repo: Repository name.
+        pr_number: Pull request number to merge.
+        merge_method: 'merge', 'squash', or 'rebase'. Defaults to 'squash'.
+    """
+    token = os.getenv("SECRET_TOKEN_GITHUB", "")
+    if not token:
+        return json.dumps({"success": False, "error": "SECRET_TOKEN_GITHUB not set — cannot merge PR"})
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {token}",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    try:
+        resp = requests.put(
+            f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/merge",
+            headers=headers,
+            json={
+                "merge_method": merge_method,
+                "commit_title": f"chore(deps): merge Dependabot PR #{pr_number} [{merge_method}]",
+            },
+            timeout=30,
+        )
+        data = resp.json() if resp.content else {}
+        if resp.status_code == 200:
+            return json.dumps({"success": True, "sha": data.get("sha"), "message": data.get("message", "Merged")})
+        return json.dumps({
+            "success": False,
+            "status": resp.status_code,
+            "error": data.get("message", resp.text[:300]),
+        })
+    except Exception as exc:
+        return json.dumps({"success": False, "error": str(exc)})
+
+
+def close_github_pr(owner: str, repo: str, pr_number: int, reason: str = "") -> str:
+    """Close a GitHub pull request without merging, optionally posting a reason comment.
+
+    Use this for Dependabot major-version PRs that require human review before merging.
+
+    Args:
+        owner: GitHub repository owner/org.
+        repo: Repository name.
+        pr_number: Pull request number to close.
+        reason: Optional explanation to post as a comment before closing.
+    """
+    token = os.getenv("SECRET_TOKEN_GITHUB", "")
+    if not token:
+        return json.dumps({"success": False, "error": "SECRET_TOKEN_GITHUB not set — cannot close PR"})
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {token}",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    try:
+        comment_body = f"🤖 Maintenance agent: {reason}" if reason else "🤖 Maintenance agent: closing this PR."
+        # Always post the comment first (issues:write is usually available)
+        comment_resp = requests.post(
+            f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/comments",
+            headers=headers,
+            json={"body": comment_body},
+            timeout=30,
+        )
+        commented = comment_resp.status_code == 201
+
+        # Attempt to close the PR (requires pull-requests:write scope)
+        resp = requests.patch(
+            f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}",
+            headers=headers,
+            json={"state": "closed"},
+            timeout=30,
+        )
+        data = resp.json() if resp.content else {}
+        if resp.status_code == 200:
+            return json.dumps({"success": True, "message": f"PR #{pr_number} closed"})
+        if resp.status_code == 403:
+            # Token lacks pull-requests:write — comment was posted as a warning instead
+            return json.dumps({
+                "success": False,
+                "partial": True,
+                "commented": commented,
+                "error": (
+                    "Token lacks pull-requests:write — PR left open. "
+                    f"Comment {'posted' if commented else 'failed'}: {comment_body}"
+                ),
+            })
+        return json.dumps({
+            "success": False,
+            "status": resp.status_code,
+            "error": data.get("message", resp.text[:300]),
+        })
+    except Exception as exc:
+        return json.dumps({"success": False, "error": str(exc)})
+
+
 def get_pr_details(owner: str, repo: str, pr_number: int) -> str:
     """Get details of a specific GitHub PR including files changed.
 
@@ -570,15 +672,22 @@ def get_pr_details(owner: str, repo: str, pr_number: int) -> str:
         )
         files = files_resp.json() if files_resp.ok else []
 
-        # Determine semver bump from title (Dependabot titles contain "from X.Y.Z to A.B.C")
+        # Determine semver bump from title.
+        # Handles both npm format ("from 10.2.0 to 11.0.2")
+        # and Python format ("from >=21.0 to >=26" or "from >=0.4 to >=0.5.1")
         bump = "unknown"
-        m = re.search(r"from (\d+)\.(\d+)\.(\d+) to (\d+)\.(\d+)\.(\d+)", pr.get("title", ""))
+        # (?:>=?)? makes the ">=" prefix optional so both npm ("from 4.0 to 5.0")
+        # and Python requirements ("from >=4.0 to >=5.0") are handled.
+        m = re.search(
+            r"from\s+(?:>=?)?(\d+)\.(\d+)(?:\.(\d+))?\s+to\s+(?:>=?)?(\d+)\.(\d+)(?:\.(\d+))?",
+            pr.get("title", ""),
+        )
         if m:
-            old = [int(m.group(i)) for i in (1, 2, 3)]
-            new = [int(m.group(i)) for i in (4, 5, 6)]
-            if new[0] > old[0]:
+            old_maj, old_min = int(m.group(1)), int(m.group(2))
+            new_maj, new_min = int(m.group(4)), int(m.group(5))
+            if new_maj > old_maj:
                 bump = "major"
-            elif new[1] > old[1]:
+            elif new_min > old_min:
                 bump = "minor"
             else:
                 bump = "patch"
@@ -756,6 +865,32 @@ def git_status_short() -> str:
         })
     except Exception as exc:
         return json.dumps({"error": str(exc)})
+
+
+def git_pull_rebase() -> str:
+    """Pull and rebase the local branch on top of the remote, then report the result.
+
+    Call this before committing SEO/ADA fixes in case Dependabot PR merges have
+    added new commits to the remote main branch since the agent started.
+    Safe to call even when the working tree has uncommitted changes — git will
+    stash, pull, rebase, and pop automatically via git pull --rebase.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "pull", "--rebase", "origin", "HEAD"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        return json.dumps({
+            "success": result.returncode == 0,
+            "stdout": result.stdout.strip(),
+            "stderr": result.stderr.strip() if result.returncode != 0 else "",
+            "message": "Rebased on remote HEAD" if result.returncode == 0 else "git pull --rebase failed",
+        })
+    except Exception as exc:
+        return json.dumps({"success": False, "error": str(exc)})
 
 
 def git_commit_and_push(message: str) -> str:

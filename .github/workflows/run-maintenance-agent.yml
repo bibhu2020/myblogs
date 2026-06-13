@@ -15,6 +15,9 @@ jobs:
   maintenance-agent:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: write        # git commit + push SEO/ADA fixes
+      pull-requests: write   # merge and close Dependabot PRs
 
     steps:
       # Fast guard — skip all setup cost on non-first-of-month runs unless forced.
@@ -57,7 +60,9 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          SECRET_TOKEN_GITHUB: ${{ secrets.GITHUB_TOKEN_SECRET }}
+          # github.token has contents:write + pull-requests:write from the job permissions above,
+          # so it can merge and close Dependabot PRs without needing a separate PAT.
+          SECRET_TOKEN_GITHUB: ${{ github.token }}
           SERVER_BASE: ${{ vars.HF_SPACE_URL }}
           GITHUB_REPO: ${{ github.repository }}
           MAINTENANCE_MODEL: ${{ vars.MAINTENANCE_MODEL || 'gpt-4o' }}

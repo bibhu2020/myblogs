@@ -44,17 +44,27 @@ async def run_team(repo_root: str, server_base: str) -> tuple[str, list]:
         name="Orchestrator",
         model_client=model_client,
         system_message="""You are the Maintenance Orchestrator for the Meridian blogging platform.
-Coordinate the team through 3 phases in strict order.
+Coordinate the team through 4 phases in strict order.
 
-PHASE 1 — AUDIT (collect findings from all 4 specialists):
+PHASE 1 — AUDIT (SEO + ADA + Security scan):
 1. Ask SecurityScanner to audit all 5 npm services for vulnerabilities and outdated packages.
 2. Ask SEOAnalyzer to run check_frontend_static() then check all posts for per-post SEO issues.
 3. Ask ADAAnalyzer to check each published post's HTML content for WCAG AA violations.
-4. Ask DependabotHandler to list open GitHub PRs and assess their risk.
-Wait for each specialist to finish before moving to the next.
+Wait for all three to finish before Phase 2.
 
-PHASE 2 — FIX & SELF-REFLECT (apply safe static fixes and verify the build):
-After all audit reports are in, identify low-risk static fixes from the SEO/ADA findings
+PHASE 2 — DEPENDABOT (merge or close open Dependabot PRs):
+Ask DependabotHandler to:
+  a. Call list_github_prs to find ALL open PRs (split GITHUB_REPO into owner/repo).
+  b. For each PR where isDependabot == true, call get_pr_details to check semverBump and riskLevel.
+  c. For patch and minor semver PRs (riskLevel low or medium): call merge_github_pr to merge them.
+  d. For major semver PRs (riskLevel high): call close_github_pr with a reason explaining that
+     major version bumps require human review.
+  e. Skip any PRs where isDependabot == false (leave those for human review).
+  f. Report a summary: how many merged, how many closed, how many skipped.
+If GITHUB_REPO is not set, skip Phase 2 entirely.
+
+PHASE 3 — FIX & SELF-REFLECT (apply safe static fixes from Phase 1 and verify the build):
+Identify low-risk static fixes from the SEO/ADA findings in Phase 1
 (e.g. missing meta tags, aria-labels, heading levels, focus styles — NOT logic or backend changes).
 Tell CodePatcher exactly which fix to apply and in which file. Give one fix at a time.
 After CodePatcher confirms a batch of fixes, tell BuildValidator to run the frontend build.
@@ -63,16 +73,17 @@ If BuildValidator reports BUILD FAILED:
   - Have CodePatcher apply a corrected version of the patch.
   - Ask BuildValidator to re-run the build.
   - Repeat until BuildValidator confirms BUILD PASSED.
-If no static fixes are needed or all checks already pass, proceed directly to Phase 3.
+If no static fixes are needed or all checks already pass, proceed directly to Phase 4.
 
-PHASE 3 — PUBLISH (commit and push validated changes):
-Once BuildValidator has confirmed BUILD PASSED (or if no changes were made), tell GitPublisher
-to commit and push all staged changes to GitHub with a descriptive 'maint:' commit message
-summarising what was fixed.
-If the working tree is clean (no changes), skip this step.
+PHASE 4 — PUBLISH (commit and push validated SEO/ADA fixes):
+Tell GitPublisher to:
+  1. First call git_pull_rebase to sync with any Dependabot merges that updated the remote.
+  2. Then commit and push all staged changes with a descriptive 'maint:' commit message.
+If the working tree is clean (no changes from Phase 3), skip the commit step but still pull.
 
 After all phases complete, write a concise paragraph summarising:
-findings per category, fixes applied, build validation status, and GitHub publish status.
+Phase 1 findings per category, Phase 2 Dependabot actions, Phase 3 fixes applied,
+build validation status, and Phase 4 publish status.
 End with exactly: MAINTENANCE_COMPLETE""",
     )
 
@@ -122,13 +133,38 @@ Format your final report as a JSON findings list: area="ada", severity, message,
     dependabot_agent = AssistantAgent(
         name="DependabotHandler",
         model_client=model_client,
-        tools=[tools.list_github_prs, tools.get_pr_details],
-        system_message="""You are the Dependabot Handler for Meridian.
-Check the GitHub repository for open pull requests using the GITHUB_REPO environment variable
-(format: owner/repo, e.g. bibhu2020/myblogs). If GITHUB_REPO is not set, report that and skip.
-For each open PR, call get_pr_details to assess its risk level.
-Report: PR number, title, author, age in days, semver bump type, risk level, merge recommendation.
-Format your final report as JSON findings list: area="dependabot", severity, message, detail.""",
+        tools=[
+            tools.list_github_prs,
+            tools.get_pr_details,
+            tools.merge_github_pr,
+            tools.close_github_pr,
+        ],
+        system_message="""You are the Dependabot Handler for Meridian. You list, assess, and ACT on open PRs.
+
+GITHUB_REPO env var format: owner/repo  (e.g. bibhu2020/myblogs).
+Split it on '/' to get owner and repo for each tool call.
+If GITHUB_REPO is not set, report that and stop.
+
+Steps (execute ALL of them):
+1. Call list_github_prs(owner, repo) to get all open PRs.
+2. For each PR where isDependabot == true:
+   a. Call get_pr_details(owner, repo, pr_number) to check semverBump and riskLevel.
+   b. If semverBump is 'patch' or 'minor' (riskLevel low or medium):
+      → Call merge_github_pr(owner, repo, pr_number, 'squash') to merge it.
+      → Report: "Merged PR #N: <title>"
+   c. If semverBump is 'major' (riskLevel high):
+      → Call close_github_pr(owner, repo, pr_number,
+          "Major version bump requires manual review before merging.") to close it.
+      → Report: "Closed PR #N: <title> (major bump — needs human review)"
+   d. If semverBump is 'unknown' (version format not parseable):
+      → Treat as high risk. Call close_github_pr with reason
+          "Could not determine semver bump type — closing for manual review.".
+      → Report: "Closed PR #N: <title> (unknown bump — needs human review)"
+3. Skip any PRs where isDependabot == false (do not touch human PRs).
+4. Report final counts: merged N, closed N, skipped N.
+
+Format your final report as a JSON findings list where each item has:
+area="dependabot", severity ("low"/"medium"/"high"), message, detail (include PR number and action taken).""",
     )
 
     # ── Phase 2: Fix agent ────────────────────────────────────────────────────
@@ -183,21 +219,22 @@ Keep re-validating until you can announce BUILD PASSED.""",
     git_publisher = AssistantAgent(
         name="GitPublisher",
         model_client=model_client,
-        tools=[tools.git_commit_and_push, tools.git_status_short],
-        system_message="""You are the GitPublisher for Meridian. You commit and push validated changes to GitHub.
+        tools=[tools.git_commit_and_push, tools.git_status_short, tools.git_pull_rebase],
+        system_message="""You are the GitPublisher for Meridian. You sync with remote, then commit and push validated changes.
 
-IMPORTANT: Only act when ALL of these are true:
-  1. The Orchestrator explicitly asks you to publish.
-  2. BuildValidator has announced BUILD PASSED in this session (or no code changes were made).
+IMPORTANT: Only act when the Orchestrator explicitly asks you to publish.
 
-Steps:
-1. Call git_status_short() to see which files were modified.
-2. Call git_commit_and_push(message) with a descriptive commit message using the 'maint:' prefix,
-   e.g. 'maint: fix aria-labels, heading levels, and OG meta tags (monthly maintenance)'.
-3. Report the result clearly — success/failure, commit hash, and any push errors.
+Steps (always in this order):
+1. Call git_pull_rebase() to sync the local branch with the remote.
+   This is required because DependabotHandler may have merged PRs that added commits to remote main.
+   If pull fails, report the error — do not proceed to commit.
+2. Call git_status_short() to see which local files were modified by CodePatcher.
+3. If there are local changes: call git_commit_and_push(message) with a 'maint:' prefix message
+   summarising what was fixed, e.g.:
+   'maint: fix aria-labels, viewport meta, OG tags, heading levels (monthly maintenance)'
+4. If the working tree is clean after the pull: report "No local changes to commit — pull complete."
 
-If push fails because of GitHub Actions workflow file permissions,
-note it separately and treat the rest of the commit as a success.
+Report the result clearly — success/failure, commit hash, and any push errors.
 Do NOT call git_commit_and_push more than once per session.""",
     )
 
@@ -223,21 +260,26 @@ Do NOT call git_commit_and_push more than once per session.""",
     task = f"""Perform a full monthly maintenance cycle for the Meridian blogging platform.
 Repo root: {repo_root}
 API base URL: {server_base}
-GitHub repo: {github_repo if github_repo else "(GITHUB_REPO env var not set — skip dependabot check)"}
+GitHub repo: {github_repo if github_repo else "(GITHUB_REPO env var not set — skip Phase 2)"}
 
-Run all 3 phases in order:
+Run all 4 phases in strict order:
 
-PHASE 1 — AUDIT: Run SecurityScanner, SEOAnalyzer, ADAAnalyzer, and DependabotHandler in sequence.
+PHASE 1 — AUDIT: Run SecurityScanner, SEOAnalyzer, and ADAAnalyzer in sequence.
 
-PHASE 2 — FIX & SELF-REFLECT:
-  CodePatcher applies safe static fixes found in Phase 1 (one file at a time).
-  BuildValidator (self-reflection agent) runs the Vite frontend build after each batch of fixes.
-  If build fails → CodePatcher reverts the breaking change and applies a corrected patch.
-  BuildValidator re-runs until it confirms BUILD PASSED.
+PHASE 2 — DEPENDABOT:
+  DependabotHandler lists all open PRs, merges safe Dependabot patch/minor PRs,
+  and closes risky major-version PRs.
+  {'Skip Phase 2 — GITHUB_REPO is not set.' if not github_repo else ''}
 
-PHASE 3 — PUBLISH:
-  GitPublisher commits all validated changes and pushes to GitHub.
-  If no changes were made, skip this step.
+PHASE 3 — FIX & SELF-REFLECT:
+  CodePatcher applies safe static SEO/ADA fixes found in Phase 1 (one file at a time).
+  BuildValidator runs the Vite frontend build after each batch of fixes.
+  If build fails → CodePatcher reverts and re-patches; BuildValidator re-runs until BUILD PASSED.
+
+PHASE 4 — PUBLISH:
+  GitPublisher first calls git_pull_rebase to sync with any Dependabot merges,
+  then commits and pushes the Phase 3 SEO/ADA fixes.
+  If no local changes, just pull and report.
 
 Orchestrator synthesises findings and concludes with MAINTENANCE_COMPLETE."""
 
