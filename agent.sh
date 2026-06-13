@@ -2,7 +2,6 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENT_DIR="$ROOT_DIR/agent"
 
 # Load .env from project root into the environment
 if [ -f "$ROOT_DIR/.env" ]; then
@@ -14,7 +13,7 @@ fi
 
 usage() {
   cat <<'USAGE'
-Meridian AI Blog Agent
+Meridian AI Blog Agent  (LangGraph / Python edition)
 
 Usage:
   ./agent.sh run                     Run the agent once now
@@ -31,29 +30,35 @@ Required (set in .env or export):
   MCP_API_KEY        Meridian MCP server key
 
 Optional overrides:
-  MCP_URL            MCP endpoint (default: https://mishrabp-myblogs.hf.space/api/mcp)
-  SERVER_BASE        Media upload base URL (default: https://mishrabp-myblogs.hf.space)
+  MCP_URL            MCP endpoint (default: https://mishrabP-myblogs.hf.space/api/mcp)
+  SERVER_BASE        Media upload base URL (default: https://mishrabP-myblogs.hf.space)
+  TOPIC_MODE         Category hint: ai_trending | random_general | AI | Technology | Science |
+                       History | Travel | Knowledge  (default: random)
   AGENT_AUTHOR_EMAIL Guest author email (default: ai.researcher@meridian.blog)
   AGENT_AUTHOR_NAME  Guest author display name (default: Meridian AI Researcher)
   AGENT_AUTHOR_PASSWORD  Guest author password (auto-generated if omitted)
   JWT_SECRET         Override JWT signing secret (default: myblogs-secret-key-2024)
+  HF_TOKEN           Hugging Face token (for FLUX.1-schnell image fallback)
+  GEMINI_API_KEY     Google Gemini key (for Gemini image fallback)
+  UNSPLASH_ACCESS_KEY  Unsplash key (for stock photo fallback / Travel category)
 USAGE
   exit 1
 }
 
 if [ $# -eq 0 ]; then usage; fi
 
-# Install agent dependencies if needed
-if [ ! -d "$AGENT_DIR/node_modules" ]; then
-  echo "📦 Installing agent dependencies..."
-  npm --prefix "$AGENT_DIR" install --silent
+# Ensure Python deps are installed
+if ! python3 -c "import langgraph, openai, croniter" 2>/dev/null; then
+  echo "📦 Installing Python agent dependencies..."
+  pip3 install -e "$ROOT_DIR[agent]" --quiet
   echo "✅ Dependencies installed"
   echo ""
 fi
 
 case "$1" in
   run)
-    node "$AGENT_DIR/index.js"
+    cd "$ROOT_DIR"
+    python3 -m agent
     ;;
   schedule)
     if [ -z "${2:-}" ]; then
@@ -61,8 +66,8 @@ case "$1" in
       echo ""
       usage
     fi
-    export CRON_SCHEDULE="$2"
-    node "$AGENT_DIR/schedule.js"
+    cd "$ROOT_DIR"
+    python3 -m agent schedule "$2"
     ;;
   *)
     echo "❌ Unknown command: $1"

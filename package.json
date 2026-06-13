@@ -1,8 +1,15 @@
 {
   "name": "myblogs",
   "private": true,
+  "workspaces": [
+    "api-gateway",
+    "auth-service",
+    "blog-service",
+    "media-service",
+    "frontend"
+  ],
   "scripts": {
-    "install:all": "npm install && npm --prefix api-gateway install && npm --prefix auth-service install && npm --prefix blog-service install && npm --prefix media-service install && npm --prefix frontend install",
+    "install:all": "npm install",
     "start": "dotenv -e .env -- concurrently \"npm --prefix auth-service run start:dev\" \"npm --prefix blog-service run start:dev\" \"npm --prefix media-service run start:dev\" \"npm --prefix api-gateway run start:dev\" \"npm --prefix frontend run dev\"",
     "start:all": "npm start",
     "start:backend": "dotenv -e .env -- concurrently \"npm --prefix auth-service run start:dev\" \"npm --prefix blog-service run start:dev\" \"npm --prefix media-service run start:dev\" \"npm --prefix api-gateway run start:dev\"",

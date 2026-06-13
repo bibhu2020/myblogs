@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "meridian"
+version = "2.0.0"
+description = "Meridian AI Blog Platform — Python services"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+agent = [
+    "langgraph>=1.0",
+    "langchain-core>=1.0",
+    "openai>=1.0",
+    "python-dotenv>=1.0",
+    "httpx>=0.25",
+    "requests>=2.31",
+    "google-generativeai>=0.5",
+    "Pillow>=10.0",
+    "croniter>=2.0",
+]
+tts = [
+    "flask>=3.0",
+    "transformers>=4.35",
+    "scipy>=1.11",
+    "numpy>=1.24",
+    "gunicorn>=21.0",
+]
+all = ["meridian[agent,tts]"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["agent"]
