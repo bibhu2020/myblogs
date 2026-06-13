@@ -10,8 +10,8 @@ const layout = useLayoutStore()
 <template>
   <footer :class="layout.variant === 'b' ? 'bg-[#090f1d] text-slate-400 mt-24' : 'bg-primary-900 text-primary-200 mt-24'">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-12">
-        <div class="md:col-span-2">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-12">
+        <div class="col-span-2 md:col-span-2">
           <div class="flex items-center gap-2.5 mb-4">
             <LogoMark :size="36" />
             <span class="text-2xl font-bold text-white tracking-tight" style="font-family: 'Playfair Display', serif">Meridian</span>
