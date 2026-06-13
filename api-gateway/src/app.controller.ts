@@ -226,14 +226,13 @@ export class AppController {
   }
 
   // TEXT-TO-SPEECH — one small chunk per request; chunking handled client-side.
-  // Priority: local Python service (Docker) → HF Inference API → OpenAI TTS.
+  // Priority: OpenAI TTS → local Python service (Docker) → HF Inference API.
+  // OpenAI is always preferred: ~0.5s/chunk vs 20-60s for local MMS-TTS on HF CPU.
   @Post('tts')
   async textToSpeech(@Body() body: { text: string }, @Res() res: Response) {
     const text = (body.text || '').trim();
     if (!text) { res.status(400).json({ message: 'text is required' }); return; }
 
-    // Use local model everywhere when TTS_SERVICE_URL is configured (set by Dockerfile ENV).
-    // Local VITS inference is faster than the HF Inference API even on HF Spaces.
     const localTts  = process.env.TTS_SERVICE_URL;
     const hfToken   = process.env.HF_TOKEN;
     const openaiKey = process.env.OPENAI_API_KEY;
@@ -247,8 +246,19 @@ export class AppController {
       let buf: Buffer;
       let contentType: string;
 
-      if (localTts) {
-        // Local Python TTS service (facebook/mms-tts-eng, running on-container)
+      if (openaiKey) {
+        // OpenAI TTS — preferred: fastest (~0.5s/chunk), high quality, works everywhere.
+        // On HF Spaces, OPENAI_API_KEY is set as a secret so this branch is always taken.
+        const r = await fetch('https://api.openai.com/v1/audio/speech', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: 'tts-1', input: text.slice(0, 4096), voice: 'alloy' }),
+        });
+        if (!r.ok) { res.status(502).json({ message: `OpenAI TTS error: ${await r.text()}` }); return; }
+        contentType = 'audio/mpeg';
+        buf = Buffer.from(await r.arrayBuffer());
+      } else if (localTts) {
+        // Local Python TTS service (facebook/mms-tts-eng, on-container fallback)
         const r = await fetch(`${localTts}/tts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -258,8 +268,8 @@ export class AppController {
         if (!r.ok) { res.status(502).json({ message: `Local TTS error: ${await r.text()}` }); return; }
         contentType = 'audio/wav';
         buf = Buffer.from(await r.arrayBuffer());
-      } else if (hfToken) {
-        // HF Inference API fallback (cold-start possible)
+      } else {
+        // HF Inference API — last resort (cold-start latency possible)
         const r = await fetch(
           'https://api-inference.huggingface.co/models/facebook/mms-tts-eng',
           {
@@ -270,16 +280,6 @@ export class AppController {
         );
         if (!r.ok) { res.status(502).json({ message: `HF TTS error: ${await r.text()}` }); return; }
         contentType = r.headers.get('content-type') || 'audio/flac';
-        buf = Buffer.from(await r.arrayBuffer());
-      } else {
-        // OpenAI TTS fallback
-        const r = await fetch('https://api.openai.com/v1/audio/speech', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: 'tts-1', input: text.slice(0, 4096), voice: 'alloy' }),
-        });
-        if (!r.ok) { res.status(502).json({ message: `OpenAI error: ${await r.text()}` }); return; }
-        contentType = 'audio/mpeg';
         buf = Buffer.from(await r.arrayBuffer());
       }
 
