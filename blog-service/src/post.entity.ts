@@ -5,6 +5,7 @@ import { Comment } from './comment.entity';
 
 export enum PostStatus {
   DRAFT = 'draft',
+  PENDING = 'pending',
   PUBLISHED = 'published',
 }
 

@@ -1,5 +1,5 @@
 import {
-  Controller, All, Req, Res, Next, Get, Post, Put, Delete, Param, Body, Query,
+  Controller, All, Req, Res, Next, Get, Post, Put, Patch, Delete, Param, Body, Query,
   UseGuards, Request, UseInterceptors, UploadedFile, Headers, HttpCode
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
@@ -89,6 +89,18 @@ export class AppController {
   @UseGuards(AuthGuard('jwt'))
   createPost(@Body() body: any, @Request() req: any) {
     return this.proxy.forward('blog', '/posts', 'POST', body, { Authorization: this.getAuthHeader(req) });
+  }
+
+  @Patch('posts/:id/approve')
+  @UseGuards(AuthGuard('jwt'))
+  approvePost(@Param('id') id: string, @Request() req: any) {
+    return this.proxy.forward('blog', `/posts/${id}/approve`, 'PATCH', null, { Authorization: this.getAuthHeader(req) });
+  }
+
+  @Patch('posts/:id/reject')
+  @UseGuards(AuthGuard('jwt'))
+  rejectPost(@Param('id') id: string, @Request() req: any) {
+    return this.proxy.forward('blog', `/posts/${id}/reject`, 'PATCH', null, { Authorization: this.getAuthHeader(req) });
   }
 
   @Put('posts/:id')

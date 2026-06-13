@@ -1,13 +1,43 @@
-"""Entry point: python -m post_agent"""
+"""Entry point: python -m meridian_agents.post_agent [approve|reject|pending|schedule] [args]"""
 import sys
-import os
 import time
 
-# Support: python -m post_agent schedule '0 8 * * 1'
-if len(sys.argv) >= 2 and sys.argv[1] == "schedule":
+cmd = sys.argv[1] if len(sys.argv) >= 2 else "generate"
+
+# ── approve <post_id> ─────────────────────────────────────────────────────────
+if cmd == "approve":
+    if len(sys.argv) < 3:
+        print("Usage: python3 -m meridian_agents.post_agent approve <post_id>")
+        sys.exit(1)
+    from .main import approve_post
+    try:
+        approve_post(int(sys.argv[2]))
+    except Exception as e:
+        print(f"❌ Approve failed: {e}", file=sys.stderr)
+        sys.exit(1)
+
+# ── reject <post_id> ──────────────────────────────────────────────────────────
+elif cmd == "reject":
+    if len(sys.argv) < 3:
+        print("Usage: python3 -m meridian_agents.post_agent reject <post_id>")
+        sys.exit(1)
+    from .main import reject_post
+    try:
+        reject_post(int(sys.argv[2]))
+    except Exception as e:
+        print(f"❌ Reject failed: {e}", file=sys.stderr)
+        sys.exit(1)
+
+# ── pending — list pending posts ──────────────────────────────────────────────
+elif cmd == "pending":
+    from .main import list_pending
+    list_pending()
+
+# ── schedule <cron_expr> ──────────────────────────────────────────────────────
+elif cmd == "schedule":
     cron_expr = sys.argv[2] if len(sys.argv) >= 3 else ""
     if not cron_expr:
-        print("❌ 'schedule' requires a cron expression, e.g.: python -m post_agent schedule '0 8 * * 1'")
+        print("Usage: python3 -m meridian_agents.post_agent schedule '0 8 * * 1'")
         sys.exit(1)
 
     from pathlib import Path
@@ -19,18 +49,15 @@ if len(sys.argv) >= 2 and sys.argv[1] == "schedule":
 
     if not croniter.is_valid(cron_expr):
         print(f'❌ Invalid cron expression: "{cron_expr}"')
-        print('   Examples: "0 8 * * 1"  (Monday 8 AM UTC)')
         sys.exit(1)
 
-    from .main import run_post_agent
+    from .main import run_agent
 
-    print(f"⏰ Meridian AI Agent scheduler started")
-    print(f"   Schedule: {cron_expr} (UTC)")
-    print(f"   Press Ctrl+C to stop\n")
+    print(f"⏰ Meridian Post Agent scheduler (human-in-the-loop mode)")
+    print(f"   Schedule: {cron_expr} (UTC)\n")
 
     running = False
     cron = croniter(cron_expr)
-
     while True:
         next_run = cron.get_next(datetime)
         wait = (next_run - datetime.utcnow()).total_seconds()
@@ -39,23 +66,23 @@ if len(sys.argv) >= 2 and sys.argv[1] == "schedule":
             h, m = divmod(m, 60)
             print(f"⏳ Next run: {next_run.strftime('%Y-%m-%d %H:%M UTC')} (in {h:02d}:{m:02d}:{s:02d})")
             time.sleep(wait)
-
         if running:
             print(f"[{datetime.utcnow().isoformat()}] Skipping — previous run still in progress")
             continue
-
         running = True
         print(f"\n[{datetime.utcnow().isoformat()}] Scheduled run triggered")
         try:
-            run_post_agent()
+            run_agent()
         except Exception as err:
             print(f"Scheduled run failed: {err}")
         finally:
             running = False
+
+# ── generate (default) ────────────────────────────────────────────────────────
 else:
-    from .main import run_post_agent
+    from .main import run_agent
     try:
-        run_post_agent()
+        run_agent()
     except Exception as e:
         print(f"\n❌ Agent failed: {e}", file=sys.stderr)
         sys.exit(1)

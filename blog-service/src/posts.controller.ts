@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, Query, UseGuards, Request, Optional } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Param, Body, Query, UseGuards, Request, Optional } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { PostsService } from './posts.service';
 
@@ -42,6 +42,18 @@ export class PostsController {
   @UseGuards(AuthGuard('jwt'))
   create(@Body() dto: any, @Request() req: any) {
     return this.postsService.create(dto, req.user);
+  }
+
+  @Patch(':id/approve')
+  @UseGuards(AuthGuard('jwt'))
+  approve(@Param('id') id: string) {
+    return this.postsService.approve(+id);
+  }
+
+  @Patch(':id/reject')
+  @UseGuards(AuthGuard('jwt'))
+  reject(@Param('id') id: string) {
+    return this.postsService.reject(+id);
   }
 
   @Put(':id')

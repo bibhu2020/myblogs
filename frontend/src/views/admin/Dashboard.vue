@@ -3,7 +3,7 @@ import { onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import api from '../../api'
 
-const stats = ref({ total: 0, published: 0, drafts: 0, totalViews: 0 })
+const stats = ref({ total: 0, published: 0, drafts: 0, pending: 0, totalViews: 0 })
 const recentPosts = ref([])
 const categories = ref([])
 
@@ -38,11 +38,16 @@ onMounted(async () => {
         <div class="text-sm text-gray-500">Published</div>
         <div class="w-8 h-1 bg-green-500 rounded-full mt-3"></div>
       </div>
-      <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-        <div class="text-3xl font-bold text-yellow-600 mb-1">{{ stats.drafts }}</div>
-        <div class="text-sm text-gray-500">Drafts</div>
-        <div class="w-8 h-1 bg-yellow-500 rounded-full mt-3"></div>
-      </div>
+      <RouterLink to="/admin/posts" class="block bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:border-amber-200 transition-colors" :class="stats.pending > 0 ? 'border-amber-200 bg-amber-50/30' : ''">
+        <div class="flex items-start justify-between">
+          <div>
+            <div class="text-3xl font-bold mb-1" :class="stats.pending > 0 ? 'text-amber-600' : 'text-gray-400'">{{ stats.pending || 0 }}</div>
+            <div class="text-sm text-gray-500">Pending Approval</div>
+          </div>
+          <span v-if="stats.pending > 0" class="text-lg">⏸️</span>
+        </div>
+        <div class="w-8 h-1 rounded-full mt-3" :class="stats.pending > 0 ? 'bg-amber-500' : 'bg-gray-200'"></div>
+      </RouterLink>
       <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
         <div class="text-3xl font-bold text-purple-600 mb-1">{{ Number(stats.totalViews || 0).toLocaleString() }}</div>
         <div class="text-sm text-gray-500">Total Views</div>

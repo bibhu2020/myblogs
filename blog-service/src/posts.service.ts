@@ -124,12 +124,31 @@ export class PostsService {
     return { message: 'Post deleted' };
   }
 
+  async approve(id: number) {
+    const post = await this.findOne(id);
+    if (post.status !== PostStatus.PENDING) {
+      throw new Error(`Post ${id} is not pending approval (status: ${post.status})`);
+    }
+    post.status = PostStatus.PUBLISHED;
+    return this.postRepo.save(post);
+  }
+
+  async reject(id: number) {
+    const post = await this.findOne(id);
+    if (post.status !== PostStatus.PENDING) {
+      throw new Error(`Post ${id} is not pending approval (status: ${post.status})`);
+    }
+    await this.postRepo.remove(post);
+    return { message: `Post "${post.title}" rejected and removed.` };
+  }
+
   async getStats() {
     const total = await this.postRepo.count();
     const published = await this.postRepo.count({ where: { status: PostStatus.PUBLISHED } });
     const drafts = await this.postRepo.count({ where: { status: PostStatus.DRAFT } });
+    const pending = await this.postRepo.count({ where: { status: PostStatus.PENDING } });
     const views = await this.postRepo.createQueryBuilder('post').select('SUM(post.views)', 'total').getRawOne();
-    return { total, published, drafts, totalViews: views?.total || 0 };
+    return { total, published, drafts, pending, totalViews: views?.total || 0 };
   }
 
   async getFeatured() {

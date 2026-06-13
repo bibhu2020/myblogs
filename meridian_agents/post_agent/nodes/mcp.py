@@ -155,13 +155,28 @@ def pick_taxonomy_node(state: AgentState) -> dict:
     return {"category_id": category_id, "tag_ids": tag_ids}
 
 
-def publish_post_node(state: AgentState) -> dict:
-    print("\n📡 Publishing post via MCP...")
+def _extract_slug_id(raw) -> tuple[str | None, int | None]:
+    if isinstance(raw, dict):
+        return raw.get("slug"), raw.get("id")
+    text = str(raw)
+    m_slug = re.search(r"Slug:\s*(\S+)", text)
+    m_id = re.search(r"ID:\s*(\d+)", text)
+    return (m_slug.group(1) if m_slug else None,
+            int(m_id.group(1)) if m_id else None)
+
+
+def save_pending_node(state: AgentState) -> dict:
+    """Save the generated post to the blog with status='pending'.
+
+    The post will not be visible to readers until an admin approves it
+    via the admin panel at /admin/posts (Pending Approval tab).
+    """
+    print("\n⏸️  Saving post as PENDING (awaiting admin approval)...")
     args: dict = {
         "title": state["post_title"],
         "content": state["final_content"],
         "excerpt": state["post_excerpt"],
-        "status": "published",
+        "status": "pending",
         "author_name": state["author_name"],
     }
     if state.get("category_id") is not None:
@@ -172,15 +187,41 @@ def publish_post_node(state: AgentState) -> dict:
         args["featured_image"] = state["featured_image_url"]
 
     raw = mcp_call("create_blog", args)
-    slug, post_id = None, None
-    if isinstance(raw, dict):
-        slug = raw.get("slug")
-        post_id = raw.get("id")
-    else:
-        text = str(raw)
-        m_slug = re.search(r"Slug:\s*(\S+)", text)
-        m_id = re.search(r"ID:\s*(\d+)", text)
-        slug = m_slug.group(1) if m_slug else None
-        post_id = int(m_id.group(1)) if m_id else None
+    slug, post_id = _extract_slug_id(raw)
 
+    print(f"✅ Pending post saved — ID: {post_id}, slug: {slug}")
+    return {"pending_post_id": post_id, "pending_post_slug": slug,
+            "approved": None, "published_slug": None, "published_id": None}
+
+
+def publish_approved_node(state: AgentState) -> dict:
+    """Publish an already-saved pending post after admin approval.
+
+    Called by the resume flow: reads pending_post_id from state and
+    updates the post status to 'published' via the blog API.
+    """
+    import httpx
+    post_id = state.get("pending_post_id")
+    if not post_id:
+        print("⚠️  No pending_post_id in state — nothing to publish.")
+        return {}
+
+    server_base = state.get("server_base", "")
+    token = os.getenv("AGENT_JWT_TOKEN", "")
+
+    print(f"\n📡 Publishing approved post #{post_id}...")
+    try:
+        with httpx.Client(timeout=15) as client:
+            r = client.patch(
+                f"{server_base}/api/posts/{post_id}/approve",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            r.raise_for_status()
+    except Exception as exc:
+        print(f"⚠️  Could not auto-publish via API ({exc}). Admin can approve manually.")
+        return {"published_slug": state.get("pending_post_slug"),
+                "published_id": post_id}
+
+    slug = state.get("pending_post_slug")
+    print(f"✅ Post published — ID: {post_id}, slug: {slug}")
     return {"published_slug": slug, "published_id": post_id}

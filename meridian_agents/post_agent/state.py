@@ -38,6 +38,13 @@ class AgentState(TypedDict):
     category_id: Optional[int]
     tag_ids: list
 
-    # Published result
+    # Pending-approval result (set by save_pending_node)
+    pending_post_id: Optional[int]
+    pending_post_slug: Optional[str]
+
+    # Set to True by resume when admin approves; False if rejected
+    approved: Optional[bool]
+
+    # Final published result (set after approval)
     published_slug: Optional[str]
     published_id: Optional[int]
