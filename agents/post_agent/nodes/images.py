@@ -114,23 +114,17 @@ def _try_gemini(prompt: str) -> tuple[bytes, str]:
         warnings.simplefilter("ignore")
         import google.generativeai as genai
     genai.configure(api_key=api_key)
-    # Use Imagen 3 if available; fall back to gemini-2.0-flash-exp inline_data
-    try:
-        model = genai.ImageGenerationModel("imagen-3.0-generate-002")
-        result = model.generate_images(prompt=prompt[:800], number_of_images=1)
-        img = result.images[0]
-        return img._image_bytes, "image/png"
-    except Exception:
-        pass
-    model = genai.GenerativeModel("gemini-2.0-flash-exp")
-    response = model.generate_content(
-        [{"text": prompt[:800]}, {"text": "Generate an image based on this description."}],
-        generation_config={"response_modalities": ["IMAGE", "TEXT"]},
-    )
-    for part in response.parts:
-        if hasattr(part, "inline_data") and part.inline_data.mime_type.startswith("image/"):
-            return base64.b64decode(part.inline_data.data), part.inline_data.mime_type
-    raise RuntimeError("Gemini returned no image data")
+    # Try Imagen 3 model variants in order; raise on all failures so the
+    # caller can fall through to the next provider (Unsplash).
+    last_exc: Exception = RuntimeError("No Imagen model succeeded")
+    for model_name in ("imagen-3.0-generate-002", "imagen-3.0-fast-generate-001"):
+        try:
+            model = genai.ImageGenerationModel(model_name)
+            result = model.generate_images(prompt=prompt[:800], number_of_images=1)
+            return result.images[0]._image_bytes, "image/png"
+        except Exception as exc:
+            last_exc = exc
+    raise RuntimeError(f"Gemini: {last_exc}")
 
 
 def _try_unsplash(topic: str) -> tuple[bytes, str, str | None]:
