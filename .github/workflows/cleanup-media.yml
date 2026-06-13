@@ -1,0 +1,52 @@
+name: Media Store Cleanup
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'   # Every Sunday at 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — list orphans without deleting'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to commit deleted files back to the repo
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run media cleanup
+        id: cleanup
+        run: |
+          ARGS=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="--dry-run"
+          fi
+          python3 scripts/cleanup_media.py $ARGS | tee /tmp/cleanup.txt
+          echo "summary<<EOF" >> "$GITHUB_OUTPUT"
+          cat /tmp/cleanup.txt >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Commit removed files
+        if: inputs.dry_run != true
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add media-service/uploads/ media-service/media.db
+          if git diff --staged --quiet; then
+            echo "Nothing to commit — no orphaned files were removed."
+          else
+            git commit -m "chore(media): remove orphaned uploads [automated]"
+            git push
+          fi
