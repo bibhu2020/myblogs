@@ -269,13 +269,14 @@ export class AppController {
         contentType = 'audio/wav';
         buf = Buffer.from(await r.arrayBuffer());
       } else {
-        // HF Inference API — last resort (cold-start latency possible)
+        // HF Inference API — last resort (cold-start can take 60s+; hard-cap at 90s)
         const r = await fetch(
           'https://api-inference.huggingface.co/models/facebook/mms-tts-eng',
           {
             method: 'POST',
             headers: { Authorization: `Bearer ${hfToken}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ inputs: text }),
+            signal: AbortSignal.timeout(90_000),
           },
         );
         if (!r.ok) { res.status(502).json({ message: `HF TTS error: ${await r.text()}` }); return; }
