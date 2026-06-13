@@ -28,7 +28,15 @@ tts = [
     "numpy>=1.24",
     "gunicorn>=21.0",
 ]
-all = ["meridian[post_agent,tts]"]
+maintenance = [
+    "autogen-agentchat>=0.4",
+    "autogen-ext[openai]>=0.4",
+    "openai>=1.0",
+    "python-dotenv>=1.0",
+    "requests>=2.31",
+    "croniter>=2.0",
+]
+all = ["meridian[post_agent,tts,maintenance]"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["post_agent"]
+packages = ["post_agent", "maintenance_agent"]

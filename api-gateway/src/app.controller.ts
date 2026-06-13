@@ -190,6 +190,29 @@ export class AppController {
     return this.proxy.forward('media', `/media/${id}`, 'DELETE', null, { Authorization: this.getAuthHeader(req) });
   }
 
+  // AGENT RUNS
+  @Post('agent-runs')
+  createAgentRun(@Body() body: any) {
+    return this.proxy.forward('blog', '/agent-runs', 'POST', body);
+  }
+
+  @Put('agent-runs/:runId')
+  updateAgentRun(@Param('runId') runId: string, @Body() body: any) {
+    return this.proxy.forward('blog', `/agent-runs/${runId}`, 'PUT', body);
+  }
+
+  @Get('agent-runs')
+  @UseGuards(AuthGuard('jwt'))
+  getAgentRuns(@Request() req: any) {
+    return this.proxy.forward('blog', '/agent-runs', 'GET', null, { Authorization: this.getAuthHeader(req) });
+  }
+
+  @Get('agent-runs/:runId')
+  @UseGuards(AuthGuard('jwt'))
+  getAgentRun(@Param('runId') runId: string, @Request() req: any) {
+    return this.proxy.forward('blog', `/agent-runs/${runId}`, 'GET', null, { Authorization: this.getAuthHeader(req) });
+  }
+
   // TEXT-TO-SPEECH — one small chunk per request; chunking handled client-side.
   // Priority: local Python service (Docker) → HF Inference API → OpenAI TTS.
   @Post('tts')

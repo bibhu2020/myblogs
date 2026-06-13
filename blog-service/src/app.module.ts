@@ -6,6 +6,7 @@ import { Post } from './post.entity';
 import { Category } from './category.entity';
 import { Tag } from './tag.entity';
 import { Comment } from './comment.entity';
+import { AgentRun } from './agent-run.entity';
 import { PostsController } from './posts.controller';
 import { PostsService } from './posts.service';
 import { CategoriesController } from './categories.controller';
@@ -14,6 +15,8 @@ import { TagsController } from './tags.controller';
 import { TagsService } from './tags.service';
 import { CommentsController } from './comments.controller';
 import { CommentsService } from './comments.service';
+import { AgentRunsController } from './agent-runs.controller';
+import { AgentRunsService } from './agent-runs.service';
 import { JwtStrategy } from './jwt.strategy';
 import { SeedService } from './seed.service';
 
@@ -23,14 +26,14 @@ import { SeedService } from './seed.service';
       type: 'postgres',
       url: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_96zZibhKwEcG@ep-delicate-fire-atgeeiwh-pooler.c-9.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
       ssl: { rejectUnauthorized: false },
-      entities: [Post, Category, Tag, Comment],
+      entities: [Post, Category, Tag, Comment, AgentRun],
       synchronize: true,
     }),
-    TypeOrmModule.forFeature([Post, Category, Tag, Comment]),
+    TypeOrmModule.forFeature([Post, Category, Tag, Comment, AgentRun]),
     PassportModule,
     JwtModule.register({ secret: 'myblogs-secret-key-2024' }),
   ],
-  controllers: [PostsController, CategoriesController, TagsController, CommentsController],
-  providers: [PostsService, CategoriesService, TagsService, CommentsService, JwtStrategy, SeedService],
+  controllers: [PostsController, CategoriesController, TagsController, CommentsController, AgentRunsController],
+  providers: [PostsService, CategoriesService, TagsService, CommentsService, AgentRunsService, JwtStrategy, SeedService],
 })
 export class AppModule {}

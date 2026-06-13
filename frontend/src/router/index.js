@@ -23,6 +23,7 @@ const routes = [
       { path: 'categories', component: () => import('../views/admin/Categories.vue'), meta: { requiresAuth: true, title: 'Categories' } },
       { path: 'users', component: () => import('../views/admin/Users.vue'), meta: { requiresAuth: true, title: 'Users' } },
       { path: 'comments', component: () => import('../views/admin/Comments.vue'), meta: { requiresAuth: true, title: 'Comments' } },
+      { path: 'agent-runs', component: () => import('../views/admin/AgentRuns.vue'), meta: { requiresAuth: true, title: 'Agent Runs' } },
     ]
   },
   { path: '/:pathMatch(.*)*', component: () => import('../views/NotFound.vue'), meta: { title: 'Not Found' } }

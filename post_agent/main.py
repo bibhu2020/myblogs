@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 from .graph import build_graph  # noqa: E402 — must load .env before importing graph
+from .tracer import complete_run, start_run  # noqa: E402
 
 SERVER_BASE       = os.getenv("SERVER_BASE", "https://mishrabP-myblogs.hf.space")
 AUTHOR_NAME       = os.getenv("AGENT_AUTHOR_NAME", "Meridian AI Researcher")
@@ -23,6 +24,8 @@ def run_agent() -> dict:
 
     if not os.getenv("OPENAI_API_KEY"):
         raise RuntimeError("OPENAI_API_KEY is required. Add it to .env or export it first.")
+
+    run_id = start_run({"authorName": AUTHOR_NAME, "authorEmail": AUTHOR_EMAIL})
 
     graph = build_graph()
     t0 = time.time()
@@ -60,10 +63,20 @@ def run_agent() -> dict:
         "published_id": None,
     }
 
-    final = graph.invoke(initial)
-    elapsed = round(time.time() - t0)
+    try:
+        final = graph.invoke(initial)
+    except Exception as exc:
+        complete_run(run_id, str(exc), failed=True)
+        raise
 
+    elapsed = round(time.time() - t0)
     slug = final.get("published_slug") or final.get("published_id") or "(see site)"
+
+    complete_run(
+        run_id,
+        summary=f"Published: {final.get('post_title', '')} (slug: {slug}) in {elapsed}s",
+    )
+
     print("\n╔══════════════════════════════════════════╗")
     print("║  ✅  Post published successfully!        ║")
     print("╚══════════════════════════════════════════╝")
@@ -75,3 +88,7 @@ def run_agent() -> dict:
     print(f"  Time:   {elapsed}s\n")
 
     return final
+
+
+# Alias for backward compatibility with __main__.py
+run_post_agent = run_agent
