@@ -10,7 +10,7 @@ requires-python = ">=3.10"
 dependencies = []
 
 [project.optional-dependencies]
-agent = [
+post_agent = [
     "langgraph>=1.0",
     "langchain-core>=1.0",
     "openai>=1.0",
@@ -28,7 +28,7 @@ tts = [
     "numpy>=1.24",
     "gunicorn>=21.0",
 ]
-all = ["meridian[agent,tts]"]
+all = ["meridian[post_agent,tts]"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["agent"]
+packages = ["post_agent"]

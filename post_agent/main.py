@@ -17,8 +17,8 @@ AUTHOR_PASSWORD   = os.getenv("AGENT_AUTHOR_PASSWORD", f"MeridianAI{time.strftim
 
 def run_agent() -> dict:
     print("\n╔══════════════════════════════════════════╗")
-    print("║        Meridian AI Blog Agent v2         ║")
-    print("║           LangGraph Edition              ║")
+    print("║     Meridian Post Agent v2               ║")
+    print("║        LangGraph Edition                 ║")
     print("╚══════════════════════════════════════════╝\n")
 
     if not os.getenv("OPENAI_API_KEY"):

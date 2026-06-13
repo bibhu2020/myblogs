@@ -13,7 +13,7 @@ fi
 
 usage() {
   cat <<'USAGE'
-Meridian AI Blog Agent  (LangGraph / Python edition)
+Meridian Post Agent  (LangGraph / Python edition)
 
 Usage:
   ./agent.sh run                     Run the agent once now
@@ -49,8 +49,8 @@ if [ $# -eq 0 ]; then usage; fi
 
 # Ensure Python deps are installed
 if ! python3 -c "import langgraph, openai, croniter" 2>/dev/null; then
-  echo "📦 Installing Python agent dependencies..."
-  pip3 install -e "$ROOT_DIR[agent]" --quiet
+  echo "📦 Installing Python post_agent dependencies..."
+  pip3 install --user -e "$ROOT_DIR[post_agent]" --quiet
   echo "✅ Dependencies installed"
   echo ""
 fi
@@ -58,7 +58,7 @@ fi
 case "$1" in
   run)
     cd "$ROOT_DIR"
-    python3 -m agent
+    python3 -m post_agent
     ;;
   schedule)
     if [ -z "${2:-}" ]; then
@@ -67,7 +67,7 @@ case "$1" in
       usage
     fi
     cd "$ROOT_DIR"
-    python3 -m agent schedule "$2"
+    python3 -m post_agent schedule "$2"
     ;;
   *)
     echo "❌ Unknown command: $1"
