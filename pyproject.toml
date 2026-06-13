@@ -26,7 +26,7 @@ tts = [
     "transformers>=4.35",
     "scipy>=1.11",
     "numpy>=1.24",
-    "gunicorn>=21.0",
+    "gunicorn>=26.0.0",
 ]
 maintenance = [
     "autogen-agentchat>=0.4",
