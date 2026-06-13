@@ -11,12 +11,33 @@ from autogen_ext.models.openai import OpenAIChatCompletionClient
 
 from . import tools
 
-MODEL = os.getenv("MAINTENANCE_MODEL", "gpt-5")
+MODEL = os.getenv("MAINTENANCE_MODEL") or "gpt-4o"
+
+# AutoGen's client registry only knows standard OpenAI model IDs. For any other
+# name (e.g. a future "gpt-5" or a fine-tuned model), we must supply model_info
+# manually so AutoGen knows its capabilities.
+_AUTOGEN_KNOWN_MODELS = {
+    "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4",
+    "gpt-3.5-turbo", "o1", "o1-mini", "o1-preview", "o3", "o3-mini",
+}
+
+
+def _make_client() -> OpenAIChatCompletionClient:
+    if MODEL in _AUTOGEN_KNOWN_MODELS:
+        return OpenAIChatCompletionClient(model=MODEL)
+    from autogen_core.models import ModelInfo
+    info: ModelInfo = {
+        "vision": False,
+        "function_calling": True,
+        "json_output": True,
+        "family": "gpt-4o",
+    }
+    return OpenAIChatCompletionClient(model=MODEL, model_info=info)
 
 
 async def run_team(repo_root: str, server_base: str) -> tuple[str, list]:
     """Run the maintenance multi-agent team and return (summary, findings_list)."""
-    model_client = OpenAIChatCompletionClient(model=MODEL)
+    model_client = _make_client()
 
     # ── Phase orchestration ────────────────────────────────────────────────────
     orchestrator = AssistantAgent(

@@ -88,19 +88,67 @@ def _try_dalle2(prompt: str) -> tuple[bytes, str]:
     return r.content, "image/png"
 
 
-def _try_flux(prompt: str) -> tuple[bytes, str]:
+_HF_BASE = "https://router.huggingface.co/hf-inference/models"
+
+
+def _hf_infer(model: str, payload: dict, timeout: int = 180) -> requests.Response:
+    """POST to HuggingFace Inference API (new router endpoint) with one 503 retry."""
     token = os.getenv("HF_TOKEN", "")
     if not token:
         raise RuntimeError("HF_TOKEN not set")
-    api_url = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
+    url = f"{_HF_BASE}/{model}"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    res = requests.post(api_url, headers=headers, json={"inputs": prompt[:500]}, timeout=120)
+    res = requests.post(url, headers=headers, json=payload, timeout=timeout)
     if res.status_code == 503:
-        wait = min(res.json().get("estimated_time", 20), 30)
-        print(f"  ⏳ FLUX loading, retrying in {wait:.0f}s...")
+        wait = min(res.json().get("estimated_time", 30), 60)
+        print(f"  ⏳ {model.split('/')[-1]} loading, retrying in {wait:.0f}s...")
         time.sleep(wait)
-        res = requests.post(api_url, headers=headers, json={"inputs": prompt[:500]}, timeout=120)
+        res = requests.post(url, headers=headers, json=payload, timeout=timeout)
     res.raise_for_status()
+    return res
+
+
+def _try_flux_dev(prompt: str) -> tuple[bytes, str]:
+    """FLUX.1-dev — photorealistic DSLR-quality images via HF Inference API.
+    Attempts FLUX.1-dev (higher-quality, 30-step); if the model is unavailable
+    on the free inference tier (410 Gone / not-supported), retries with
+    FLUX.1-schnell using a DSLR-optimised prompt prefix for the best realism
+    available without a paid HF subscription."""
+    dslr_prompt = (
+        "DSLR photography, photorealistic, sharp focus, natural lighting, "
+        f"8K ultra-detailed, {prompt[:440]}"
+    )
+    # Try the full FLUX.1-dev model first
+    try:
+        res = _hf_infer(
+            "black-forest-labs/FLUX.1-dev",
+            {"inputs": dslr_prompt, "parameters": {"num_inference_steps": 30}},
+            timeout=180,
+        )
+        mime = res.headers.get("content-type", "image/jpeg").split(";")[0]
+        return res.content, mime
+    except requests.HTTPError as exc:
+        # 410 = removed from free tier; 400 = not supported by provider
+        if exc.response is not None and exc.response.status_code in (400, 410):
+            print("  ℹ️  FLUX.1-dev unavailable on free tier — using schnell + DSLR prompt")
+        else:
+            raise
+    # Fallback: FLUX.1-schnell with DSLR prompt prefix
+    res = _hf_infer(
+        "black-forest-labs/FLUX.1-schnell",
+        {"inputs": dslr_prompt},
+        timeout=120,
+    )
+    mime = res.headers.get("content-type", "image/jpeg").split(";")[0]
+    return res.content, mime
+
+
+def _try_flux(prompt: str) -> tuple[bytes, str]:
+    res = _hf_infer(
+        "black-forest-labs/FLUX.1-schnell",
+        {"inputs": prompt[:500]},
+        timeout=120,
+    )
     mime = res.headers.get("content-type", "image/jpeg").split(";")[0]
     return res.content, mime
 
@@ -165,10 +213,11 @@ def _generate_image(
 
     ai_prompt = f"{prompt}. Professional, high-quality illustration, no text overlays, no watermarks."
     providers: list[tuple[str, object]] = [
-        ("DALL-E 3", lambda: _try_dalle3(ai_prompt, size)),
-        ("DALL-E 2", lambda: _try_dalle2(ai_prompt)),
-        ("FLUX.1-schnell", lambda: _try_flux(ai_prompt)),
-        ("Gemini", lambda: _try_gemini(ai_prompt)),
+        ("DALL-E 3",      lambda: _try_dalle3(ai_prompt, size)),
+        ("FLUX.1-dev",    lambda: _try_flux_dev(ai_prompt)),   # DSLR-quality HF fallback
+        ("DALL-E 2",      lambda: _try_dalle2(ai_prompt)),
+        ("FLUX.1-schnell",lambda: _try_flux(ai_prompt)),
+        ("Gemini",        lambda: _try_gemini(ai_prompt)),
     ]
     for name, fn in providers:
         try:

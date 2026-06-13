@@ -27,5 +27,5 @@ jobs:
           SECRET_TOKEN_GITHUB: ${{ secrets.GITHUB_TOKEN_SECRET }}
           SERVER_BASE: ${{ vars.HF_SPACE_URL }}
           GITHUB_REPO: ${{ github.repository }}
-          MAINTENANCE_MODEL: ${{ vars.MAINTENANCE_MODEL }}
+          MAINTENANCE_MODEL: ${{ vars.MAINTENANCE_MODEL || 'gpt-4o' }}
         run: python3 -m agents.maintenance_agent
