@@ -30,7 +30,7 @@ tts = [
 ]
 maintenance = [
     "autogen-agentchat>=0.4",
-    "autogen-ext[openai]>=0.4",
+    "autogen-ext[openai]>=0.7.5",
     "openai>=1.0",
     "python-dotenv>=1.0",
     "requests>=2.31",
