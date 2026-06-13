@@ -1,5 +1,5 @@
 ---
-title: myblogs
+title: Meridian
 emoji: 🌐
 colorFrom: blue
 colorTo: indigo
