@@ -492,10 +492,7 @@ def commit_and_push(ctx: RunContextWrapper[RebrandCtx]) -> str:
     git("config", "user.name", "Claude Theme Bot")
     git("config", "user.email", "bm80177@gmail.com")
 
-    pull = git("pull", "--rebase", "origin", "main", timeout=90)
-    if pull.returncode != 0:
-        print(f"[publish] git pull warning: {_mask_token(pull.stderr or pull.stdout)[:200]}")
-
+    # Commit our changes first so the working tree is clean for the pull-rebase
     git("add", "-A")
 
     status = git("status", "--porcelain")
@@ -510,6 +507,11 @@ def commit_and_push(ctx: RunContextWrapper[RebrandCtx]) -> str:
 
     sha = git("rev-parse", "--short", "HEAD").stdout.strip()
     print(f"[publish] Committed {sha}: {commit_msg}")
+
+    # Pull-rebase stacks our commit on top of any remote changes
+    pull = git("pull", "--rebase", "origin", "main", timeout=90)
+    if pull.returncode != 0:
+        print(f"[publish] git pull warning: {_mask_token(pull.stderr or pull.stdout)[:200]}")
 
     push = git("push", "origin", "main", timeout=90)
     if push.returncode == 0:
