@@ -8,30 +8,83 @@ from ..state import AgentState
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
 
-_BASE_SYSTEM = """You are a senior technology journalist writing for Meridian, a premium AI and technology blog.
+# Per-category writer persona: (role description, publication description,
+#   example category keywords, example tag keywords, structure hint)
+_PERSONAS: dict[str, tuple] = {
+    "Technology": (
+        "senior technology journalist",
+        "a premium AI and technology publication",
+        '["ai", "machine-learning", "software"]',
+        '["openai", "llm", "neural-network", "gpu", "api"]',
+        "Hook → Background → The Breakthrough → Under the Hood (technical deep-dive) → "
+        "Expert Voices → Implications → The Bigger Picture → Key Takeaways → Conclusion",
+    ),
+    "History": (
+        "senior history writer and cultural journalist",
+        "a longform editorial magazine covering world history and human civilization",
+        '["history", "civilization", "world-history"]',
+        '["ancient-history", "empire", "revolution", "discovery", "archaeology"]',
+        "Hook → Historical Context → The Event / Era → Key Figures → Causes & Consequences → "
+        "Global Impact → Legacy & Lessons → Key Takeaways → Conclusion",
+    ),
+    "Science": (
+        "senior science journalist",
+        "a popular-science magazine covering physics, biology, space, and climate",
+        '["science", "research", "discovery"]',
+        '["physics", "biology", "astronomy", "genetics", "climate"]',
+        "Hook → Background → The Discovery / Experiment → Methodology → Expert Reactions → "
+        "Implications → The Bigger Picture → Key Takeaways → Conclusion",
+    ),
+    "Travel": (
+        "senior travel writer",
+        "a premium travel publication covering global destinations and experiences",
+        '["travel", "destinations", "adventure"]',
+        '["adventure", "culture", "food", "photography", "budget-travel"]',
+        "Hook → Destination Overview → Getting There → What to See & Do → Food & Culture → "
+        "Practical Tips → When to Go → Key Takeaways → Conclusion",
+    ),
+    "Knowledge": (
+        "senior editorial journalist and essayist",
+        "a curious multi-topic magazine exploring ideas, culture, and society",
+        '["knowledge", "culture", "society"]',
+        '["ideas", "trends", "analysis", "human-behavior", "education"]',
+        "Hook → Context → Deep Dive → Expert Perspectives → Real-World Examples → "
+        "Implications → The Bigger Picture → Key Takeaways → Conclusion",
+    ),
+}
+_DEFAULT_PERSONA = (
+    "senior editorial journalist",
+    "a premium multi-topic publication",
+    '["editorial", "culture", "society"]',
+    '["trends", "analysis", "insight", "society", "ideas"]',
+    "Hook → Background → Main Argument → Evidence & Examples → Expert Voices → "
+    "Implications → Key Takeaways → Conclusion",
+)
+
+_BASE_SYSTEM_TEMPLATE = """You are a {role} writing for Meridian, {publication}.
 Your posts are detailed, authoritative, and read like long-form magazine features — not listicles.
 
 CONTENT RULES:
 - Minimum 3,000 words of body content (aim for 3,500–4,500 for a 12-15 min read)
 - Write flowing narrative prose, not bullet-point summaries
 - Explain the WHY and HOW, not just the WHAT
-- Include concrete examples, analogies, and real technical depth
+- Include concrete examples, analogies, and real depth appropriate to the topic
 - Use pull quotes from real people (from the research) inside <blockquote> tags
-- Add code snippets with <pre><code class="language-X"> where illustrative
+- Add code snippets with <pre><code class="language-X"> only if the topic genuinely involves code
 
 IMAGE PLACEHOLDERS:
 Place 4–6 image placeholders throughout using this EXACT format (on its own line):
-[[IMAGE: detailed DALL-E 3 prompt — be specific about style, content, composition, colors]]
+[[IMAGE: vivid visual description of what the image should show — style, subject, composition, mood]]
 
 OUTPUT FORMAT — return a single JSON object with these exact keys:
-{
+{{
   "title": "55–70 character headline, specific and compelling, no clickbait",
   "excerpt": "140–160 character teaser for blog listing cards — hook the reader",
-  "suggestedCategoryKeywords": ["ai", "machine-learning", "research"],
-  "suggestedTagKeywords": ["openai", "llm", "transformer", "neural-network", "gpt"],
-  "featuredImagePrompt": "Detailed DALL-E 3 prompt for a 16:9 hero image. Photorealistic or artistic render. No text/logos.",
+  "suggestedCategoryKeywords": {cat_kw_example},
+  "suggestedTagKeywords": {tag_kw_example},
+  "featuredImagePrompt": "Detailed visual prompt for a 16:9 hero image. Photorealistic or artistic render. No text/logos.",
   "content": "Full HTML blog content string using ONLY these tags: <h2> <h3> <h4> <p> <strong> <em> <a href=''> <ul> <ol> <li> <blockquote> <pre><code class='language-X'> <img src='' alt=''>"
-}
+}}
 
 Do not include markdown, only valid HTML in the content field. Escape all quotes inside JSON strings."""
 
@@ -55,7 +108,16 @@ Add "unsplashSearchQuery" to the OUTPUT FORMAT JSON alongside the other fields."
 
 
 def _system_prompt(category: str) -> str:
-    return _BASE_SYSTEM + (_TRAVEL_ADDENDUM if category == "Travel" else "")
+    role, publication, cat_kw, tag_kw, _ = _PERSONAS.get(category, _DEFAULT_PERSONA)
+    system = _BASE_SYSTEM_TEMPLATE.format(
+        role=role,
+        publication=publication,
+        cat_kw_example=cat_kw,
+        tag_kw_example=tag_kw,
+    )
+    if category == "Travel":
+        system += _TRAVEL_ADDENDUM
+    return system
 
 
 def _word_count(html: str) -> int:
@@ -63,13 +125,19 @@ def _word_count(html: str) -> int:
 
 
 def _user_prompt(state: AgentState) -> str:
+    category = state["category_name"]
+    _, _, _, _, structure = _PERSONAS.get(category, _DEFAULT_PERSONA)
     return f"""Write a comprehensive, deeply researched blog post based on the research below.
 The post must be AT LEAST 3,000 words — do not cut corners. This is long-form editorial journalism.
+
+CATEGORY: {category}
+Ensure suggestedCategoryKeywords and suggestedTagKeywords reflect the **{category}** topic,
+not unrelated domains (e.g. do NOT use tech/code keywords for a {category} post).
 
 ## TOPIC & KEY FACTS
 {state['trend']}
 
-## TECHNICAL DEPTH
+## DEPTH & DETAIL
 {state['technical']}
 
 ## EXPERT OPINIONS & COMMUNITY REACTION
@@ -78,16 +146,7 @@ The post must be AT LEAST 3,000 words — do not cut corners. This is long-form 
 ## REAL-WORLD IMPLICATIONS
 {state['implications']}
 
-Structure suggestion (adapt as needed):
-1. Hook — Open with the most surprising or dramatic element
-2. Background — What was the state of the art before this?
-3. The Breakthrough — What exactly happened / was built / was discovered?
-4. Under the Hood — Technical deep-dive (architecture, methodology, results)
-5. Expert Voices — Reactions from the community (use real quotes from the research)
-6. Implications — Who benefits? Who's disrupted? What changes?
-7. The Bigger Picture — Where does this fit in the arc of progress?
-8. Key Takeaways — 4–6 bullet points in a <ul>
-9. Conclusion — Forward-looking synthesis"""
+Recommended structure (adapt as needed): {structure}"""
 
 
 # ── LangGraph nodes ──────────────────────────────────────────────────────────

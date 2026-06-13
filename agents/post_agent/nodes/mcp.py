@@ -100,26 +100,57 @@ def pick_taxonomy_node(state: AgentState) -> dict:
     categories = _parse_mcp_items(raw_cats)
     tags = _parse_mcp_items(raw_tags)
 
+    # ── Category matching ─────────────────────────────────────────────────────
     category_id = None
+    matched_cat = None
     if categories:
         kws = [k.lower() for k in state["post_category_keywords"]]
-        match = next(
+        # Also include the category_name itself as a keyword so it always matches
+        cat_name_kw = state.get("category_name", "").lower()
+        all_kws = list({cat_name_kw} | set(kws)) if cat_name_kw else kws
+        matched_cat = next(
             (c for c in categories
-             if any(k in c["name"].lower() or k in c["slug"].lower() for k in kws)),
+             if any(k in c["name"].lower() or k in c["slug"].lower() for k in all_kws)),
             None,
         )
-        category_id = (match or categories[0])["id"]
+        category_id = (matched_cat or categories[0])["id"]
 
+    # ── Tag matching ──────────────────────────────────────────────────────────
     tag_ids: list[int] = []
     if tags:
-        kws = [k.lower() for k in state["post_tag_keywords"]]
-        matched = [t for t in tags
-                   if any(k in t["name"].lower() or k in t["slug"].lower() for k in kws)]
+        # Normalise: lowercase, replace hyphens/underscores with spaces,
+        # then also expand each multi-word keyword into individual words so
+        # "software-development" matches "Software Engineering" via "software".
+        raw_kws = [k.lower().replace("-", " ").replace("_", " ")
+                   for k in state["post_tag_keywords"]]
+        expanded: list[str] = []
+        for kw in raw_kws:
+            expanded.append(kw)
+            expanded.extend(w for w in kw.split() if len(w) > 3)  # skip short stop-words
+        kws = list(dict.fromkeys(expanded))  # deduplicate, preserve order
+
+        def _tag_matches(t: dict) -> bool:
+            name = t["name"].lower()
+            slug = t.get("slug", "").lower()
+            return any(k in name or k in slug for k in kws)
+
+        matched = [t for t in tags if _tag_matches(t)]
         tag_ids = [t["id"] for t in matched[:6]]
-        if len(tag_ids) < 3:
-            extras = [t["id"] for t in tags if t["id"] not in tag_ids][: 3 - len(tag_ids)]
+
+        # Pad to 3 only with tags that relate to the category — never with random low-ID tags
+        if len(tag_ids) < 3 and matched_cat:
+            cat_words = matched_cat["name"].lower().split()
+            cat_pool = [
+                t for t in tags
+                if t["id"] not in tag_ids
+                and any(w in t["name"].lower() or w in t["slug"].lower() for w in cat_words)
+            ]
+            extras = [t["id"] for t in cat_pool][: 3 - len(tag_ids)]
             tag_ids.extend(extras)
 
+    cat_kws = state.get("post_category_keywords", [])
+    tag_kws = state.get("post_tag_keywords", [])
+    print(f"🏷️  Writer cat-kws={cat_kws} | tag-kws={tag_kws[:5]}")
     print(f"🏷️  Category ID: {category_id} | Tag IDs: {tag_ids}")
     return {"category_id": category_id, "tag_ids": tag_ids}
 

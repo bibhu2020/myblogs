@@ -272,7 +272,9 @@ def generate_images_node(state: AgentState) -> dict:
         for match in placeholders:
             full_match = match.group(0)
             prompt = match.group(1).strip()
-            alt = re.sub(r"\s+", " ", prompt)[:120]
+            # Strip any LLM-generated label prefix ("detailed DALL-E 3 prompt — ", etc.)
+            clean = re.sub(r"^[\w\s\-]+(?:prompt|image)\s*[—–\-:]+\s*", "", prompt, flags=re.IGNORECASE).strip()
+            alt = re.sub(r"\s+", " ", clean or prompt)[:120]
             try:
                 print(f'  → "{alt[:65]}"')
                 img_result = _generate_image(prompt, size="1024x1024", category=category)
