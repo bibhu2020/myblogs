@@ -79,13 +79,6 @@ const isB = () => layout.variant === 'b'
               : (route.path === '/blog' ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50')"
           >All Posts</RouterLink>
 
-          <RouterLink to="/about"
-            class="px-3 py-2 text-sm font-medium transition-colors rounded-lg"
-            :class="layout.variant === 'b'
-              ? (route.path === '/about' ? 'text-violet-400 bg-violet-950' : 'text-slate-400 hover:text-violet-400 hover:bg-slate-900')
-              : (route.path === '/about' ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50')"
-          >About</RouterLink>
-
           <!-- Topics dropdown -->
           <div class="relative" ref="topicsRef">
             <button
@@ -124,6 +117,13 @@ const isB = () => layout.variant === 'b'
               </RouterLink>
             </div>
           </div>
+
+          <RouterLink to="/about"
+            class="px-3 py-2 text-sm font-medium transition-colors rounded-lg"
+            :class="layout.variant === 'b'
+              ? (route.path === '/about' ? 'text-violet-400 bg-violet-950' : 'text-slate-400 hover:text-violet-400 hover:bg-slate-900')
+              : (route.path === '/about' ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50')"
+          >About</RouterLink>
         </div>
 
         <!-- Search -->
@@ -176,10 +176,6 @@ const isB = () => layout.variant === 'b'
           class="block px-4 py-2.5 font-medium rounded-lg"
           :class="layout.variant === 'b' ? 'text-slate-300 hover:text-violet-400 hover:bg-slate-900' : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'"
         >All Posts</RouterLink>
-        <RouterLink to="/about" @click="mobileOpen=false"
-          class="block px-4 py-2.5 font-medium rounded-lg"
-          :class="layout.variant === 'b' ? 'text-slate-300 hover:text-violet-400 hover:bg-slate-900' : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'"
-        >About</RouterLink>
         <div class="px-4 pt-2 pb-1 text-xs font-bold uppercase tracking-wider"
           :class="layout.variant === 'b' ? 'text-slate-600' : 'text-gray-400'">Topics</div>
         <RouterLink v-for="cat in blog.categories" :key="cat.id"
@@ -187,6 +183,10 @@ const isB = () => layout.variant === 'b'
           class="flex items-center gap-2 px-4 py-2.5 font-medium rounded-lg"
           :class="layout.variant === 'b' ? 'text-slate-300 hover:text-violet-400 hover:bg-slate-900' : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'"
         >{{ cat.icon }} {{ cat.name }}</RouterLink>
+        <RouterLink to="/about" @click="mobileOpen=false"
+          class="block px-4 py-2.5 font-medium rounded-lg"
+          :class="layout.variant === 'b' ? 'text-slate-300 hover:text-violet-400 hover:bg-slate-900' : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'"
+        >About</RouterLink>
         <div class="border-t mt-2 pt-2" :class="layout.variant === 'b' ? 'border-slate-800' : 'border-gray-100'">
           <RouterLink to="/admin" @click="mobileOpen=false"
             class="block px-4 py-2.5 font-medium rounded-lg"

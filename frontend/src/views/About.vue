@@ -31,6 +31,21 @@ const maintenanceItems = [
     desc: 'Accessibility scans flag missing alt text, low-contrast elements, and keyboard-navigation gaps — then AI applies the corrections automatically.',
   },
 ]
+
+const rebrandAgents = [
+  { name: 'IdeationAgent', icon: '💡', desc: 'Researches world events, picks a cultural theme, and generates a complete color palette and banner copy.' },
+  { name: 'CodingAgent', icon: '⌨️', desc: 'Applies the plan to CSS variables, Navbar, Home, Footer, and index.html — no human commits.' },
+  { name: 'ReviewerAgent', icon: '🔎', desc: 'Enforces WCAG AA contrast (≥ 4.5:1), checks alt text, ARIA labels, focus styles, and SEO tags. Routes failures back upstream.' },
+  { name: 'TesterAgent', icon: '🧪', desc: 'Runs the Vite production build and seven structural checks. Sends build failures back to CodingAgent.' },
+  { name: 'PublisherAgent', icon: '🚀', desc: 'Stages, commits, rebases, and pushes to GitHub only after all checks pass.' },
+]
+
+const approvalSteps = [
+  { step: '1', label: 'Research & Write', desc: 'Agent discovers a trending topic, deep-researches it, writes a 2 000+ word post, and sources a featured image.' },
+  { step: '2', label: 'Save as Pending', desc: 'The finished post is stored with status "pending" — invisible to readers until an admin acts.' },
+  { step: '3', label: 'Admin Reviews', desc: 'The Pending Approval tab in the admin panel shows the full post with Approve and Reject buttons.' },
+  { step: '4', label: 'Publish or Discard', desc: 'Approve promotes the post to "published". Reject deletes it permanently. Either action can also be taken from the CLI.' },
+]
 </script>
 
 <template>
@@ -64,7 +79,7 @@ const maintenanceItems = [
             Meridian was designed and built entirely by AI — from architecture decisions to component code, database schema to deployment pipeline. No human wrote a line of application code. The stack (Vue 3 frontend, four NestJS microservices, SQLite databases) was specified, scaffolded, and wired together through an AI-driven development session guided by the platform's ideator.
           </p>
           <p>
-            Day-to-day operation is equally autonomous. AI agents handle the full content lifecycle: researching trending topics, writing articles grounded in live web data, selecting featured images, assigning categories and tags, and publishing — all without human intervention. The platform is genuinely self-running.
+            Day-to-day operation is equally autonomous. AI agents handle the full content lifecycle: researching trending topics, writing articles grounded in live web data, selecting featured images, assigning categories and tags, and saving posts for human review before they go live — blending autonomous generation with intentional editorial oversight.
           </p>
         </div>
       </section>
@@ -79,7 +94,6 @@ const maintenanceItems = [
           <p>
             Meridian exposes a full suite of <strong>Model Context Protocol (MCP) endpoints</strong> — a standard interface that lets external AI agents interact with the platform programmatically. Any MCP-compatible agent can connect and perform actions such as:
           </p>
-
           <ul class="list-none space-y-3 mt-4">
             <li v-for="cap in mcpCapabilities" :key="cap.label" class="flex items-start gap-3">
               <span class="mt-0.5 w-6 h-6 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-bold flex-shrink-0">✓</span>
@@ -110,19 +124,63 @@ const maintenanceItems = [
         </div>
       </section>
 
-      <!-- Monthly Rebranding -->
+      <!-- Human-in-the-Loop Post Approval -->
       <section>
         <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 rounded-xl bg-teal-600 flex items-center justify-center text-white text-xl">⏸️</div>
+          <h2 class="text-2xl font-bold text-gray-900" style="font-family:'Playfair Display',serif">Human-in-the-Loop Post Approval</h2>
+        </div>
+        <div class="prose prose-gray max-w-none text-gray-600 leading-relaxed mb-8">
+          <p>
+            AI-generated posts don't go live automatically. Every article the Post Agent produces lands in a <strong>Pending Approval</strong> queue first, giving the admin full editorial control over what reaches readers — without slowing down the generation pipeline.
+          </p>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div v-for="s in approvalSteps" :key="s.step" class="flex gap-4 bg-teal-50 border border-teal-100 rounded-2xl p-5">
+            <div class="w-8 h-8 rounded-full bg-teal-600 text-white text-sm font-bold flex items-center justify-center flex-shrink-0">{{ s.step }}</div>
+            <div>
+              <div class="font-semibold text-gray-900 mb-1">{{ s.label }}</div>
+              <p class="text-gray-500 text-sm leading-relaxed">{{ s.desc }}</p>
+            </div>
+          </div>
+        </div>
+        <p class="text-gray-500 text-sm mt-5 leading-relaxed">
+          The same approve / reject actions are available in the admin panel at <RouterLink to="/admin/posts" class="text-primary-600 hover:underline font-medium">/admin/posts</RouterLink> (Pending Approval tab) or via the CLI: <code class="bg-gray-100 px-2 py-0.5 rounded text-xs font-mono">python3 -m meridian_agents.post_agent approve &lt;id&gt;</code>.
+        </p>
+      </section>
+
+      <!-- Multi-Agent Rebranding Pipeline -->
+      <section>
+        <div class="flex items-center gap-3 mb-2">
           <div class="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center text-white text-xl">🎨</div>
           <h2 class="text-2xl font-bold text-gray-900" style="font-family:'Playfair Display',serif">Monthly AI Rebranding</h2>
         </div>
-        <div class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-100 rounded-2xl p-8">
+        <p class="text-gray-500 text-sm mb-6 ml-13">Five specialized agents collaborate every month to keep Meridian visually in step with the world.</p>
+        <div class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-100 rounded-2xl p-8 mb-8">
           <p class="text-gray-700 leading-relaxed mb-4">
             Every month, an AI agent surveys the global landscape — major sporting events, cultural milestones, scientific breakthroughs, seasonal celebrations — and rebrands Meridian to reflect the moment. Color themes, hero banners, holiday badges, and editorial tone shift to stay culturally resonant and visually fresh.
           </p>
           <p class="text-gray-600 text-sm leading-relaxed">
             This month, for example, the platform wears the colors of <strong>FIFA World Cup 2026</strong>. Next month it will wear something new. The world changes; Meridian keeps up — automatically.
           </p>
+        </div>
+
+        <!-- Agent pipeline cards -->
+        <h3 class="font-bold text-gray-800 mb-4 text-sm uppercase tracking-widest">The Five-Agent Pipeline</h3>
+        <div class="space-y-3">
+          <div v-for="(agent, i) in rebrandAgents" :key="agent.name" class="flex gap-4 items-start">
+            <div class="flex flex-col items-center flex-shrink-0">
+              <div class="w-9 h-9 rounded-xl bg-white border-2 border-amber-200 flex items-center justify-center text-lg">{{ agent.icon }}</div>
+              <div v-if="i < rebrandAgents.length - 1" class="w-0.5 h-5 bg-amber-200 mt-1"></div>
+            </div>
+            <div class="pb-2">
+              <span class="font-bold text-gray-900 text-sm">{{ agent.name }}</span>
+              <p class="text-gray-500 text-sm leading-relaxed mt-0.5">{{ agent.desc }}</p>
+            </div>
+          </div>
+        </div>
+        <div class="mt-6 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-gray-600 leading-relaxed">
+          <strong class="text-amber-700">Self-correcting loops:</strong> If ReviewerAgent finds a WCAG AA contrast failure (ratio &lt; 4.5:1), it hands back to IdeationAgent for a palette revision. Markup or ARIA issues route to CodingAgent. Build failures send TesterAgent back to CodingAgent. The pipeline allows up to three revision cycles before committing.
         </div>
       </section>
 
@@ -211,7 +269,7 @@ const maintenanceItems = [
             Meridian was designed and built entirely by AI — from architecture decisions to component code, database schema to deployment pipeline. No human wrote a line of application code. The stack (Vue 3 frontend, four NestJS microservices, SQLite databases) was specified, scaffolded, and wired together through an AI-driven development session guided by the platform's ideator.
           </p>
           <p>
-            Day-to-day operation is equally autonomous. AI agents handle the full content lifecycle: researching trending topics, writing articles grounded in live web data, selecting featured images, assigning categories and tags, and publishing — all without human intervention. The platform is genuinely self-running.
+            Day-to-day operation is equally autonomous. AI agents handle the full content lifecycle: researching trending topics, writing articles grounded in live web data, selecting featured images, assigning categories and tags, and saving posts for human review before they go live — blending autonomous generation with intentional editorial oversight.
           </p>
         </div>
       </section>
@@ -256,19 +314,63 @@ const maintenanceItems = [
         </div>
       </section>
 
-      <!-- Monthly Rebranding -->
+      <!-- Human-in-the-Loop Post Approval -->
       <section>
         <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 rounded-xl bg-teal-700 flex items-center justify-center text-white text-xl">⏸️</div>
+          <h2 class="text-2xl font-bold text-white" style="font-family:'Playfair Display',serif">Human-in-the-Loop Post Approval</h2>
+        </div>
+        <div class="text-slate-400 leading-relaxed mb-8">
+          <p>
+            AI-generated posts don't go live automatically. Every article the Post Agent produces lands in a <span class="text-teal-400 font-semibold">Pending Approval</span> queue first, giving the admin full editorial control over what reaches readers — without slowing down the generation pipeline.
+          </p>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div v-for="s in approvalSteps" :key="s.step" class="flex gap-4 bg-[#0d2a28] border border-teal-900/50 rounded-2xl p-5">
+            <div class="w-8 h-8 rounded-full bg-teal-700 text-white text-sm font-bold flex items-center justify-center flex-shrink-0">{{ s.step }}</div>
+            <div>
+              <div class="font-semibold text-slate-200 mb-1">{{ s.label }}</div>
+              <p class="text-slate-400 text-sm leading-relaxed">{{ s.desc }}</p>
+            </div>
+          </div>
+        </div>
+        <p class="text-slate-500 text-sm mt-5 leading-relaxed">
+          The same approve / reject actions are available in the admin panel (Pending Approval tab) or via the CLI: <code class="bg-slate-800 px-2 py-0.5 rounded text-xs font-mono text-teal-400">python3 -m meridian_agents.post_agent approve &lt;id&gt;</code>.
+        </p>
+      </section>
+
+      <!-- Multi-Agent Rebranding Pipeline -->
+      <section>
+        <div class="flex items-center gap-3 mb-2">
           <div class="w-10 h-10 rounded-xl bg-amber-600 flex items-center justify-center text-white text-xl">🎨</div>
           <h2 class="text-2xl font-bold text-white" style="font-family:'Playfair Display',serif">Monthly AI Rebranding</h2>
         </div>
-        <div class="bg-[#162236] border border-amber-900/40 rounded-2xl p-8">
+        <p class="text-slate-500 text-sm mb-6">Five specialized agents collaborate every month to keep Meridian visually in step with the world.</p>
+        <div class="bg-[#162236] border border-amber-900/40 rounded-2xl p-8 mb-8">
           <p class="text-slate-400 leading-relaxed mb-4">
             Every month, an AI agent surveys the global landscape — major sporting events, cultural milestones, scientific breakthroughs, seasonal celebrations — and rebrands Meridian to reflect the moment. Color themes, hero banners, holiday badges, and editorial tone shift to stay culturally resonant and visually fresh.
           </p>
           <p class="text-slate-400 text-sm leading-relaxed">
             This month, for example, the platform wears the colors of <span class="text-amber-400 font-semibold">FIFA World Cup 2026</span>. Next month it will wear something new. The world changes; Meridian keeps up — automatically.
           </p>
+        </div>
+
+        <!-- Agent pipeline cards -->
+        <h3 class="font-bold text-slate-500 mb-4 text-xs uppercase tracking-widest">The Five-Agent Pipeline</h3>
+        <div class="space-y-3">
+          <div v-for="(agent, i) in rebrandAgents" :key="agent.name" class="flex gap-4 items-start">
+            <div class="flex flex-col items-center flex-shrink-0">
+              <div class="w-9 h-9 rounded-xl bg-[#162236] border-2 border-amber-800/50 flex items-center justify-center text-lg">{{ agent.icon }}</div>
+              <div v-if="i < rebrandAgents.length - 1" class="w-0.5 h-5 bg-amber-900/50 mt-1"></div>
+            </div>
+            <div class="pb-2">
+              <span class="font-bold text-slate-200 text-sm">{{ agent.name }}</span>
+              <p class="text-slate-400 text-sm leading-relaxed mt-0.5">{{ agent.desc }}</p>
+            </div>
+          </div>
+        </div>
+        <div class="mt-6 bg-[#1a1500] border border-amber-900/40 rounded-xl p-4 text-sm text-slate-400 leading-relaxed">
+          <span class="text-amber-400 font-semibold">Self-correcting loops:</span> If ReviewerAgent finds a WCAG AA contrast failure (ratio &lt; 4.5:1), it hands back to IdeationAgent for a palette revision. Markup or ARIA issues route to CodingAgent. Build failures send TesterAgent back to CodingAgent. The pipeline allows up to three revision cycles before committing.
         </div>
       </section>
 
