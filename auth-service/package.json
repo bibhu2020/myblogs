@@ -14,7 +14,7 @@
     "@nestjs/passport": "^10.0.3",
     "@nestjs/platform-express": "^10.0.0",
     "@nestjs/typeorm": "^10.0.1",
-    "bcryptjs": "^2.4.3",
+    "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.10.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
@@ -28,7 +28,7 @@
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",
-    "@types/bcryptjs": "^2.4.6",
+    "@types/bcryptjs": "^3.0.0",
     "@types/better-sqlite3": "^7.6.8",
     "@types/node": "^20.11.5",
     "@types/passport-jwt": "^4.0.1",
