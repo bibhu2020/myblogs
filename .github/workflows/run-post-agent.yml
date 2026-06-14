@@ -27,17 +27,19 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: pip
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: pip install -e ".[post_agent]" --quiet
 
-      - name: Resolve topic mode
+      - name: Resolve topic mode from schedule or manual input
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "TOPIC_MODE=${{ inputs.topic_mode }}" >> "$GITHUB_ENV"
@@ -47,7 +49,7 @@ jobs:
             echo "TOPIC_MODE=random_general" >> "$GITHUB_ENV"
           fi
 
-      - name: Run post agent
+      - name: Generate and publish blog post
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           MCP_API_KEY: ${{ secrets.MCP_API_KEY }}

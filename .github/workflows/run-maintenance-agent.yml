@@ -43,20 +43,22 @@ jobs:
             fi
           fi
 
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         if: steps.guard.outputs.skip != 'true'
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         if: steps.guard.outputs.skip != 'true'
         with:
           python-version: '3.11'
           cache: pip
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         if: steps.guard.outputs.skip != 'true'
         run: pip install -e ".[maintenance]" --quiet
 
-      - name: Run maintenance agent
+      - name: Run maintenance agent (SEO/ADA scan + Dependabot PRs + publish fixes)
         if: steps.guard.outputs.skip != 'true'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

@@ -22,7 +22,7 @@ jobs:
     steps:
       # Fast guard — skip all setup cost on non-first Sundays unless forced.
       # The agent also enforces this internally for standalone compatibility.
-      - name: First-Sunday guard
+      - name: First-Sunday guard (skip non-first Sundays unless forced)
         id: guard
         run: |
           FORCE="${{ inputs.force_rebrand }}"
@@ -43,25 +43,27 @@ jobs:
             fi
           fi
 
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         if: steps.guard.outputs.skip != 'true'
         with:
           persist-credentials: true   # Allows the agent to git push
 
-      - name: Configure git identity
+      - name: Configure git identity for agent commits
         if: steps.guard.outputs.skip != 'true'
         run: |
           git config user.name "Claude Theme Bot"
           git config user.email "bm80177@gmail.com"
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         if: steps.guard.outputs.skip != 'true'
         with:
           python-version: '3.11'
           cache: pip
 
-      # Node.js is needed for the frontend build verification step
-      - uses: actions/setup-node@v4
+      - name: Set up Node.js 20 (frontend build verification)
+        uses: actions/setup-node@v4
         if: steps.guard.outputs.skip != 'true'
         with:
           node-version: '20'
@@ -76,7 +78,7 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         run: pip install -e ".[rebranding]" --quiet
 
-      - name: Run rebranding agent
+      - name: Run rebranding agent (theme + colours + copy)
         if: steps.guard.outputs.skip != 'true'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
