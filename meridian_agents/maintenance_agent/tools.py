@@ -944,3 +944,353 @@ def git_commit_and_push(message: str) -> str:
         })
     except Exception as exc:
         return json.dumps({"success": False, "error": str(exc)})
+
+
+# ---------------------------------------------------------------------------
+# Branch / PR workflow tools  (used by all fix agents)
+# ---------------------------------------------------------------------------
+
+
+def get_github_repo() -> str:
+    """Return the GitHub owner and repo from the GITHUB_REPO env var (format: 'owner/repo').
+
+    Returns JSON with 'owner', 'repo', and 'full' keys.
+    """
+    repo_str = os.getenv("GITHUB_REPO", "")
+    if not repo_str or "/" not in repo_str:
+        return json.dumps({"error": "GITHUB_REPO not set or invalid (expected 'owner/repo')",
+                           "owner": "", "repo": "", "full": ""})
+    owner, repo_name = repo_str.split("/", 1)
+    return json.dumps({"owner": owner, "repo": repo_name, "full": repo_str})
+
+
+def get_current_branch() -> str:
+    """Return the name of the currently checked-out git branch."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=REPO_ROOT, capture_output=True, text=True, timeout=15,
+        )
+        return json.dumps({"branch": result.stdout.strip(), "success": result.returncode == 0})
+    except Exception as exc:
+        return json.dumps({"error": str(exc)})
+
+
+def git_checkout_branch(branch_name: str, create_from_main: bool = False) -> str:
+    """Check out a branch, optionally creating it fresh from the latest main.
+
+    When create_from_main=True:
+      1. Stashes any uncommitted changes.
+      2. Switches to main and pulls latest from origin.
+      3. Creates and checks out the new branch.
+
+    Args:
+        branch_name: Branch to switch to or create.
+        create_from_main: If True, sync main first then create the branch.
+    """
+    try:
+        if create_from_main:
+            subprocess.run(["git", "stash"], cwd=REPO_ROOT, capture_output=True, text=True, timeout=30)
+            co = subprocess.run(
+                ["git", "checkout", "main"],
+                cwd=REPO_ROOT, capture_output=True, text=True, timeout=30,
+            )
+            if co.returncode != 0:
+                return json.dumps({"success": False, "error": f"git checkout main failed: {co.stderr}"})
+            subprocess.run(
+                ["git", "pull", "origin", "main"],
+                cwd=REPO_ROOT, capture_output=True, text=True, timeout=60,
+            )
+            result = subprocess.run(
+                ["git", "checkout", "-b", branch_name],
+                cwd=REPO_ROOT, capture_output=True, text=True, timeout=30,
+            )
+        else:
+            result = subprocess.run(
+                ["git", "checkout", branch_name],
+                cwd=REPO_ROOT, capture_output=True, text=True, timeout=30,
+            )
+        return json.dumps({
+            "success": result.returncode == 0,
+            "branch": branch_name,
+            "output": (result.stdout or result.stderr).strip(),
+        })
+    except Exception as exc:
+        return json.dumps({"success": False, "error": str(exc)})
+
+
+def git_pull_main() -> str:
+    """Switch to main and pull latest changes from origin.
+
+    Stashes any uncommitted changes first so the switch is safe.
+    """
+    try:
+        subprocess.run(["git", "stash"], cwd=REPO_ROOT, capture_output=True, text=True, timeout=30)
+        subprocess.run(["git", "checkout", "main"], cwd=REPO_ROOT, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(
+            ["git", "pull", "origin", "main"],
+            cwd=REPO_ROOT, capture_output=True, text=True, timeout=60,
+        )
+        return json.dumps({
+            "success": result.returncode == 0,
+            "output": result.stdout.strip() or result.stderr.strip(),
+            "message": "main synced with origin" if result.returncode == 0 else "git pull failed",
+        })
+    except Exception as exc:
+        return json.dumps({"success": False, "error": str(exc)})
+
+
+def git_stage_and_commit(message: str) -> str:
+    """Stage all modified and new files (git add -A) and commit on the current branch.
+
+    Args:
+        message: Commit message.
+    """
+    try:
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=REPO_ROOT, capture_output=True, text=True, timeout=30,
+        )
+        if not status.stdout.strip():
+            return json.dumps({"success": False, "message": "Nothing to commit — working tree is clean"})
+
+        add = subprocess.run(
+            ["git", "add", "-A"],
+            cwd=REPO_ROOT, capture_output=True, text=True, timeout=30,
+        )
+        if add.returncode != 0:
+            return json.dumps({"success": False, "error": f"git add failed: {add.stderr}"})
+
+        commit = subprocess.run(
+            ["git", "commit", "-m", message],
+            cwd=REPO_ROOT, capture_output=True, text=True, timeout=60,
+        )
+        return json.dumps({
+            "success": commit.returncode == 0,
+            "output": commit.stdout.strip(),
+            "error": commit.stderr.strip() if commit.returncode != 0 else "",
+        })
+    except Exception as exc:
+        return json.dumps({"success": False, "error": str(exc)})
+
+
+def git_push_current_branch() -> str:
+    """Push the currently checked-out branch to origin (sets --set-upstream automatically)."""
+    try:
+        branch_result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=REPO_ROOT, capture_output=True, text=True, timeout=15,
+        )
+        branch = branch_result.stdout.strip()
+        push = subprocess.run(
+            ["git", "push", "--set-upstream", "origin", branch],
+            cwd=REPO_ROOT, capture_output=True, text=True, timeout=120,
+        )
+        return json.dumps({
+            "success": push.returncode == 0,
+            "branch": branch,
+            "output": push.stdout.strip() if push.returncode == 0 else push.stderr.strip(),
+        })
+    except Exception as exc:
+        return json.dumps({"success": False, "error": str(exc)})
+
+
+def create_github_pr(owner: str, repo: str, title: str, body: str,
+                     head_branch: str, base_branch: str = "main") -> str:
+    """Create a GitHub pull request from head_branch into base_branch.
+
+    Requires SECRET_TOKEN_GITHUB with pull-requests:write permission.
+
+    Args:
+        owner: GitHub owner/org.
+        repo: Repository name.
+        title: PR title.
+        body: PR description body.
+        head_branch: Source branch containing the changes.
+        base_branch: Target branch to merge into (default: 'main').
+    """
+    token = os.getenv("SECRET_TOKEN_GITHUB", "")
+    if not token:
+        return json.dumps({"success": False, "error": "SECRET_TOKEN_GITHUB not set"})
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {token}",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    try:
+        resp = requests.post(
+            f"https://api.github.com/repos/{owner}/{repo}/pulls",
+            headers=headers,
+            json={"title": title, "body": body, "head": head_branch, "base": base_branch},
+            timeout=30,
+        )
+        data = resp.json() if resp.content else {}
+        if resp.status_code == 201:
+            return json.dumps({
+                "success": True,
+                "pr_number": data["number"],
+                "url": data["html_url"],
+                "message": f"PR #{data['number']} created: {data['html_url']}",
+            })
+        return json.dumps({
+            "success": False,
+            "status": resp.status_code,
+            "error": data.get("message", resp.text[:300]),
+        })
+    except Exception as exc:
+        return json.dumps({"success": False, "error": str(exc)})
+
+
+def delete_github_branch(owner: str, repo: str, branch_name: str) -> str:
+    """Delete a remote branch — call after a PR is merged to clean up.
+
+    Args:
+        owner: GitHub owner/org.
+        repo: Repository name.
+        branch_name: Branch to delete.
+    """
+    token = os.getenv("SECRET_TOKEN_GITHUB", "")
+    if not token:
+        return json.dumps({"success": False, "error": "SECRET_TOKEN_GITHUB not set"})
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {token}",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    try:
+        resp = requests.delete(
+            f"https://api.github.com/repos/{owner}/{repo}/git/refs/heads/{branch_name}",
+            headers=headers,
+            timeout=30,
+        )
+        return json.dumps({
+            "success": resp.status_code == 204,
+            "branch": branch_name,
+            "message": "Branch deleted" if resp.status_code == 204 else f"HTTP {resp.status_code}",
+        })
+    except Exception as exc:
+        return json.dumps({"success": False, "error": str(exc)})
+
+
+# ---------------------------------------------------------------------------
+# Sitemap tools
+# ---------------------------------------------------------------------------
+
+
+def generate_sitemap() -> str:
+    """Generate/update frontend/public/sitemap.xml.
+
+    Reads public routes from the Vue router config, then fetches published posts
+    and stories from the Meridian API to build a complete sitemap.xml.
+    """
+    base = SERVER_BASE.rstrip("/")
+    sitemap_path = Path(REPO_ROOT) / "frontend/public/sitemap.xml"
+
+    # Known static public routes
+    static_paths = ["/", "/news", "/stories"]
+
+    # Parse Vue router for additional static (non-dynamic) public routes
+    router_file = Path(REPO_ROOT) / "frontend/src/router/index.js"
+    if router_file.exists():
+        content = router_file.read_text(encoding="utf-8")
+        for path in re.findall(r"path:\s*['\"]([^'\"*]+)['\"]", content):
+            if (
+                path
+                and ":" not in path          # skip :slug / :id segments
+                and "admin" not in path
+                and "login" not in path
+                and path not in static_paths
+            ):
+                static_paths.append(path)
+
+    urls: list[str] = [base + p for p in static_paths]
+
+    # Dynamic: published blog posts
+    try:
+        resp = requests.get(f"{base}/api/posts?limit=500", timeout=20)
+        if resp.ok:
+            data = resp.json()
+            posts = data.get("posts", data) if isinstance(data, dict) else data
+            for p in (posts if isinstance(posts, list) else []):
+                if p.get("slug") and p.get("status") == "published":
+                    urls.append(f"{base}/post/{p['slug']}")
+    except Exception:
+        pass
+
+    # Dynamic: stories
+    try:
+        resp = requests.get(f"{base}/api/stories?limit=500", timeout=20)
+        if resp.ok:
+            stories = resp.json()
+            for s in (stories if isinstance(stories, list) else []):
+                if s.get("id"):
+                    urls.append(f"{base}/story/{s['id']}")
+    except Exception:
+        pass
+
+    # Deduplicate while preserving order
+    urls = list(dict.fromkeys(urls))
+
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+    for url in urls:
+        lines.append(f"  <url><loc>{url}</loc></url>")
+    lines.append("</urlset>")
+
+    sitemap_path.parent.mkdir(parents=True, exist_ok=True)
+    sitemap_path.write_text("\n".join(lines), encoding="utf-8")
+
+    return json.dumps({
+        "success": True,
+        "urlCount": len(urls),
+        "path": "frontend/public/sitemap.xml",
+        "urls": urls,
+    })
+
+
+def get_sitemap_urls() -> str:
+    """Read frontend/public/sitemap.xml and return all URLs listed in it."""
+    sitemap_path = Path(REPO_ROOT) / "frontend/public/sitemap.xml"
+    if not sitemap_path.exists():
+        return json.dumps({"exists": False, "count": 0, "urls": [],
+                           "message": "sitemap.xml not found at frontend/public/sitemap.xml"})
+    try:
+        content = sitemap_path.read_text(encoding="utf-8")
+        urls = re.findall(r"<loc>([^<]+)</loc>", content)
+        return json.dumps({"exists": True, "count": len(urls), "urls": urls})
+    except Exception as exc:
+        return json.dumps({"error": str(exc), "urls": []})
+
+
+def check_url_status(url: str) -> str:
+    """Check the HTTP status of a URL.
+
+    For Vue SPA dynamic routes (/post/:slug, /story/:id) the underlying API
+    endpoint is checked because the SPA shell always returns 200.
+
+    Args:
+        url: Full URL to check (e.g. 'https://example.com/post/my-slug').
+    """
+    api_url = url
+    base = SERVER_BASE.rstrip("/")
+    if "/post/" in url:
+        slug = url.split("/post/", 1)[1].rstrip("/")
+        api_url = f"{base}/api/posts/{slug}"
+    elif "/story/" in url:
+        story_id = url.split("/story/", 1)[1].rstrip("/")
+        api_url = f"{base}/api/stories/{story_id}"
+
+    try:
+        resp = requests.get(api_url, timeout=15, allow_redirects=True)
+        return json.dumps({
+            "url": url,
+            "checkedUrl": api_url,
+            "status": resp.status_code,
+            "ok": resp.status_code < 400,
+            "is404": resp.status_code == 404,
+        })
+    except Exception as exc:
+        return json.dumps({"url": url, "checkedUrl": api_url,
+                           "error": str(exc), "ok": False, "is404": False})

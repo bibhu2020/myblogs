@@ -2,71 +2,43 @@ name: Run Maintenance Agent
 
 on:
   schedule:
-    - cron: '0 0 1 * *'  # 1st of each month at 00:00 UTC — agent enforces first-of-month guard
-  workflow_dispatch:
-    inputs:
-      force_maintenance:
-        description: 'Force maintenance regardless of schedule (bypass first-of-month guard)'
-        required: false
-        type: boolean
-        default: false
+    - cron: '0 0 1 * *'  # 1st of each month at 00:00 UTC
+  workflow_dispatch:      # Manual trigger always runs immediately
 
 jobs:
   maintenance-agent:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
-      contents: write        # git commit + push SEO/ADA fixes
-      pull-requests: write   # merge and close Dependabot PRs
+      contents: write        # git push fix branches + merge PRs
+      pull-requests: write   # create / merge / close PRs
 
     steps:
-      # Fast guard — skip all setup cost on non-first-of-month runs unless forced.
-      # The agent also enforces this internally for standalone compatibility.
-      - name: First-of-month guard
-        id: guard
+      - name: Configure git identity
         run: |
-          FORCE="${{ inputs.force_maintenance }}"
-          if [ "$FORCE" = "true" ]; then
-            echo "Manual trigger with force_maintenance=true — bypassing first-of-month guard."
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Manual trigger without force flag — bypassing first-of-month guard."
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          else
-            day=$(printf '%d' "$(date -u +%d)")
-            if [ "$day" -ne 1 ]; then
-              echo "Not the first of the month (day $day). Skipping."
-              echo "skip=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "First of the month confirmed (day $day). Proceeding."
-              echo "skip=false" >> "$GITHUB_OUTPUT"
-            fi
-          fi
+          git config --global user.email "maintenance-agent@meridian.internal"
+          git config --global user.name "Meridian Maintenance Agent"
 
       - name: Checkout repository
         uses: actions/checkout@v4
-        if: steps.guard.outputs.skip != 'true'
+        with:
+          fetch-depth: 0          # full history so branch creation works correctly
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
-        if: steps.guard.outputs.skip != 'true'
         with:
           python-version: '3.11'
           cache: pip
 
       - name: Install Python dependencies
-        if: steps.guard.outputs.skip != 'true'
         run: pip install -e ".[maintenance]" --quiet
 
-      - name: Run maintenance agent (SEO/ADA scan + Dependabot PRs + publish fixes)
-        if: steps.guard.outputs.skip != 'true'
+      - name: Run maintenance agent
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # github.token has contents:write + pull-requests:write from the job permissions above,
-          # so it can merge and close Dependabot PRs without needing a separate PAT.
-          SECRET_TOKEN_GITHUB: ${{ github.token }}
+          SECRET_TOKEN_GITHUB: ${{ secrets.GITHUB_TOKEN }}
           SERVER_BASE: ${{ vars.HF_SPACE_URL }}
           GITHUB_REPO: ${{ github.repository }}
           MAINTENANCE_MODEL: ${{ vars.MAINTENANCE_MODEL || 'gpt-4o' }}
-          FORCE_MAINTENANCE: ${{ inputs.force_maintenance || 'false' }}
         run: python3 -m meridian_agents.maintenance_agent
