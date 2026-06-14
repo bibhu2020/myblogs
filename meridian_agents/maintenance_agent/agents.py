@@ -2,14 +2,52 @@
 import json
 import os
 import re
+from typing import Sequence
 
 from autogen_agentchat.agents import AssistantAgent
-from autogen_agentchat.base import TaskResult
-from autogen_agentchat.conditions import MaxMessageTermination, TextMentionTermination
+from autogen_agentchat.base import TaskResult, TerminationCondition
+from autogen_agentchat.conditions import MaxMessageTermination
+from autogen_agentchat.messages import StopMessage, TextMessage
 from autogen_agentchat.teams import SelectorGroupChat
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 
 from . import tools
+
+
+_DONE_SIGNAL = "###MAINTENANCE_DONE###"
+
+
+class _OrchestratorDoneTermination(TerminationCondition):
+    """Fires only when the Orchestrator agent writes the done sentinel.
+
+    Using plain TextMentionTermination would fire on any agent whose output
+    happens to contain the sentinel (e.g. BuildValidator printing a git diff
+    of agents.py that includes the sentinel string in the system-message text).
+    """
+
+    def __init__(self) -> None:
+        self._terminated = False
+
+    @property
+    def terminated(self) -> bool:
+        return self._terminated
+
+    async def __call__(self, messages: Sequence) -> StopMessage | None:
+        for msg in messages:
+            if (
+                isinstance(msg, TextMessage)
+                and getattr(msg, "source", "") == "Orchestrator"
+                and _DONE_SIGNAL in msg.content
+            ):
+                self._terminated = True
+                return StopMessage(
+                    content="Orchestrator signalled maintenance complete.",
+                    source="_OrchestratorDoneTermination",
+                )
+        return None
+
+    async def reset(self) -> None:
+        self._terminated = False
 
 MODEL = os.getenv("MAINTENANCE_MODEL") or "gpt-4o"
 
@@ -44,47 +82,48 @@ async def run_team(repo_root: str, server_base: str) -> tuple[str, list]:
         name="Orchestrator",
         model_client=model_client,
         system_message="""You are the Maintenance Orchestrator for the Meridian blogging platform.
-Coordinate the team through 4 phases in strict order.
+Assign tasks to specialists ONE PHASE AT A TIME. Wait for each specialist to report back
+before moving on. Never plan future phases until the current phase is done.
 
-PHASE 1 — AUDIT (SEO + ADA + Security scan):
-1. Ask SecurityScanner to audit all 5 npm services for vulnerabilities and outdated packages.
-2. Ask SEOAnalyzer to run check_frontend_static() then check all posts for per-post SEO issues.
-3. Ask ADAAnalyzer to check each published post's HTML content for WCAG AA violations.
-Wait for all three to finish before Phase 2.
+=== CRITICAL RULES ===
+1. Your VERY FIRST message must be SHORT — only direct SecurityScanner, SEOAnalyzer,
+   and ADAAnalyzer to begin their Phase 1 checks. Nothing else in that first message.
+2. Do NOT write ###MAINTENANCE_DONE### until ALL four phases are complete and you have
+   RECEIVED actual tool-call reports from all relevant specialists in this conversation.
+   Writing ###MAINTENANCE_DONE### in a planning message will abort the run prematurely.
+3. Only advance to the next phase after the agents for the CURRENT phase have replied.
 
-PHASE 2 — DEPENDABOT (merge or close open Dependabot PRs):
-Ask DependabotHandler to:
-  a. Call list_github_prs to find ALL open PRs (split GITHUB_REPO into owner/repo).
-  b. For each PR where isDependabot == true, call get_pr_details to check semverBump and riskLevel.
-  c. For patch and minor semver PRs (riskLevel low or medium): call merge_github_pr to merge them.
-  d. For major semver PRs (riskLevel high): call close_github_pr with a reason explaining that
-     major version bumps require human review.
-  e. Skip any PRs where isDependabot == false (leave those for human review).
-  f. Report a summary: how many merged, how many closed, how many skipped.
-If GITHUB_REPO is not set, skip Phase 2 entirely.
+=== PHASES ===
 
-PHASE 3 — FIX & SELF-REFLECT (apply safe static fixes from Phase 1 and verify the build):
-Identify low-risk static fixes from the SEO/ADA findings in Phase 1
-(e.g. missing meta tags, aria-labels, heading levels, focus styles — NOT logic or backend changes).
-Tell CodePatcher exactly which fix to apply and in which file. Give one fix at a time.
-After CodePatcher confirms a batch of fixes, tell BuildValidator to run the frontend build.
-If BuildValidator reports BUILD FAILED:
-  - Tell CodePatcher to revert the file that caused the error (using revert_file).
-  - Have CodePatcher apply a corrected version of the patch.
-  - Ask BuildValidator to re-run the build.
-  - Repeat until BuildValidator confirms BUILD PASSED.
-If no static fixes are needed or all checks already pass, proceed directly to Phase 4.
+PHASE 1 — AUDIT (start here):
+  Ask SecurityScanner to npm audit all 5 services and list outdated packages.
+  Ask SEOAnalyzer to call check_frontend_static() then analyze all posts for per-post SEO issues.
+  Ask ADAAnalyzer to fetch all posts and check each for WCAG AA violations.
+  Wait for all three to report back.
 
-PHASE 4 — PUBLISH (commit and push validated SEO/ADA fixes):
-Tell GitPublisher to:
-  1. First call git_pull_rebase to sync with any Dependabot merges that updated the remote.
-  2. Then commit and push all staged changes with a descriptive 'maint:' commit message.
-If the working tree is clean (no changes from Phase 3), skip the commit step but still pull.
+PHASE 2 — DEPENDABOT (after Phase 1 reports received):
+  Ask DependabotHandler to:
+    - List all open PRs (split GITHUB_REPO env var into owner/repo).
+    - For each Dependabot PR: get details, merge patch/minor PRs, close major PRs with a reason.
+    - Skip non-Dependabot PRs.
+    - Report counts: merged / closed / skipped.
+  If GITHUB_REPO is not set, skip this phase.
 
-After all phases complete, write a concise paragraph summarising:
-Phase 1 findings per category, Phase 2 Dependabot actions, Phase 3 fixes applied,
-build validation status, and Phase 4 publish status.
-End with exactly: MAINTENANCE_COMPLETE""",
+PHASE 3 — FIX & SELF-REFLECT (after Phase 2 complete):
+  Identify low-risk static SEO/ADA fixes from Phase 1 findings
+  (missing meta tags, aria-labels, heading levels, focus styles — never backend/logic changes).
+  Direct CodePatcher to apply one fix at a time. After each batch, tell BuildValidator to build.
+  If BUILD FAILED: CodePatcher reverts the file, re-patches, BuildValidator re-validates.
+  Repeat until BUILD PASSED. If no fixes needed, skip to Phase 4.
+
+PHASE 4 — PUBLISH (after Phase 3 complete):
+  Tell GitPublisher to: (1) call git_pull_rebase, then (2) commit and push with 'maint:' prefix.
+  If working tree is clean, just pull and skip the commit.
+
+=== COMPLETION ===
+After GitPublisher reports back, write one concise summary paragraph covering:
+Phase 1 findings, Phase 2 Dependabot actions, Phase 3 fixes applied, build status, publish status.
+Then on its own line write exactly: ###MAINTENANCE_DONE###""",
     )
 
     # ── Phase 1: Audit agents ──────────────────────────────────────────────────
@@ -239,7 +278,7 @@ Do NOT call git_commit_and_push more than once per session.""",
     )
 
     # ── Team assembly ─────────────────────────────────────────────────────────
-    termination = TextMentionTermination("MAINTENANCE_COMPLETE") | MaxMessageTermination(120)
+    termination = _OrchestratorDoneTermination() | MaxMessageTermination(120)
 
     team = SelectorGroupChat(
         [
@@ -281,7 +320,7 @@ PHASE 4 — PUBLISH:
   then commits and pushes the Phase 3 SEO/ADA fixes.
   If no local changes, just pull and report.
 
-Orchestrator synthesises findings and concludes with MAINTENANCE_COMPLETE."""
+Orchestrator synthesises findings and announces completion when all phases are done."""
 
     # ── Stream processing ─────────────────────────────────────────────────────
     audit_agents = {"SecurityScanner", "SEOAnalyzer", "ADAAnalyzer", "DependabotHandler"}
@@ -296,16 +335,18 @@ Orchestrator synthesises findings and concludes with MAINTENANCE_COMPLETE."""
         source = getattr(message, "source", "")
         if not isinstance(content, str) or not content.strip():
             continue
-        print(f"[{source}] {content[:200]}{'...' if len(content) > 200 else ''}")
+        print(f"[{source}] {content[:500]}{'...' if len(content) > 500 else ''}")
         last_content = content
-        # Collect JSON findings only from audit-phase agents
+        # Collect JSON findings only from audit-phase agents.
+        # Only items with an explicit severity field are real issues;
+        # items without severity come from "passed" arrays and are ignored.
         if source in audit_agents:
             for block in re.findall(r"\[[\s\S]*?\]", content):
                 try:
                     items = json.loads(block)
                     if isinstance(items, list):
                         for item in items:
-                            if isinstance(item, dict) and "message" in item:
+                            if isinstance(item, dict) and "message" in item and item.get("severity"):
                                 findings.append({
                                     "area": item.get("area", source.lower()),
                                     "severity": item.get("severity", "info"),
@@ -314,7 +355,9 @@ Orchestrator synthesises findings and concludes with MAINTENANCE_COMPLETE."""
                                 })
                 except (json.JSONDecodeError, ValueError):
                     pass
-        if source == "Orchestrator" and "MAINTENANCE_COMPLETE" not in content:
+        # Only include Orchestrator messages that are actual summaries (>200 chars),
+        # not short task-assignment messages or the final termination line.
+        if source == "Orchestrator" and _DONE_SIGNAL not in content and len(content) > 200:
             summary_parts.append(content)
 
     summary = " ".join(summary_parts).strip() or last_content[:1000]
