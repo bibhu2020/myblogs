@@ -202,6 +202,64 @@ export class AppController {
     return this.proxy.forward('media', `/media/${id}`, 'DELETE', null, { Authorization: this.getAuthHeader(req) });
   }
 
+  // STORY ROUTES - Public
+  @Get('stories')
+  getStories(@Query() query: any) {
+    const params = new URLSearchParams(query).toString();
+    return this.proxy.forward('blog', `/stories?${params}`, 'GET');
+  }
+
+  @Get('stories/recent')
+  getRecentStories() { return this.proxy.forward('blog', '/stories/recent', 'GET'); }
+
+  @Get('stories/stats')
+  @UseGuards(AuthGuard('jwt'))
+  getStoryStats(@Request() req: any) {
+    return this.proxy.forward('blog', '/stories/stats', 'GET', null, { Authorization: this.getAuthHeader(req) });
+  }
+
+  @Get('stories/admin')
+  @UseGuards(AuthGuard('jwt'))
+  getAdminStories(@Query() query: any, @Request() req: any) {
+    const params = new URLSearchParams({ ...query, status: query.status || '' }).toString();
+    return this.proxy.forward('blog', `/stories/admin?${params}`, 'GET', null, { Authorization: this.getAuthHeader(req) });
+  }
+
+  @Get('stories/:slug')
+  getStory(@Param('slug') slug: string) {
+    return this.proxy.forward('blog', `/stories/${slug}`, 'GET');
+  }
+
+  @Post('stories')
+  @UseGuards(AuthGuard('jwt'))
+  createStory(@Body() body: any, @Request() req: any) {
+    return this.proxy.forward('blog', '/stories', 'POST', body, { Authorization: this.getAuthHeader(req) });
+  }
+
+  @Patch('stories/:id/approve')
+  @UseGuards(AuthGuard('jwt'))
+  approveStory(@Param('id') id: string, @Request() req: any) {
+    return this.proxy.forward('blog', `/stories/${id}/approve`, 'PATCH', null, { Authorization: this.getAuthHeader(req) });
+  }
+
+  @Patch('stories/:id/reject')
+  @UseGuards(AuthGuard('jwt'))
+  rejectStory(@Param('id') id: string, @Request() req: any) {
+    return this.proxy.forward('blog', `/stories/${id}/reject`, 'PATCH', null, { Authorization: this.getAuthHeader(req) });
+  }
+
+  @Put('stories/:id')
+  @UseGuards(AuthGuard('jwt'))
+  updateStory(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.proxy.forward('blog', `/stories/${id}`, 'PUT', body, { Authorization: this.getAuthHeader(req) });
+  }
+
+  @Delete('stories/:id')
+  @UseGuards(AuthGuard('jwt'))
+  deleteStory(@Param('id') id: string, @Request() req: any) {
+    return this.proxy.forward('blog', `/stories/${id}`, 'DELETE', null, { Authorization: this.getAuthHeader(req) });
+  }
+
   // AGENT RUNS
   @Post('agent-runs')
   createAgentRun(@Body() body: any) {

@@ -7,6 +7,8 @@ const routes = [
   { path: '/blog/:slug', component: () => import('../views/BlogPost.vue'), meta: { title: 'Post' } },
   { path: '/category/:slug', component: () => import('../views/CategoryView.vue'), meta: { title: 'Category' } },
   { path: '/search', component: () => import('../views/Search.vue'), meta: { title: 'Search' } },
+  { path: '/story', component: () => import('../views/StoryList.vue'), meta: { title: 'Stories' } },
+  { path: '/story/:slug', component: () => import('../views/StoryDetail.vue'), meta: { title: 'Story' } },
   { path: '/about', component: () => import('../views/About.vue'), meta: { title: 'About' } },
   { path: '/admin/login', component: () => import('../views/admin/Login.vue'), meta: { title: 'Admin Login' } },
   {
@@ -24,6 +26,9 @@ const routes = [
       { path: 'users', component: () => import('../views/admin/Users.vue'), meta: { requiresAuth: true, title: 'Users' } },
       { path: 'comments', component: () => import('../views/admin/Comments.vue'), meta: { requiresAuth: true, title: 'Comments' } },
       { path: 'agent-runs', component: () => import('../views/admin/AgentRuns.vue'), meta: { requiresAuth: true, title: 'Agent Runs' } },
+      { path: 'stories', component: () => import('../views/admin/Stories.vue'), meta: { requiresAuth: true, title: 'Stories' } },
+      { path: 'stories/new', component: () => import('../views/admin/StoryEditor.vue'), meta: { requiresAuth: true, title: 'New Story' } },
+      { path: 'stories/:id/edit', component: () => import('../views/admin/StoryEditor.vue'), meta: { requiresAuth: true, title: 'Edit Story' } },
     ]
   },
   { path: '/:pathMatch(.*)*', component: () => import('../views/NotFound.vue'), meta: { title: 'Not Found' } }

@@ -7,6 +7,7 @@ import { Category } from './category.entity';
 import { Tag } from './tag.entity';
 import { Comment } from './comment.entity';
 import { AgentRun } from './agent-run.entity';
+import { Story } from './story.entity';
 import { PostsController } from './posts.controller';
 import { PostsService } from './posts.service';
 import { CategoriesController } from './categories.controller';
@@ -17,6 +18,8 @@ import { CommentsController } from './comments.controller';
 import { CommentsService } from './comments.service';
 import { AgentRunsController } from './agent-runs.controller';
 import { AgentRunsService } from './agent-runs.service';
+import { StoriesController } from './stories.controller';
+import { StoriesService } from './stories.service';
 import { JwtStrategy } from './jwt.strategy';
 import { SeedService } from './seed.service';
 
@@ -26,14 +29,14 @@ import { SeedService } from './seed.service';
       type: 'postgres',
       url: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_96zZibhKwEcG@ep-delicate-fire-atgeeiwh-pooler.c-9.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
       ssl: { rejectUnauthorized: false },
-      entities: [Post, Category, Tag, Comment, AgentRun],
+      entities: [Post, Category, Tag, Comment, AgentRun, Story],
       synchronize: true,
     }),
-    TypeOrmModule.forFeature([Post, Category, Tag, Comment, AgentRun]),
+    TypeOrmModule.forFeature([Post, Category, Tag, Comment, AgentRun, Story]),
     PassportModule,
     JwtModule.register({ secret: 'myblogs-secret-key-2024' }),
   ],
-  controllers: [PostsController, CategoriesController, TagsController, CommentsController, AgentRunsController],
-  providers: [PostsService, CategoriesService, TagsService, CommentsService, AgentRunsService, JwtStrategy, SeedService],
+  controllers: [PostsController, CategoriesController, TagsController, CommentsController, AgentRunsController, StoriesController],
+  providers: [PostsService, CategoriesService, TagsService, CommentsService, AgentRunsService, StoriesService, JwtStrategy, SeedService],
 })
 export class AppModule {}

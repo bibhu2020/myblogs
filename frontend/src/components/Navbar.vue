@@ -118,6 +118,13 @@ const isB = () => layout.variant === 'b'
             </div>
           </div>
 
+          <RouterLink to="/story"
+            class="px-3 py-2 text-sm font-medium transition-colors rounded-lg"
+            :class="layout.variant === 'b'
+              ? (route.path.startsWith('/story') ? 'text-violet-400 bg-violet-950' : 'text-slate-400 hover:text-violet-400 hover:bg-slate-900')
+              : (route.path.startsWith('/story') ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50')"
+          >Story</RouterLink>
+
           <RouterLink to="/about"
             class="px-3 py-2 text-sm font-medium transition-colors rounded-lg"
             :class="layout.variant === 'b'
@@ -183,6 +190,10 @@ const isB = () => layout.variant === 'b'
           class="flex items-center gap-2 px-4 py-2.5 font-medium rounded-lg"
           :class="layout.variant === 'b' ? 'text-slate-300 hover:text-violet-400 hover:bg-slate-900' : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'"
         >{{ cat.icon }} {{ cat.name }}</RouterLink>
+        <RouterLink to="/story" @click="mobileOpen=false"
+          class="block px-4 py-2.5 font-medium rounded-lg"
+          :class="layout.variant === 'b' ? 'text-slate-300 hover:text-violet-400 hover:bg-slate-900' : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'"
+        >Story</RouterLink>
         <RouterLink to="/about" @click="mobileOpen=false"
           class="block px-4 py-2.5 font-medium rounded-lg"
           :class="layout.variant === 'b' ? 'text-slate-300 hover:text-violet-400 hover:bg-slate-900' : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'"

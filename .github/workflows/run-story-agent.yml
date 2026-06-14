@@ -1,0 +1,48 @@
+name: Run Story Agent
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Every Monday 06:00 UTC — one story per week
+  workflow_dispatch:
+    inputs:
+      genre:
+        description: 'Force a specific story genre (leave blank for random)'
+        required: false
+        default: ''
+        type: choice
+        options:
+          - ''
+          - Adventure
+          - Fantasy
+          - Mystery
+          - Fable
+          - Science Fiction
+          - Historical Fiction
+          - Mythology
+
+jobs:
+  story-agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install Python dependencies
+        run: pip install -e ".[story_agent]" --quiet
+
+      - name: Generate weekly story
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SERVER_BASE: ${{ vars.HF_SPACE_URL }}
+          STORY_GENRE: ${{ inputs.genre }}
+        run: python3 -m meridian_agents.story_agent

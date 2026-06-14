@@ -22,6 +22,7 @@ const navItems = [
   { path: '/admin/comments', label: 'Comments', icon: '💬' },
   { path: '/admin/users', label: 'Users', icon: '👥' },
   { path: '/admin/agent-runs', label: 'Agent Runs', icon: '🤖' },
+  { path: '/admin/stories', label: 'Stories', icon: '📖' },
 ]
 </script>
 
