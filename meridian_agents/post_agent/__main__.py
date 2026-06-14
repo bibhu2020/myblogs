@@ -81,13 +81,30 @@ elif cmd == "schedule":
 # ── registry-remove <post_id> — remove from pending JSONL without API call ────
 # Used by the on-post-decision workflow after the blog-service has already
 # handled the approve/reject; this only syncs the local pending registry.
+# Implemented with stdlib only — avoids importing graph/OpenAI at module level.
 elif cmd == "registry-remove":
     if len(sys.argv) < 3:
         print("Usage: python3 -m meridian_agents.post_agent registry-remove <post_id>")
         sys.exit(1)
-    from .main import _remove_pending
+    import json
+    from pathlib import Path
     post_id = int(sys.argv[2])
-    _remove_pending(post_id)
+    pending_file = Path(__file__).parent / "pending_posts.jsonl"
+    if pending_file.exists():
+        entries = []
+        for line in pending_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line:
+                try:
+                    entry = json.loads(line)
+                    if entry.get("post_id") != post_id:
+                        entries.append(entry)
+                except json.JSONDecodeError:
+                    pass
+        pending_file.write_text(
+            "\n".join(json.dumps(e) for e in entries) + ("\n" if entries else ""),
+            encoding="utf-8",
+        )
     print(f"✅ Post #{post_id} removed from pending registry.")
 
 # ── generate (default) ────────────────────────────────────────────────────────
