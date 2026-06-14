@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, computed } from 'vue'
+import { onMounted, computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useBlogStore } from '../stores/blog'
 import { useLayoutStore } from '../stores/layout'
@@ -7,24 +7,39 @@ import Navbar from '../components/Navbar.vue'
 import Footer from '../components/Footer.vue'
 import PostCard from '../components/PostCard.vue'
 import WeatherWidget from '../components/WeatherWidget.vue'
+import api from '../api'
 import { format } from 'date-fns'
 
 const blog = useBlogStore()
 const layout = useLayoutStore()
 
+const newsItems   = ref([])
+const latestStory = ref(null)
+
 onMounted(async () => {
   await Promise.all([blog.fetchRecent(), blog.fetchFeatured(), blog.fetchCategories()])
+
+  try {
+    const { data } = await api.get('/news')
+    newsItems.value = (data.items || []).slice(0, 4)
+  } catch {}
+
+  try {
+    const { data } = await api.get('/stories?limit=1')
+    latestStory.value = (data.stories || data)[0] || null
+  } catch {}
 })
 
 // Latest posts — recent takes priority over featured
 const latestPosts = computed(() => blog.recent.length ? blog.recent : blog.featured)
-const hero       = computed(() => latestPosts.value[0] || null)
-const sidePanel  = computed(() => latestPosts.value.slice(1, 4))
-const gridPosts  = computed(() => latestPosts.value.slice(1, 9))
-const listPosts  = computed(() => latestPosts.value.slice(1, 5))
-const morePosts  = computed(() => latestPosts.value.slice(5, 11))
+const hero        = computed(() => latestPosts.value[0] || null)
+const sidePanel   = computed(() => latestPosts.value.slice(1, 4))
+const gridPosts   = computed(() => latestPosts.value.slice(1, 9))
+const listPosts   = computed(() => latestPosts.value.slice(1, 5))
+const morePosts   = computed(() => latestPosts.value.slice(5, 11))
 
-function formatDate(d) { return format(new Date(d), 'MMM d, yyyy') }
+const regionLabel = { world: '🌍 World', usa: '🇺🇸 USA', india: '🇮🇳 India', odisha: '🏛️ Odisha' }
+
 function ago(d) {
   const diff = Date.now() - new Date(d).getTime()
   const h = Math.floor(diff / 3_600_000)
@@ -42,7 +57,6 @@ function ago(d) {
   <div v-if="layout.variant === 'a'" class="min-h-screen bg-white">
     <Navbar />
 
-    <!-- Holiday badge -->
     <main id="main-content" tabindex="-1" class="outline-none">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 text-center">
       <!-- HOLIDAY-HERO-START -->
@@ -50,7 +64,7 @@ function ago(d) {
 <!-- HOLIDAY-HERO-END -->
     </div>
 
-    <!-- Hero: latest post dominates -->
+    <!-- ── Hero: latest blog post dominates ── -->
     <section v-if="hero" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-16">
       <div class="flex items-center gap-2 mb-6">
         <span class="w-2 h-2 rounded-full bg-primary-500 animate-pulse"></span>
@@ -92,9 +106,9 @@ function ago(d) {
           </div>
         </RouterLink>
 
-        <!-- Side panel: next 3 recent + newsletter -->
-          <h2 class="sr-only">Recent Posts &amp; Newsletter</h2>
+        <!-- Side panel: next 3 recent posts -->
         <div class="lg:col-span-5 flex flex-col gap-4">
+          <h2 class="sr-only">Recent Posts</h2>
           <RouterLink v-for="post in sidePanel" :key="post.id" :to="`/blog/${post.slug}`"
             class="group flex gap-4 bg-gray-50 rounded-2xl p-4 hover:bg-primary-50 transition-colors">
             <div class="w-24 h-24 rounded-xl overflow-hidden flex-shrink-0 bg-gray-200">
@@ -113,12 +127,99 @@ function ago(d) {
               <div class="text-xs text-gray-400 mt-1">{{ ago(post.createdAt) }} · {{ post.readTime }} min read</div>
             </div>
           </RouterLink>
-
         </div>
       </div>
     </section>
 
-    <!-- Weather + Newsletter full-width row -->
+    <!-- ── Latest Blog Posts grid ── -->
+    <section v-if="gridPosts.length" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+      <div class="flex items-center justify-between mb-8">
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900" style="font-family:'Playfair Display',serif">Latest Posts</h2>
+          <p class="text-gray-500 text-sm mt-1">Fresh from every corner of knowledge</p>
+        </div>
+        <RouterLink to="/blog" class="text-primary-600 text-sm font-semibold hover:underline flex items-center gap-1">
+          All posts <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </RouterLink>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <PostCard v-for="post in gridPosts.slice(0, 4)" :key="post.id" :post="post" />
+      </div>
+    </section>
+
+    <!-- ── Discover More: News + Story Corner ── -->
+    <section v-if="newsItems.length || latestStory" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+      <div class="border-t border-gray-100 pt-10 mb-8 flex items-center justify-between">
+        <h2 class="text-xl font-bold text-gray-900" style="font-family:'Playfair Display',serif">Discover More</h2>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+
+        <!-- News column: 3/5 width -->
+        <div v-if="newsItems.length" class="lg:col-span-3">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+              <span class="text-xs font-bold uppercase tracking-widest text-rose-600">Today's News</span>
+            </div>
+            <RouterLink to="/news" class="text-xs text-gray-400 hover:text-primary-600 font-medium transition-colors flex items-center gap-1">
+              All news <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </RouterLink>
+          </div>
+          <div class="divide-y divide-gray-100">
+            <a v-for="item in newsItems" :key="item.id" :href="item.sourceUrl" target="_blank" rel="noopener"
+              class="group flex gap-3 py-4 hover:bg-gray-50 rounded-xl px-2 -mx-2 transition-colors">
+              <div v-if="item.imageUrl" class="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
+                <img :src="item.imageUrl" :alt="item.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{{ regionLabel[item.region] || item.region }}</span>
+                  <span class="text-xs text-gray-400">{{ item.sourceName }}</span>
+                </div>
+                <p class="text-sm font-semibold text-gray-800 line-clamp-2 group-hover:text-primary-600 transition-colors leading-snug">{{ item.title }}</p>
+              </div>
+            </a>
+          </div>
+        </div>
+
+        <!-- Story Corner: 2/5 width -->
+        <div v-if="latestStory" class="lg:col-span-2">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+              <span class="text-xs font-bold uppercase tracking-widest text-indigo-600">Story Corner</span>
+            </div>
+            <RouterLink to="/stories" class="text-xs text-gray-400 hover:text-indigo-600 font-medium transition-colors flex items-center gap-1">
+              All stories <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </RouterLink>
+          </div>
+          <RouterLink :to="`/story/${latestStory.slug}`" class="group block rounded-2xl overflow-hidden border border-gray-100 hover:border-indigo-200 hover:shadow-lg transition-all duration-300">
+            <div v-if="latestStory.featuredImage" class="aspect-[16/9] overflow-hidden">
+              <img :src="latestStory.featuredImage" :alt="latestStory.title"
+                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+            </div>
+            <div v-else class="aspect-[16/9] bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center">
+              <span class="text-4xl">📖</span>
+            </div>
+            <div class="p-4">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600">{{ latestStory.genre }}</span>
+                <span class="text-xs text-gray-400">Ages 8–15</span>
+              </div>
+              <h3 class="font-bold text-gray-900 text-sm leading-snug mb-2 group-hover:text-indigo-600 transition-colors"
+                style="font-family:'Playfair Display',serif">{{ latestStory.title }}</h3>
+              <p class="text-xs text-gray-500 line-clamp-2">{{ latestStory.excerpt }}</p>
+              <div class="mt-3 text-xs font-semibold text-indigo-600 flex items-center gap-1">
+                Read story <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+              </div>
+            </div>
+          </RouterLink>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ── Weather + Newsletter ── -->
     <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 items-stretch">
         <WeatherWidget variant="light" />
@@ -136,23 +237,7 @@ function ago(d) {
       </div>
     </section>
 
-    <!-- Latest Stories grid -->
-    <section v-if="gridPosts.length" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <div class="flex items-center justify-between mb-8">
-        <div>
-          <h2 class="text-2xl font-bold text-gray-900" style="font-family:'Playfair Display',serif">Latest Stories</h2>
-          <p class="text-gray-500 text-sm mt-1">Fresh from every corner of knowledge</p>
-        </div>
-        <RouterLink to="/blog" class="text-primary-600 text-sm font-semibold hover:underline flex items-center gap-1">
-          All posts <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-        </RouterLink>
-      </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <PostCard v-for="post in gridPosts.slice(0, 4)" :key="post.id" :post="post" />
-      </div>
-    </section>
-
-    <!-- More Stories -->
+    <!-- ── More blog posts ── -->
     <section v-if="gridPosts.length > 4" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
       <div class="border-t border-gray-100 pt-12">
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -172,35 +257,26 @@ function ago(d) {
     <Navbar />
 
     <main id="main-content" tabindex="-1" class="outline-none">
-    <!-- Layout B holiday badge -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 text-center">
       <!-- HOLIDAY-HERO-B-START -->
 <div class="holiday-badge-b bg-[#13132a] border border-[#43cfd8]/30 text-[#43cfd8] rounded-full px-4 py-1 text-sm inline-block mb-4" aria-label="Global events highlight">Celebrate the World!</div>
 <!-- HOLIDAY-HERO-B-END -->
     </div>
 
-    <!-- Full-bleed hero: the single latest post dominates -->
+    <!-- ── Full-bleed blog hero ── -->
     <section v-if="hero" class="relative">
-      <!-- Image: tall on mobile, 65vh on desktop -->
       <div class="relative h-[60vw] min-h-[340px] max-h-[680px]">
         <img v-if="hero.featuredImage" :src="hero.featuredImage" :alt="hero.title"
           class="w-full h-full object-cover" />
         <div v-else class="w-full h-full bg-gradient-to-br from-violet-950 to-slate-950 flex items-center justify-center">
           <span class="text-8xl opacity-20">{{ hero.category?.icon || '📝' }}</span>
         </div>
-        <!-- Deep gradient overlay -->
         <div class="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-[#0f172a]/50 to-transparent" />
         <div class="absolute inset-0 bg-gradient-to-r from-[#0f172a]/60 to-transparent" />
-
-        <!-- "NEW" badge -->
         <div class="absolute top-6 left-6 md:left-10">
-          <span class="bg-violet-600 text-white text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-widest">
-            Latest
-          </span>
+          <span class="bg-violet-600 text-white text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-widest">Latest</span>
         </div>
       </div>
-
-      <!-- Text block: overlaps image bottom -->
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="-mt-32 relative z-10 max-w-3xl">
           <div v-if="hero.category" class="mb-4">
@@ -234,7 +310,7 @@ function ago(d) {
       </div>
     </section>
 
-    <!-- Latest: numbered list + side grid -->
+    <!-- ── Numbered latest list + sidebar ── -->
     <section v-if="listPosts.length" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
 
@@ -242,7 +318,7 @@ function ago(d) {
         <div class="lg:col-span-7">
           <div class="flex items-center gap-3 mb-8">
             <span class="w-2 h-2 rounded-full bg-violet-500 animate-pulse"></span>
-            <h2 class="text-xs font-bold uppercase tracking-widest text-violet-400">Latest Stories</h2>
+            <h2 class="text-xs font-bold uppercase tracking-widest text-violet-400">Latest Posts</h2>
           </div>
           <div class="space-y-0 divide-y divide-[#2d3f5f]">
             <RouterLink v-for="(post, i) in listPosts" :key="post.id" :to="`/blog/${post.slug}`"
@@ -271,27 +347,98 @@ function ago(d) {
               </div>
             </RouterLink>
           </div>
-
           <RouterLink to="/blog"
             class="mt-8 inline-flex items-center gap-2 border border-[#2d3f5f] hover:border-violet-500 text-slate-400 hover:text-violet-400 px-6 py-3 rounded-full text-sm font-medium transition-all">
-            View all stories
+            View all posts
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
           </RouterLink>
         </div>
 
-        <!-- Sidebar: more recent cards -->
+        <!-- Sidebar: more blog post cards -->
         <div class="lg:col-span-5 space-y-4">
           <div class="flex items-center gap-3 mb-8">
             <span class="w-2 h-2 rounded-full bg-slate-600"></span>
-            <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400">More Stories</h2>
+            <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400">More Posts</h2>
           </div>
           <PostCard v-for="post in morePosts.slice(0, 4)" :key="post.id" :post="post" />
-
         </div>
       </div>
     </section>
 
-    <!-- Weather + Newsletter full-width row (dark) -->
+    <!-- ── Discover More: News + Story Corner (dark) ── -->
+    <section v-if="newsItems.length || latestStory" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+      <div class="border-t border-[#2d3f5f] pt-10 mb-8 flex items-center justify-between">
+        <h2 class="text-base font-bold uppercase tracking-widest text-slate-400">Discover More</h2>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+
+        <!-- News column -->
+        <div v-if="newsItems.length" class="lg:col-span-3">
+          <div class="flex items-center justify-between mb-5">
+            <div class="flex items-center gap-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+              <span class="text-xs font-bold uppercase tracking-widest text-rose-400">Today's News</span>
+            </div>
+            <RouterLink to="/news" class="text-xs text-slate-500 hover:text-rose-400 font-medium transition-colors flex items-center gap-1">
+              All news <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </RouterLink>
+          </div>
+          <div class="divide-y divide-[#1e2d44]">
+            <a v-for="item in newsItems" :key="item.id" :href="item.sourceUrl" target="_blank" rel="noopener"
+              class="group flex gap-3 py-4 hover:bg-[#162236] rounded-xl px-2 -mx-2 transition-colors">
+              <div v-if="item.imageUrl" class="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-slate-800">
+                <img :src="item.imageUrl" :alt="item.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#1e2d44] text-slate-400">{{ regionLabel[item.region] || item.region }}</span>
+                  <span class="text-xs text-slate-600">{{ item.sourceName }}</span>
+                </div>
+                <p class="text-sm font-semibold text-slate-200 line-clamp-2 group-hover:text-rose-300 transition-colors leading-snug">{{ item.title }}</p>
+              </div>
+            </a>
+          </div>
+        </div>
+
+        <!-- Story Corner -->
+        <div v-if="latestStory" class="lg:col-span-2">
+          <div class="flex items-center justify-between mb-5">
+            <div class="flex items-center gap-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+              <span class="text-xs font-bold uppercase tracking-widest text-indigo-400">Story Corner</span>
+            </div>
+            <RouterLink to="/stories" class="text-xs text-slate-500 hover:text-indigo-400 font-medium transition-colors flex items-center gap-1">
+              All stories <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </RouterLink>
+          </div>
+          <RouterLink :to="`/story/${latestStory.slug}`"
+            class="group block rounded-2xl overflow-hidden border border-[#1e2d44] hover:border-indigo-700/60 hover:shadow-xl hover:shadow-indigo-950/40 transition-all duration-300">
+            <div v-if="latestStory.featuredImage" class="aspect-[16/9] overflow-hidden">
+              <img :src="latestStory.featuredImage" :alt="latestStory.title"
+                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+            </div>
+            <div v-else class="aspect-[16/9] bg-gradient-to-br from-indigo-950 to-[#0f172a] flex items-center justify-center">
+              <span class="text-4xl opacity-40">📖</span>
+            </div>
+            <div class="p-4 bg-[#162236]">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-400 border border-indigo-800/50">{{ latestStory.genre }}</span>
+                <span class="text-xs text-slate-500">Ages 8–15</span>
+              </div>
+              <h3 class="font-bold text-slate-100 text-sm leading-snug mb-2 group-hover:text-indigo-300 transition-colors"
+                style="font-family:'Playfair Display',serif">{{ latestStory.title }}</h3>
+              <p class="text-xs text-slate-500 line-clamp-2">{{ latestStory.excerpt }}</p>
+              <div class="mt-3 text-xs font-semibold text-indigo-400 flex items-center gap-1">
+                Read story <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+              </div>
+            </div>
+          </RouterLink>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ── Weather + Newsletter ── -->
     <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 items-stretch">
         <WeatherWidget variant="dark" />
@@ -310,7 +457,7 @@ function ago(d) {
       </div>
     </section>
 
-    <!-- More stories grid (deeper posts) -->
+    <!-- ── More blog posts archive ── -->
     <section v-if="morePosts.length > 4" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
       <div class="border-t border-[#2d3f5f] pt-12 mb-8">
         <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400">Archive</h2>
@@ -346,9 +493,10 @@ function ago(d) {
             <ul class="space-y-2">
               <li><RouterLink to="/" class="text-slate-400 hover:text-violet-400 text-sm transition-colors">Home</RouterLink></li>
               <li><RouterLink to="/blog" class="text-slate-400 hover:text-violet-400 text-sm transition-colors">All Posts</RouterLink></li>
+              <li><RouterLink to="/news" class="text-slate-400 hover:text-violet-400 text-sm transition-colors">News</RouterLink></li>
+              <li><RouterLink to="/stories" class="text-slate-400 hover:text-violet-400 text-sm transition-colors">Stories</RouterLink></li>
               <li><RouterLink to="/search" class="text-slate-400 hover:text-violet-400 text-sm transition-colors">Search</RouterLink></li>
               <li><RouterLink to="/about" class="text-slate-400 hover:text-violet-400 text-sm transition-colors">About</RouterLink></li>
-              <li><RouterLink to="/admin" class="text-slate-400 hover:text-violet-400 text-sm transition-colors">Admin Panel</RouterLink></li>
             </ul>
           </div>
         </div>
