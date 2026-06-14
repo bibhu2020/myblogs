@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
 import { Post, PostStatus } from './post.entity';
@@ -6,8 +6,14 @@ import { Category } from './category.entity';
 import { Tag } from './tag.entity';
 import slugify from 'slugify';
 
+// Fallback repo slug — non-sensitive (repo is public), avoids silent no-op
+// when GITHUB_REPO env var hasn't propagated to the container yet.
+const GITHUB_REPO_FALLBACK = 'bibhu2020/myblogs';
+
 @Injectable()
 export class PostsService {
+  private readonly logger = new Logger(PostsService.name);
+
   constructor(
     @InjectRepository(Post) private postRepo: Repository<Post>,
     @InjectRepository(Category) private catRepo: Repository<Category>,
@@ -149,10 +155,19 @@ export class PostsService {
 
   // Fires a repository_dispatch event to GitHub so the post-agent resume
   // workflow can clean up media (on reject) and update the pending registry.
+  // Requires SECRET_TOKEN_GITHUB to have repo scope (classic PAT) or
+  // Actions:write + Contents:write (fine-grained PAT).
   private async dispatchPostDecision(action: 'approve' | 'reject', postId: number): Promise<void> {
     const token = process.env.SECRET_TOKEN_GITHUB;
-    const repo  = process.env.GITHUB_REPO;
-    if (!token || !repo) return;
+    const repo  = process.env.GITHUB_REPO || GITHUB_REPO_FALLBACK;
+
+    if (!token) {
+      this.logger.error('[post-agent] SECRET_TOKEN_GITHUB is not set — cannot trigger resume workflow');
+      return;
+    }
+
+    this.logger.log(`[post-agent] Dispatching post-decision (${action}) for post #${postId} → ${repo}`);
+
     try {
       const resp = await fetch(`https://api.github.com/repos/${repo}/dispatches`, {
         method: 'POST',
@@ -166,12 +181,17 @@ export class PostsService {
           client_payload: { action, post_id: postId },
         }),
       });
-      if (!resp.ok) {
+
+      if (resp.ok) {
+        this.logger.log(`[post-agent] GitHub dispatch accepted (${resp.status}) — resume workflow triggered`);
+      } else {
         const body = await resp.text();
-        console.warn(`[posts] GitHub dispatch failed (${resp.status}): ${body.slice(0, 200)}`);
+        this.logger.error(
+          `[post-agent] GitHub dispatch failed (${resp.status}) — check PAT has repo/Actions:write scope. Response: ${body.slice(0, 300)}`,
+        );
       }
     } catch (err: any) {
-      console.warn('[posts] GitHub dispatch error:', err.message);
+      this.logger.error(`[post-agent] GitHub dispatch threw: ${err.message}`);
     }
   }
 
