@@ -1,18 +1,18 @@
-"""Shared LLM client: Qwen/Qwen2.5-72B-Instruct via HF first, gpt-4o fallback."""
+"""Shared LLM client: Gemini 2.5 Flash (free) first, gpt-4o fallback."""
 import json
 import os
 import re
 
-# Appended to the system message when calling HF (no json_object response_format).
-_HF_JSON_INSTRUCTION = (
+_GEMINI_MODEL = "gemini-2.5-flash"
+_OAI_MODEL = "gpt-4o"
+_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+
+# Appended to the system message when calling Gemini (no json_object response_format).
+_JSON_INSTRUCTION = (
     "\n\nCRITICAL: Your entire response must be a single valid JSON object. "
     "No explanatory text, no markdown code fences (no ```json), no preamble or postamble. "
     "Begin your response immediately with { and end with }."
 )
-
-_HF_MODEL = "Qwen/Qwen2.5-72B-Instruct"
-_OAI_MODEL = "gpt-4o"
-_HF_MAX_TOKENS = 8000  # HF serverless inference hard cap for this model
 
 
 def chat_completion(
@@ -21,27 +21,27 @@ def chat_completion(
     max_tokens: int,
     temperature: float = 0.8,
 ) -> tuple[str, str]:
-    """Call HF Qwen first; fall back to gpt-4o on any error.
+    """Call Gemini 2.5 Flash first; fall back to gpt-4o on any error.
 
     Returns (text, model_name).
     """
-    hf_token = os.getenv("HF_TOKEN", "")
-    if hf_token:
+    gemini_key = os.getenv("GEMINI_API_KEY", "")
+    if gemini_key:
         try:
-            from huggingface_hub import InferenceClient
+            from openai import OpenAI
 
-            client = InferenceClient(token=hf_token)
+            client = OpenAI(api_key=gemini_key, base_url=_GEMINI_BASE_URL)
             response = client.chat.completions.create(
-                model=_HF_MODEL,
+                model=_GEMINI_MODEL,
                 messages=_inject_json_instruction(messages),
-                max_tokens=min(max_tokens, _HF_MAX_TOKENS),
+                max_tokens=max_tokens,
                 temperature=temperature,
             )
             text = (response.choices[0].message.content or "").strip()
-            print(f"   [llm] model={_HF_MODEL}  ~{len(text.split())} words")
-            return text, _HF_MODEL
+            print(f"   [llm] model={_GEMINI_MODEL}  ~{len(text.split())} words")
+            return text, _GEMINI_MODEL
         except Exception as exc:
-            print(f"⚠️  HF Inference failed ({exc!r}) — falling back to {_OAI_MODEL}")
+            print(f"⚠️  Gemini Inference failed ({exc!r}) — falling back to {_OAI_MODEL}")
 
     from openai import OpenAI
 
@@ -90,11 +90,11 @@ def extract_json(text: str) -> dict:
 
 
 def _inject_json_instruction(messages: list[dict]) -> list[dict]:
-    """Append JSON-only instruction to the system message for HF models."""
+    """Append JSON-only instruction to the system message."""
     result = [dict(m) for m in messages]
     for i, msg in enumerate(result):
         if msg["role"] == "system":
-            result[i]["content"] = msg["content"] + _HF_JSON_INSTRUCTION
+            result[i]["content"] = msg["content"] + _JSON_INSTRUCTION
             return result
     # No system message — prepend one
-    return [{"role": "system", "content": _HF_JSON_INSTRUCTION.strip()}, *result]
+    return [{"role": "system", "content": _JSON_INSTRUCTION.strip()}, *result]
