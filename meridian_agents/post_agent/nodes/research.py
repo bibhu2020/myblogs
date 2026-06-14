@@ -3,11 +3,7 @@ import random
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 
-from openai import OpenAI
-
 from ..state import AgentState
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
 
 CATEGORIES = [
     {
@@ -98,7 +94,27 @@ def _pick_category() -> dict:
     return random.choice(CATEGORIES)
 
 
-def _web_search(prompt: str) -> str:
+def _web_search_gemini(prompt: str) -> str:
+    """Gemini 2.5 Flash with Google Search grounding."""
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY", ""))
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            tools=[types.Tool(google_search=types.GoogleSearch())]
+        ),
+    )
+    return response.text or ""
+
+
+def _web_search_openai(prompt: str) -> str:
+    """OpenAI web search — Responses API → search-preview → gpt-4o fallback."""
+    from openai import OpenAI
+
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
     try:
         response = client.responses.create(
             model="gpt-4o",
@@ -132,6 +148,18 @@ def _web_search(prompt: str) -> str:
             max_tokens=3000,
         )
         return response.choices[0].message.content
+
+
+def _web_search(prompt: str) -> str:
+    """Try Gemini Search grounding first; fall back to OpenAI web search."""
+    if os.getenv("GEMINI_API_KEY"):
+        try:
+            result = _web_search_gemini(prompt)
+            if result.strip():
+                return result
+        except Exception as exc:
+            print(f"⚠️  Gemini search failed ({exc!r}) — falling back to OpenAI")
+    return _web_search_openai(prompt)
 
 
 # ── LangGraph nodes ──────────────────────────────────────────────────────────
