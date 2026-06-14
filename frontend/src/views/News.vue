@@ -10,158 +10,165 @@ const lastUpdated = ref(null)
 const loading     = ref(true)
 const activeRegion = ref('all')
 
-// ── TTS state ────────────────────────────────────────────────────────────────
-const speaking     = ref(false)
-const activeIdx    = ref(-1)
-const ttsSupported = typeof window !== 'undefined' && 'speechSynthesis' in window
+// ── TTS player — same server-side synthesis engine as the blog reader ─────────
+const ttsState       = ref('idle')   // idle | loading | playing | paused
+const ttsProgress    = ref(0)
+const ttsChunkIdx    = ref(0)
+const ttsTotalChunks = ref(0)
+const playerOpen     = ref(false)
+const activeIdx      = ref(-1)
 
-// ── Female voice selection ───────────────────────────────────────────────────
-let _voice = null
+let sessionId      = 0
+let audioEl        = null
+let currentBlobUrl = null
+let resolveChunk   = null
+let chunkFetches   = []
+let chunkData      = []   // { text, storyIdx }[]
 
-function _pickVoice() {
-  const voices = window.speechSynthesis.getVoices()
-  if (!voices.length) return
-  // Prefer natural-sounding female English voices by known name
-  const PREFER = [
-    'Google UK English Female',
-    'Microsoft Zira',           // Windows
-    'Microsoft Jenny',          // Windows neural
-    'Microsoft Aria',           // Windows neural
-    'Samantha',                 // macOS / iOS
-    'Karen',                    // macOS Australian
-    'Victoria',                 // macOS
-    'Moira',                    // macOS Irish
-    'Fiona',                    // macOS Scottish
-    'Tessa',                    // macOS South African
-  ]
-  for (const name of PREFER) {
-    const v = voices.find(v => v.name.includes(name))
-    if (v) { _voice = v; return }
+function _splitText(text, maxLen = 280) {
+  const parts = []
+  let rem = text.trim()
+  while (rem.length > 0) {
+    if (rem.length <= maxLen) { parts.push(rem); break }
+    let cut = rem.lastIndexOf('. ', maxLen)
+    if (cut < maxLen * 0.4) cut = rem.lastIndexOf(' ', maxLen)
+    if (cut < 0) cut = maxLen
+    else cut += 1
+    parts.push(rem.slice(0, cut).trim())
+    rem = rem.slice(cut).trim()
   }
-  // Fallback: any voice with "female" in the name
-  _voice = voices.find(v => /female/i.test(v.name))
-        || voices.find(v => v.lang.startsWith('en-'))
-        || voices[0]
+  return parts.filter(Boolean)
 }
 
-if (ttsSupported) {
-  _pickVoice()
-  window.speechSynthesis.onvoiceschanged = _pickVoice
+function _buildChunks(newsList, regionLabel) {
+  const chunks = []
+  chunks.push({
+    text: `Good day. Here are today's top${regionLabel} news stories.`,
+    storyIdx: -1,
+  })
+  newsList.forEach((item, i) => {
+    chunks.push({ text: `Story ${i + 1}. ${item.title}.`, storyIdx: i })
+    _splitText(item.summary || '', 280).forEach(part =>
+      chunks.push({ text: part, storyIdx: i })
+    )
+  })
+  chunks.push({ text: 'That is all for now. Stay informed.', storyIdx: -1 })
+  return chunks
 }
 
-// ── Alert words — read with a slight slowdown + pitch lift ───────────────────
-const ALERT_WORDS = new Set([
-  'breaking', 'urgent', 'alert', 'exclusive', 'developing',
-  'war', 'conflict', 'attack', 'attacked', 'killed', 'dead', 'death', 'deaths',
-  'bomb', 'bombing', 'explosion', 'exploded', 'strike', 'airstrike', 'missile',
-  'troops', 'invasion', 'invaded', 'ceasefire', 'hostage', 'hostages', 'shooting',
-  'massacre', 'genocide', 'casualties',
-  'crisis', 'emergency', 'disaster', 'catastrophe', 'collapse', 'collapsed',
-  'devastated', 'devastating', 'destroyed',
-  'arrested', 'detained', 'indicted', 'impeached', 'sanctions', 'banned',
-  'convicted', 'sentenced', 'coup', 'protest', 'protests',
-  'historic', 'unprecedented', 'record', 'worst', 'deadliest', 'largest', 'breakthrough',
-  'warning', 'threat', 'threatened', 'danger', 'dangerous', 'critical',
-  'severe', 'major', 'nuclear', 'pandemic', 'epidemic',
-])
+function _fetchChunk(text) {
+  return api.post('/tts', { text }, { responseType: 'blob', timeout: 90_000 })
+    .then(r => r.data).catch(() => null)
+}
 
-function _segments(text) {
-  const pattern = new RegExp(`\\b(${[...ALERT_WORDS].join('|')})\\b`, 'gi')
-  const out = []
-  let last = 0, m
-  while ((m = pattern.exec(text)) !== null) {
-    if (m.index > last) out.push({ text: text.slice(last, m.index), alert: false })
-    out.push({ text: m[0], alert: true })
-    last = m.index + m[0].length
+function _ensureAudio() {
+  if (!audioEl) {
+    audioEl = new Audio()
+    // silent WAV activates element under Safari autoplay policy
+    audioEl.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='
+    const p = audioEl.play(); if (p) p.catch(() => {})
+    audioEl.pause()
+    audioEl.src = ''
   }
-  if (last < text.length) out.push({ text: text.slice(last), alert: false })
-  return out
+  return audioEl
 }
 
-function _utter(text, rate = 0.82, pitch = 1.05) {
+function _playBlob(blob, idx) {
   return new Promise(resolve => {
-    if (!text.trim()) { resolve(); return }
-    const u = new SpeechSynthesisUtterance(text)
-    u.rate  = rate
-    u.pitch = pitch
-    if (_voice) u.voice = _voice
-    u.onend   = resolve
-    u.onerror = resolve
-    window.speechSynthesis.speak(u)
+    resolveChunk = resolve
+    const el = _ensureAudio()
+    const url = URL.createObjectURL(blob)
+    currentBlobUrl = url
+    el.src = url
+    el.ontimeupdate = () => {
+      if (!el.duration) return
+      ttsProgress.value = (idx + el.currentTime / el.duration) / ttsTotalChunks.value
+    }
+    const done = () => {
+      URL.revokeObjectURL(url)
+      if (currentBlobUrl === url) currentBlobUrl = null
+      el.ontimeupdate = el.onended = el.onerror = null
+      resolveChunk = null
+      resolve()
+    }
+    el.onended = done
+    el.onerror = done
+    el.play().catch(done)
   })
 }
 
-// Silent pause between utterances (ms)
-function _pause(ms = 450) {
-  return new Promise(resolve => setTimeout(resolve, ms))
+function _cancelCurrent() {
+  if (audioEl) { audioEl.pause(); audioEl.src = '' }
+  if (currentBlobUrl) { URL.revokeObjectURL(currentBlobUrl); currentBlobUrl = null }
+  if (resolveChunk) { resolveChunk(); resolveChunk = null }
 }
 
-// Speak text at baseRate/basePitch; alert words slow down further for emphasis
-async function _speakRich(text, baseRate = 0.82, basePitch = 1.05) {
-  for (const seg of _segments(text)) {
-    if (!speaking.value) break
-    // Alert words: drop rate by 0.12 and raise pitch — clearly weighted
-    const rate  = seg.alert ? Math.max(0.64, baseRate - 0.12) : baseRate
-    const pitch = seg.alert ? basePitch + 0.10 : basePitch
-    await _utter(seg.text, rate, pitch)
+async function _runFrom(start, session) {
+  for (let i = start; i < ttsTotalChunks.value; i++) {
+    if (session !== sessionId) return
+    ttsChunkIdx.value = i
+    const si = chunkData[i]?.storyIdx ?? -1
+    if (si >= 0) {
+      activeIdx.value = si
+      document.getElementById(`news-item-${si}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    } else {
+      activeIdx.value = -1
+    }
+    ttsState.value = 'loading'
+    if (!chunkFetches[i]) chunkFetches[i] = _fetchChunk(chunkData[i].text)
+    const next = i + 1
+    if (next < ttsTotalChunks.value && !chunkFetches[next])
+      chunkFetches[next] = _fetchChunk(chunkData[next].text)
+    const blob = await chunkFetches[i]
+    if (session !== sessionId) return
+    if (!blob) continue
+    ttsState.value = 'playing'
+    await _playBlob(blob, i)
+    if (session !== sessionId) return
   }
+  ttsState.value = 'idle'
+  ttsProgress.value = 0
+  ttsChunkIdx.value = 0
+  activeIdx.value = -1
+  playerOpen.value = false
 }
 
-async function toggleTTS() {
-  if (speaking.value) {
-    window.speechSynthesis.cancel()
-    speaking.value = false
-    activeIdx.value = -1
-    return
-  }
-
-  speaking.value = true
+async function openPlayer() {
+  playerOpen.value = true
+  if (ttsState.value !== 'idle') return
   const list = filtered.value
   const regionLabel = activeRegion.value === 'all' ? '' : ` ${activeRegion.value}`
-
-  // Intro — calm, unhurried welcome
-  await _utter(`Good day. Here are today's top${regionLabel} news stories.`, 0.82, 1.05)
-  await _pause(400)
-
-  for (let i = 0; i < list.length; i++) {
-    if (!speaking.value) break
-    activeIdx.value = i
-    document.getElementById(`news-item-${i}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-
-    // Story number — brief beat to set context
-    await _utter(`Story ${i + 1}.`, 0.80, 1.05)
-
-    // Headline — noticeably slower and more deliberate than body text
-    // rate 0.73 feels like a news anchor reading a bold headline
-    await _speakRich(list[i].title + '.', 0.73, 1.12)
-
-    // Meaningful pause between headline and body — gives listener time to absorb the title
-    if (!speaking.value) break
-    await _pause(600)
-
-    // Body / summary — comfortable pace for non-native English speakers
-    if (list[i].summary) {
-      await _speakRich(list[i].summary, 0.82, 1.05)
-    }
-
-    if (!speaking.value) break
-    if (i < list.length - 1) {
-      await _pause(350)
-      await _utter('Next.', 0.85, 1.05)
-      await _pause(250)
-    }
-  }
-
-  if (speaking.value) await _utter('That is all for now. Stay informed.', 0.82, 1.05)
-  speaking.value = false
-  activeIdx.value = -1
+  chunkData = _buildChunks(list, regionLabel)
+  ttsTotalChunks.value = chunkData.length
+  ttsProgress.value = 0
+  ttsChunkIdx.value = 0
+  chunkFetches = new Array(chunkData.length).fill(null)
+  _ensureAudio()
+  chunkFetches[0] = _fetchChunk(chunkData[0].text)
+  if (chunkData.length > 1) chunkFetches[1] = _fetchChunk(chunkData[1].text)
+  ttsState.value = 'loading'
+  const session = ++sessionId
+  await _runFrom(0, session)
 }
 
-// Stop TTS when region changes or user navigates away
-watch(activeRegion, () => {
-  if (speaking.value) { window.speechSynthesis.cancel(); speaking.value = false; activeIdx.value = -1 }
-})
-onUnmounted(() => { window.speechSynthesis.cancel() })
+function togglePlayPause() {
+  if (!audioEl) return
+  if (ttsState.value === 'playing') { audioEl.pause(); ttsState.value = 'paused' }
+  else if (ttsState.value === 'paused') { audioEl.play(); ttsState.value = 'playing' }
+}
+
+function stopPlayback() {
+  sessionId++
+  _cancelCurrent()
+  ttsState.value = 'idle'
+  ttsProgress.value = 0
+  ttsChunkIdx.value = 0
+  activeIdx.value = -1
+  playerOpen.value = false
+}
+
+watch(activeRegion, () => { if (playerOpen.value) stopPlayback() })
+onUnmounted(() => { sessionId++; _cancelCurrent(); if (audioEl) { audioEl.src = ''; audioEl = null } })
 
 // ── Regions / colours ────────────────────────────────────────────────────────
 const REGIONS = [
@@ -240,7 +247,7 @@ onMounted(load)
           </span>
         </p>
 
-        <!-- Region tabs + TTS button in one flex row -->
+        <!-- Region tabs + Listen button -->
         <div class="flex flex-wrap items-center gap-2 mt-6">
           <button
             v-for="r in REGIONS" :key="r.key"
@@ -253,24 +260,60 @@ onMounted(load)
             {{ r.flag }} {{ r.label }}
           </button>
 
-          <!-- TTS button — pushed to the end of the same row -->
-          <button v-if="ttsSupported && filtered.length"
-            @click="toggleTTS"
-            class="ml-auto flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold transition-all"
-            :class="speaking
-              ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-lg shadow-rose-900/40'
-              : 'bg-white/10 hover:bg-white/20 text-white border border-white/20'"
+          <!-- Listen button — only shown when player is closed -->
+          <button v-if="!playerOpen && filtered.length"
+            @click="openPlayer"
+            class="ml-auto flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all"
           >
-            <span v-if="speaking" class="flex items-end gap-0.5 h-4">
-              <span class="w-0.5 bg-white rounded-full animate-[bounce_0.6s_ease-in-out_infinite]" style="height:60%"></span>
-              <span class="w-0.5 bg-white rounded-full animate-[bounce_0.6s_ease-in-out_0.15s_infinite]" style="height:100%"></span>
-              <span class="w-0.5 bg-white rounded-full animate-[bounce_0.6s_ease-in-out_0.3s_infinite]" style="height:70%"></span>
-              <span class="w-0.5 bg-white rounded-full animate-[bounce_0.6s_ease-in-out_0.1s_infinite]" style="height:40%"></span>
-            </span>
-            <svg v-else class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
               <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
             </svg>
-            {{ speaking ? 'Stop' : 'Listen to all' }}
+            Listen to all
+          </button>
+        </div>
+
+        <!-- Player bar — shown while TTS is active -->
+        <div v-if="playerOpen" class="mt-3 flex items-center gap-3 bg-white/10 rounded-xl px-4 py-2.5 border border-white/10">
+          <!-- Animated waveform bars -->
+          <div class="flex items-end gap-0.5 h-4 flex-shrink-0" aria-hidden="true">
+            <span v-for="(h, i) in [60,100,70,40]" :key="i"
+              class="w-0.5 rounded-full transition-all"
+              :class="ttsState === 'playing' ? 'bg-white animate-[bounce_0.6s_ease-in-out_infinite]' : 'bg-white/40'"
+              :style="ttsState === 'playing' ? `height:${h}%; animation-delay:${i * 0.15}s` : 'height:4px'">
+            </span>
+          </div>
+          <!-- Progress bar -->
+          <div class="flex-1 h-1 bg-white/20 rounded-full overflow-hidden">
+            <div class="h-full bg-white rounded-full transition-all duration-200"
+              :style="`width:${Math.round(ttsProgress * 100)}%`"></div>
+          </div>
+          <!-- Chunk counter -->
+          <span class="text-xs text-white/60 flex-shrink-0 tabular-nums">
+            {{ ttsChunkIdx + 1 }}/{{ ttsTotalChunks }}
+          </span>
+          <!-- Pause / Resume -->
+          <button @click="ttsState === 'loading' ? null : togglePlayPause()"
+            class="flex items-center justify-center w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex-shrink-0"
+            :class="ttsState === 'loading' ? 'cursor-wait opacity-50' : ''"
+            :title="ttsState === 'playing' ? 'Pause' : 'Resume'">
+            <svg v-if="ttsState === 'loading'" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+            <svg v-else-if="ttsState === 'playing'" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+            </svg>
+            <svg v-else class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z"/>
+            </svg>
+          </button>
+          <!-- Stop -->
+          <button @click="stopPlayback"
+            class="flex items-center justify-center w-7 h-7 rounded-lg bg-white/10 hover:bg-rose-500/80 text-white transition-colors flex-shrink-0"
+            title="Stop">
+            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+              <rect x="4" y="4" width="16" height="16" rx="2"/>
+            </svg>
           </button>
         </div>
       </div>
@@ -354,7 +397,7 @@ onMounted(load)
             </div>
 
             <!-- CTA -->
-            <div class="mt-4 flex items-center gap-3">
+            <div class="mt-4">
               <a
                 :href="item.sourceUrl"
                 target="_blank"
@@ -366,18 +409,6 @@ onMounted(load)
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                 </svg>
               </a>
-              <!-- Per-item listen button -->
-              <button v-if="ttsSupported"
-                @click="activeIdx === idx ? toggleTTS() : (toggleTTS().then ? null : null, activeRegion = activeRegion)"
-                class="text-xs text-gray-400 hover:text-rose-500 transition-colors flex items-center gap-1"
-                :class="activeIdx === idx ? 'text-rose-500' : ''"
-                :title="activeIdx === idx ? 'Stop' : 'Listen to this story'"
-              >
-                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
-                </svg>
-                {{ activeIdx === idx ? 'Reading…' : 'Listen' }}
-              </button>
             </div>
           </div>
         </article>
