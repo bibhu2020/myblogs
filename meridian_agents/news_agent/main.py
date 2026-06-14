@@ -17,12 +17,7 @@ from .tools import fetch_region_news, save_news
 
 _TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-_REGION_QUERIES = [
-    ("world",  "top world news when:1d",          10),
-    ("usa",    "top USA America news when:1d",     10),
-    ("india",  "top India news when:1d",           10),
-    ("odisha", "Odisha news when:2d",              10),
-]
+_REGIONS = ["world", "usa", "india", "odisha"]
 
 _INSTRUCTIONS = """\
 You are the Meridian News Agent. You have been given a batch of freshly-fetched news
@@ -80,11 +75,11 @@ def _build_agent() -> Agent:
 
 
 def _gather_articles() -> list[dict]:
-    """Run all 4 region searches before starting the agent."""
-    print("🔍 Searching news (all regions)...")
+    """Fetch from direct RSS feeds for all 4 regions before starting the agent."""
+    print("🔍 Fetching news feeds (all regions)...")
     all_articles = []
-    for region, query, max_r in _REGION_QUERIES:
-        articles = fetch_region_news(region, query, max_results=max_r)
+    for region in _REGIONS:
+        articles = fetch_region_news(region, max_results=10)
         all_articles.extend(articles)
     print(f"   Total articles fetched: {len(all_articles)}\n")
     return all_articles

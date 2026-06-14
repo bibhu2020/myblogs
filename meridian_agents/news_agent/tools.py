@@ -1,7 +1,7 @@
 """Tools and search helpers for the Meridian News Agent."""
 import json
 import re
-import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
 
 import feedparser
@@ -10,23 +10,47 @@ from agents import function_tool
 
 from .publisher import save_news_items as _save
 
-_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; MeridianBot/1.0)"}
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+}
+
+# Per-region list of direct RSS feeds (real URLs, no Google wrappers)
+_REGION_FEEDS: dict[str, list[tuple[str, str]]] = {
+    "world": [
+        ("BBC World",   "https://feeds.bbci.co.uk/news/world/rss.xml"),
+        ("CNN",         "http://rss.cnn.com/rss/edition.rss"),
+        ("The Guardian","https://www.theguardian.com/world/rss"),
+        ("Al Jazeera",  "https://www.aljazeera.com/xml/rss/all.xml"),
+    ],
+    "usa": [
+        ("BBC US & Canada", "https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml"),
+        ("CNN",             "http://rss.cnn.com/rss/edition_us.rss"),
+        ("NPR",             "https://feeds.npr.org/1001/rss.xml"),
+    ],
+    "india": [
+        ("NDTV",       "https://feeds.feedburner.com/ndtvnews-india-news"),
+        ("Times of India", "https://timesofindia.indiatimes.com/rssfeedstopstories.cms"),
+        ("The Hindu",  "https://www.thehindu.com/news/national/feeder/default.rss"),
+    ],
+    "odisha": [
+        ("OTV",        "https://odishatv.in/feed"),
+        ("Pragativadi","https://pragativadi.com/feed"),
+        ("The Hindu Odisha", "https://www.thehindu.com/news/national/other-states/feeder/default.rss"),
+    ],
+}
 
 
-def _parse_gnews_date(date_str: str) -> str | None:
-    """Parse RFC 2822 date from Google News RSS into ISO format."""
-    try:
-        import email.utils
-        ts = email.utils.parsedate_to_datetime(date_str)
-        return ts.isoformat()
-    except Exception:
-        return date_str or None
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
-
-def _is_within_hours(date_str: str | None, hours: int = 48) -> bool:
-    """Return True if the date_str is within the last `hours` hours."""
+def _is_within_hours(date_str: str | None, hours: int = 36) -> bool:
     if not date_str:
-        return True  # unknown date — keep it
+        return True
     try:
         import email.utils
         ts = email.utils.parsedate_to_datetime(date_str)
@@ -36,60 +60,136 @@ def _is_within_hours(date_str: str | None, hours: int = 48) -> bool:
         return True
 
 
-def _extract_og_image(url: str, timeout: int = 5) -> str | None:
-    """Try to fetch og:image from the article page."""
+def _rss_image(entry) -> str | None:
+    """Extract image URL from feedparser entry (media:content / enclosure / media:thumbnail)."""
+    mc = getattr(entry, "media_content", None) or []
+    if mc:
+        return mc[0].get("url")
+    enc = getattr(entry, "enclosures", None) or []
+    for e in enc:
+        if e.get("type", "").startswith("image"):
+            return e.get("href") or e.get("url")
+    mt = getattr(entry, "media_thumbnail", None) or []
+    if mt:
+        return mt[0].get("url")
+    return None
+
+
+def _fetch_og_image(url: str, timeout: int = 8) -> str | None:
+    """Fetch og:image / twitter:image from an article page."""
     try:
-        resp = requests.get(url, headers=_HEADERS, timeout=timeout, allow_redirects=True)
-        match = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\'](https?://[^"\']+)["\']', resp.text)
-        if not match:
-            match = re.search(r'<meta[^>]+content=["\'](https?://[^"\']+)["\'][^>]+property=["\']og:image["\']', resp.text)
-        return match.group(1) if match else None
+        resp = requests.get(url, headers=_HEADERS, timeout=timeout,
+                            allow_redirects=True)
+        if resp.status_code != 200:
+            return None
+        html = resp.text
+        for pattern in [
+            r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\'](https?://[^"\'> ]+)',
+            r'<meta[^>]+content=["\'](https?://[^"\'> ]+)[^>]+property=["\']og:image["\']',
+            r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\'](https?://[^"\'> ]+)',
+            r'<meta[^>]+content=["\'](https?://[^"\'> ]+)[^>]+name=["\']twitter:image["\']',
+        ]:
+            m = re.search(pattern, html, re.IGNORECASE)
+            if m:
+                return m.group(1)
+        return None
     except Exception:
         return None
 
 
-def fetch_region_news(region: str, query: str, max_results: int = 10) -> list[dict]:
-    """Search Google News RSS for a region. Articles within 48h preferred; falls back to 7d."""
-    encoded = urllib.parse.quote(query)
-    url = f"https://news.google.com/rss/search?q={encoded}&hl=en-US&gl=US&ceid=US:en"
+def _parse_feed(source_name: str, feed_url: str, region: str) -> list[dict]:
+    """Parse one RSS feed and return normalised article dicts."""
+    try:
+        feed = feedparser.parse(feed_url)
+        articles = []
+        for e in feed.entries:
+            title = e.get("title", "").strip()
+            url = e.get("link", "")
+            if not title or not url:
+                continue
+            articles.append({
+                "title": title,
+                "url": url,
+                "body": re.sub(r"<[^>]+>", " ", e.get("summary", "")).strip(),
+                "image": _rss_image(e),
+                "date": e.get("published", ""),
+                "source": source_name,
+                "region": region,
+            })
+        return articles
+    except Exception:
+        return []
 
-    feed = feedparser.parse(url)
-    entries = feed.entries[:max_results * 2]  # fetch extra, then filter
 
-    articles = []
-    for e in entries:
-        pub_date = e.get("published", "")
-        # Google News wraps source articles — extract the real URL from the link
-        link = e.get("link", "")
-        source = e.get("source", {}).get("title", "") if hasattr(e.get("source", ""), "get") else ""
-        title = e.get("title", "")
-        # Strip " - Source Name" suffix Google appends to titles
-        if source and title.endswith(f" - {source}"):
-            title = title[: -len(f" - {source}")]
+# ── Public search function (called from main.py) ─────────────────────────────
 
-        # Try media:content for thumbnail, else None (agent will handle)
-        image = None
-        if hasattr(e, "media_content") and e.media_content:
-            image = e.media_content[0].get("url")
+def fetch_region_news(region: str, _query: str = "", max_results: int = 10) -> list[dict]:
+    """Aggregate articles from multiple direct RSS feeds for a region."""
+    feeds = _REGION_FEEDS.get(region, [])
+    all_articles: list[dict] = []
 
-        articles.append({
-            "title": title.strip(),
-            "url": link,
-            "body": e.get("summary", ""),
-            "image": image,
-            "date": pub_date,
-            "source": source,
-            "region": region,
-        })
+    # Fetch all feeds in parallel
+    with ThreadPoolExecutor(max_workers=len(feeds)) as pool:
+        futures = {pool.submit(_parse_feed, name, url, region): name
+                   for name, url in feeds}
+        for future in as_completed(futures):
+            all_articles.extend(future.result())
 
-    # Prefer articles within 36h; fall back to all if fewer than 3 fresh ones
-    fresh = [a for a in articles if _is_within_hours(a["date"], hours=36)]
-    chosen = fresh if len(fresh) >= 3 else articles
+    # Deduplicate by title similarity (keep first seen)
+    seen: set[str] = set()
+    unique = []
+    for a in all_articles:
+        key = re.sub(r"[^a-z0-9]", "", a["title"].lower())[:60]
+        if key not in seen:
+            seen.add(key)
+            unique.append(a)
+
+    # Sort newest-first by parsed date
+    def _sort_key(a):
+        try:
+            import email.utils
+            return email.utils.parsedate_to_datetime(a["date"])
+        except Exception:
+            return datetime.min.replace(tzinfo=timezone.utc)
+
+    unique.sort(key=_sort_key, reverse=True)
+
+    # Prefer fresh (36h); fall back to all
+    fresh = [a for a in unique if _is_within_hours(a["date"], hours=36)]
+    chosen = fresh if len(fresh) >= 3 else unique
     window = "36h" if chosen is fresh else "all"
 
     result = chosen[:max_results]
-    print(f"   [{region:6}]  {len(result)} articles  (window={window})")
+    with_img = sum(1 for a in result if a["image"])
+    print(f"   [{region:6}]  {len(result)} articles  "
+          f"(window={window}, {with_img} with RSS image)")
     return result
+
+
+# ── Image enrichment (run after agent selects articles) ──────────────────────
+
+def _enrich_images(items: list[dict]) -> list[dict]:
+    """Fetch og:image for items that have no imageUrl yet."""
+    need = [(i, it) for i, it in enumerate(items) if not it.get("imageUrl")]
+    if not need:
+        return items
+
+    print(f"   🖼  Fetching og:image for {len(need)} articles…")
+    results: dict[int, str | None] = {}
+
+    with ThreadPoolExecutor(max_workers=len(need)) as pool:
+        futures = {pool.submit(_fetch_og_image, it["sourceUrl"]): i
+                   for i, it in need}
+        for f in as_completed(futures):
+            results[futures[f]] = f.result()
+
+    enriched = [dict(it) for it in items]
+    for i, _ in need:
+        enriched[i]["imageUrl"] = results.get(i)
+        status = "✓" if results.get(i) else "✗"
+        print(f"      {status} {enriched[i]['title'][:55]}")
+
+    return enriched
 
 
 # ── Save tool (called by the agent) ──────────────────────────────────────────
@@ -98,22 +198,28 @@ def fetch_region_news(region: str, query: str, max_results: int = 10) -> list[di
 def save_news(items_json: str) -> str:
     """Save the final curated list of news items to the Meridian platform.
 
+    Images missing from RSS feeds are fetched automatically from each
+    article's source page before saving.
+
     Args:
         items_json: JSON array of exactly 10 news items. Each item must have:
             - title (str): Headline
             - summary (str): ~100-word neutral journalistic summary
-            - sourceUrl (str): Link to the original article
+            - sourceUrl (str): Direct article URL (from the search results)
             - region (str): 'world' | 'usa' | 'india' | 'odisha'
-            - imageUrl (str | null): Thumbnail image URL
+            - imageUrl (str | null): Image URL from the search result, or null
             - sourceName (str): Publication name
-            - publishedAt (str | null): ISO date string
+            - publishedAt (str | null): date field from the search result
 
     Returns:
         JSON result from the platform API.
     """
     try:
         items = json.loads(items_json)
+        items = _enrich_images(items)
         result = _save(items)
+        got = sum(1 for it in items if it.get("imageUrl"))
+        print(f"   💾  Saved {len(items)} items ({got} with thumbnail)")
         return json.dumps(result)
     except Exception as exc:
         return json.dumps({"error": str(exc)})
