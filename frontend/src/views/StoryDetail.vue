@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref, nextTick } from 'vue'
+import { onMounted, onUnmounted, ref, nextTick } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import Navbar from '../components/Navbar.vue'
 import Footer from '../components/Footer.vue'
@@ -176,6 +176,12 @@ function closePlayer() {
   playerOpen.value = false
 }
 // ── end TTS ───────────────────────────────────────────────────────────────────
+
+onUnmounted(() => {
+  sessionId++
+  cancelCurrentChunk()
+  if (audioEl) { audioEl.src = ''; audioEl = null }
+})
 
 onMounted(async () => {
   try {

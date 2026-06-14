@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref, nextTick, computed } from 'vue'
+import { onMounted, onUnmounted, ref, nextTick, computed } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { useBlogStore } from '../stores/blog'
 import { useLayoutStore } from '../stores/layout'
@@ -238,6 +238,12 @@ function applyHighlighting() {
     })
   })
 }
+
+onUnmounted(() => {
+  sessionId++
+  cancelCurrentChunk()
+  if (audioEl) { audioEl.src = ''; audioEl = null }
+})
 
 onMounted(async () => {
   try {
