@@ -14,7 +14,7 @@
     "@tiptap/extension-code-block-lowlight": "^3.26.1",
     "@tiptap/extension-image": "^3.23.6",
     "@tiptap/extension-link": "^3.23.6",
-    "@tiptap/extension-placeholder": "^3.23.6",
+    "@tiptap/extension-placeholder": "^3.26.1",
     "@tiptap/starter-kit": "^3.23.6",
     "@tiptap/vue-3": "^3.23.6",
     "@vueuse/core": "^14.3.0",
