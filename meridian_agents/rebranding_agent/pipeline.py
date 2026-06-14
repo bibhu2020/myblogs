@@ -33,11 +33,20 @@ from .tools import (
     commit_and_push,
 )
 
-# ── Publisher ─────────────────────────────────────────────────────────────────
-publisher_agent: Agent[RebrandCtx] = Agent(
-    name="PublisherAgent",
-    model="gpt-4o",
-    instructions="""\
+
+def build_pipeline(model: object) -> Agent:
+    """Build the full agent pipeline and return the entry-point IdeationAgent.
+
+    Args:
+        model: A model name string (e.g. "gpt-4o-mini") or an OpenAIChatCompletionsModel
+               instance for custom endpoints (e.g. Gemini via OpenAI-compatible API).
+    """
+
+    # ── Publisher ─────────────────────────────────────────────────────────────
+    publisher_agent: Agent[RebrandCtx] = Agent(
+        name="PublisherAgent",
+        model=model,
+        instructions="""\
 You are the Meridian PublisherAgent. Your sole job is to ship the approved rebrand to GitHub.
 
 SEQUENCE
@@ -49,14 +58,14 @@ SEQUENCE
 
 Do NOT call any other tools. Do NOT modify files.
 """,
-    tools=[commit_and_push],
-)
+        tools=[commit_and_push],
+    )
 
-# ── Tester ────────────────────────────────────────────────────────────────────
-tester_agent: Agent[RebrandCtx] = Agent(
-    name="TesterAgent",
-    model="gpt-4o",
-    instructions="""\
+    # ── Tester ────────────────────────────────────────────────────────────────
+    tester_agent: Agent[RebrandCtx] = Agent(
+        name="TesterAgent",
+        model=model,
+        instructions="""\
 You are the Meridian TesterAgent. You validate that the patched code actually builds
 and passes structural quality checks before it is published.
 
@@ -78,15 +87,15 @@ RULES
 • Maximum one round-trip back to CodingAgent per issue type — if it still fails after one fix,
   report it as a fatal error rather than looping indefinitely.
 """,
-    tools=[verify_build, run_structural_tests],
-    handoffs=[],   # set below after CodingAgent is defined
-)
+        tools=[verify_build, run_structural_tests],
+        handoffs=[],   # set below after CodingAgent is defined
+    )
 
-# ── Reviewer ──────────────────────────────────────────────────────────────────
-reviewer_agent: Agent[RebrandCtx] = Agent(
-    name="ReviewerAgent",
-    model="gpt-4o",
-    instructions="""\
+    # ── Reviewer ──────────────────────────────────────────────────────────────
+    reviewer_agent: Agent[RebrandCtx] = Agent(
+        name="ReviewerAgent",
+        model=model,
+        instructions="""\
 You are the Meridian ReviewerAgent. You check every patched file for SEO and ADA/WCAG
 compliance before the code is tested or published.
 
@@ -112,15 +121,15 @@ RULES
 • Keep track of revision_cycles — if context shows review_cycles ≥ 3, report
   a fatal escalation instead of looping again.
 """,
-    tools=[review_seo_ada],
-    handoffs=[],   # set below
-)
+        tools=[review_seo_ada],
+        handoffs=[],   # set below
+    )
 
-# ── Coding ────────────────────────────────────────────────────────────────────
-coding_agent: Agent[RebrandCtx] = Agent(
-    name="CodingAgent",
-    model="gpt-4o",
-    instructions="""\
+    # ── Coding ────────────────────────────────────────────────────────────────
+    coding_agent: Agent[RebrandCtx] = Agent(
+        name="CodingAgent",
+        model=model,
+        instructions="""\
 You are the Meridian CodingAgent. You translate the rebrand plan into actual file changes
 and fix any specific code issues flagged by the ReviewerAgent or TesterAgent.
 
@@ -149,15 +158,15 @@ RULES
 • When fixing alt text: add alt="<descriptive alt>" to <img> tags.
 • Do NOT call patch_frontend_files() again when doing targeted fixes — it overwrites everything.
 """,
-    tools=[patch_frontend_files, read_frontend_file, write_frontend_file],
-    handoffs=[],   # set below
-)
+        tools=[patch_frontend_files, read_frontend_file, write_frontend_file],
+        handoffs=[],   # set below
+    )
 
-# ── Ideation ──────────────────────────────────────────────────────────────────
-ideation_agent: Agent[RebrandCtx] = Agent(
-    name="IdeationAgent",
-    model="gpt-4o",
-    instructions="""\
+    # ── Ideation ──────────────────────────────────────────────────────────────
+    ideation_agent: Agent[RebrandCtx] = Agent(
+        name="IdeationAgent",
+        model=model,
+        instructions="""\
 You are the Meridian IdeationAgent — the creative director of the monthly rebrand pipeline.
 
 SEQUENCE (first run)
@@ -189,13 +198,15 @@ RULES
 • The context already contains chosen_theme and world_events from the first run.
 • Do not modify files. Do not call coding or testing tools.
 """,
-    tools=[check_schedule, research_world_events, generate_rebrand_plan, revise_rebrand_plan],
-    handoffs=[],   # set below
-)
+        tools=[check_schedule, research_world_events, generate_rebrand_plan, revise_rebrand_plan],
+        handoffs=[],   # set below
+    )
 
-# ── Wire up handoffs (after all agents are defined) ───────────────────────────
-ideation_agent.handoffs  = [coding_agent]
-coding_agent.handoffs    = [reviewer_agent]
-reviewer_agent.handoffs  = [ideation_agent, coding_agent, tester_agent]
-tester_agent.handoffs    = [coding_agent, publisher_agent]
-publisher_agent.handoffs = []
+    # ── Wire up handoffs ──────────────────────────────────────────────────────
+    ideation_agent.handoffs  = [coding_agent]
+    coding_agent.handoffs    = [reviewer_agent]
+    reviewer_agent.handoffs  = [ideation_agent, coding_agent, tester_agent]
+    tester_agent.handoffs    = [coding_agent, publisher_agent]
+    publisher_agent.handoffs = []
+
+    return ideation_agent

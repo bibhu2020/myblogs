@@ -14,29 +14,50 @@ from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.base import TaskResult
 from autogen_agentchat.conditions import MaxMessageTermination
 from autogen_agentchat.teams import RoundRobinGroupChat
+from autogen_core.models import ModelInfo
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 
 from . import tools
 
-MODEL = os.getenv("MAINTENANCE_MODEL") or "gpt-4o"
+_GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
-_AUTOGEN_KNOWN_MODELS = {
+_OPENAI_KNOWN_MODELS = {
     "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4",
     "gpt-3.5-turbo", "o1", "o1-mini", "o1-preview", "o3", "o3-mini",
 }
 
+_GEMINI_MODEL_INFO: ModelInfo = {
+    "vision": False,
+    "function_calling": True,
+    "json_output": True,
+    "family": "unknown",
+}
+
 
 def _make_client() -> OpenAIChatCompletionClient:
-    if MODEL in _AUTOGEN_KNOWN_MODELS:
-        return OpenAIChatCompletionClient(model=MODEL)
-    from autogen_core.models import ModelInfo
+    """Gemini primary → gpt-4o-mini fallback."""
+    if _GOOGLE_API_KEY:
+        print(f"[model] Gemini primary: {_GEMINI_MODEL}")
+        return OpenAIChatCompletionClient(
+            model=_GEMINI_MODEL,
+            api_key=_GOOGLE_API_KEY,
+            base_url=_GEMINI_BASE_URL,
+            model_info=_GEMINI_MODEL_INFO,
+        )
+    # Fallback: OpenAI
+    fallback = os.getenv("MAINTENANCE_MODEL") or "gpt-4o-mini"
+    print(f"[model] OpenAI fallback: {fallback}")
+    if fallback in _OPENAI_KNOWN_MODELS:
+        return OpenAIChatCompletionClient(model=fallback)
     info: ModelInfo = {
         "vision": False,
         "function_calling": True,
         "json_output": True,
         "family": "gpt-4o",
     }
-    return OpenAIChatCompletionClient(model=MODEL, model_info=info)
+    return OpenAIChatCompletionClient(model=fallback, model_info=info)
 
 
 async def _run_agent(agent: AssistantAgent, task: str, max_turns: int = 80) -> str:
