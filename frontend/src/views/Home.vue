@@ -6,6 +6,7 @@ import { useLayoutStore } from '../stores/layout'
 import Navbar from '../components/Navbar.vue'
 import Footer from '../components/Footer.vue'
 import PostCard from '../components/PostCard.vue'
+import WeatherWidget from '../components/WeatherWidget.vue'
 import { format } from 'date-fns'
 
 const blog = useBlogStore()
@@ -112,6 +113,9 @@ function ago(d) {
               <div class="text-xs text-gray-400 mt-1">{{ ago(post.createdAt) }} · {{ post.readTime }} min read</div>
             </div>
           </RouterLink>
+
+          <!-- Weather widget -->
+          <WeatherWidget variant="light" />
 
           <!-- Newsletter -->
           <div class="bg-gradient-to-br from-primary-600 to-primary-800 rounded-2xl p-6 text-white">
@@ -277,6 +281,9 @@ function ago(d) {
             <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400">More Stories</h2>
           </div>
           <PostCard v-for="post in morePosts.slice(0, 4)" :key="post.id" :post="post" />
+
+          <!-- Weather widget (dark) -->
+          <WeatherWidget variant="dark" class="mt-2" />
 
           <!-- Newsletter (dark variant) -->
           <div class="mt-6 bg-[#162236] border border-violet-700/40 rounded-2xl p-6">
