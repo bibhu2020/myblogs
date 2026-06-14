@@ -6,7 +6,38 @@ on:
       - main
 
 jobs:
+  build-check:
+    name: Verify npm ci + frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: npm ci — auth-service
+        run: npm ci --prefix auth-service
+
+      - name: npm ci — blog-service
+        run: npm ci --prefix blog-service
+
+      - name: npm ci — media-service
+        run: npm ci --prefix media-service
+
+      - name: npm ci — api-gateway
+        run: npm ci --prefix api-gateway
+
+      - name: npm ci + build — frontend
+        run: |
+          npm ci --prefix frontend
+          npm --prefix frontend run build
+
   deploy:
+    name: Deploy to Hugging Face
+    needs: build-check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

@@ -919,12 +919,12 @@ def revert_file(file_path: str) -> str:
 
 
 def build_nodejs_service(service: str) -> str:
-    """Install deps and run 'npm run build' for a specific Node.js / NestJS service.
+    """Run 'npm ci' then 'npm run build' for a specific Node.js / NestJS service.
 
-    Covers all five services: api-gateway, auth-service, blog-service,
-    media-service, and frontend.  Each build is self-contained — it runs
-    'npm install --prefer-offline' first so stale node_modules after a
-    Dependabot merge are handled automatically.
+    Uses 'npm ci' (same as the production Dockerfile) so peer-dependency
+    conflicts that would break the Hugging Face build are caught here first.
+    If 'npm ci' fails due to a missing or out-of-sync lock file the tool falls
+    back to 'npm install' and regenerates the lock file automatically.
 
     Args:
         service: One of 'frontend', 'api-gateway', 'auth-service',
@@ -944,15 +944,23 @@ def build_nodejs_service(service: str) -> str:
                            "message": f"Directory not found: {service_dir}"})
     try:
         t0 = time.time()
-        # Sync deps first (fast when already installed; catches Dependabot package.json changes)
-        install = subprocess.run(
-            ["npm", "install", "--prefer-offline"],
-            cwd=service_dir, capture_output=True, text=True, timeout=300,
-        )
+        # Use npm ci (strict, matches Dockerfile) to catch peer-dep conflicts.
+        # Fall back to npm install only when package-lock.json is absent/stale.
+        lock_file = os.path.join(service_dir, "package-lock.json")
+        if os.path.exists(lock_file):
+            install = subprocess.run(
+                ["npm", "ci"],
+                cwd=service_dir, capture_output=True, text=True, timeout=300,
+            )
+        else:
+            install = subprocess.run(
+                ["npm", "install"],
+                cwd=service_dir, capture_output=True, text=True, timeout=300,
+            )
         if install.returncode != 0:
             return json.dumps({
                 "service": service, "success": False, "verdict": "BUILD FAILED",
-                "error": f"npm install failed:\n{install.stderr[-1500:]}",
+                "error": f"npm ci failed (peer-dep conflict or lock mismatch):\n{install.stderr[-2000:]}",
             })
         # Build
         result = subprocess.run(

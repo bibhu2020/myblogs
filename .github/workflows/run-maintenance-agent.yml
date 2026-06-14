@@ -44,9 +44,9 @@ jobs:
 
       - name: Run maintenance agent
         env:
+          GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           SECRET_TOKEN_GITHUB: ${{ secrets.GITHUB_TOKEN }}
           SERVER_BASE: ${{ vars.HF_SPACE_URL }}
           GITHUB_REPO: ${{ github.repository }}
-          MAINTENANCE_MODEL: ${{ vars.MAINTENANCE_MODEL || 'gpt-4o' }}
         run: python3 -m meridian_agents.maintenance_agent
