@@ -125,8 +125,6 @@ async def run_team(repo_root: str, server_base: str) -> tuple[str, list]:
             tools=[
                 tools.list_github_prs,
                 tools.get_pr_details,
-                tools.merge_github_pr,
-                tools.close_github_pr,
                 *_BRANCH_PR_TOOLS,
                 *_CODE_TOOLS,
                 *_BUILD_TOOL,
