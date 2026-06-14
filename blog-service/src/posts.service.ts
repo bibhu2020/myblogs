@@ -130,7 +130,9 @@ export class PostsService {
       throw new Error(`Post ${id} is not pending approval (status: ${post.status})`);
     }
     post.status = PostStatus.PUBLISHED;
-    return this.postRepo.save(post);
+    const saved = await this.postRepo.save(post);
+    void this.dispatchPostDecision('approve', id);
+    return saved;
   }
 
   async reject(id: number) {
@@ -138,8 +140,39 @@ export class PostsService {
     if (post.status !== PostStatus.PENDING) {
       throw new Error(`Post ${id} is not pending approval (status: ${post.status})`);
     }
+    const title = post.title;
     await this.postRepo.remove(post);
-    return { message: `Post "${post.title}" rejected and removed.` };
+    // Fire-and-forget: triggers the resume workflow which runs media cleanup
+    void this.dispatchPostDecision('reject', id);
+    return { message: `Post "${title}" rejected and removed.` };
+  }
+
+  // Fires a repository_dispatch event to GitHub so the post-agent resume
+  // workflow can clean up media (on reject) and update the pending registry.
+  private async dispatchPostDecision(action: 'approve' | 'reject', postId: number): Promise<void> {
+    const token = process.env.SECRET_TOKEN_GITHUB;
+    const repo  = process.env.GITHUB_REPO;
+    if (!token || !repo) return;
+    try {
+      const resp = await fetch(`https://api.github.com/repos/${repo}/dispatches`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          event_type: 'post-decision',
+          client_payload: { action, post_id: postId },
+        }),
+      });
+      if (!resp.ok) {
+        const body = await resp.text();
+        console.warn(`[posts] GitHub dispatch failed (${resp.status}): ${body.slice(0, 200)}`);
+      }
+    } catch (err: any) {
+      console.warn('[posts] GitHub dispatch error:', err.message);
+    }
   }
 
   async getStats() {

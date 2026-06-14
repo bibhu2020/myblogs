@@ -1,4 +1,4 @@
-"""Entry point: python -m meridian_agents.post_agent [approve|reject|pending|schedule] [args]"""
+"""Entry point: python -m meridian_agents.post_agent [approve|reject|pending|registry-remove|schedule] [args]"""
 import sys
 import time
 
@@ -77,6 +77,18 @@ elif cmd == "schedule":
             print(f"Scheduled run failed: {err}")
         finally:
             running = False
+
+# ── registry-remove <post_id> — remove from pending JSONL without API call ────
+# Used by the on-post-decision workflow after the blog-service has already
+# handled the approve/reject; this only syncs the local pending registry.
+elif cmd == "registry-remove":
+    if len(sys.argv) < 3:
+        print("Usage: python3 -m meridian_agents.post_agent registry-remove <post_id>")
+        sys.exit(1)
+    from .main import _remove_pending
+    post_id = int(sys.argv[2])
+    _remove_pending(post_id)
+    print(f"✅ Post #{post_id} removed from pending registry.")
 
 # ── generate (default) ────────────────────────────────────────────────────────
 else:
