@@ -11,18 +11,68 @@ const loading     = ref(true)
 const activeRegion = ref('all')
 
 // ── TTS state ────────────────────────────────────────────────────────────────
-const speaking   = ref(false)
-const activeIdx  = ref(-1)
+const speaking     = ref(false)
+const activeIdx    = ref(-1)
 const ttsSupported = typeof window !== 'undefined' && 'speechSynthesis' in window
 
-function _utter(text, rate = 0.92) {
+// Words that get read slower + raised pitch to feel weighty
+const ALERT_WORDS = new Set([
+  // Breaking / urgency
+  'breaking', 'urgent', 'alert', 'exclusive', 'developing',
+  // Conflict / violence
+  'war', 'conflict', 'attack', 'attacked', 'killed', 'dead', 'death', 'deaths',
+  'bomb', 'bombing', 'explosion', 'exploded', 'strike', 'airstrike', 'missile',
+  'troops', 'invasion', 'invaded', 'ceasefire', 'hostage', 'hostages', 'shooting',
+  'massacre', 'genocide', 'casualties',
+  // Crisis
+  'crisis', 'emergency', 'disaster', 'catastrophe', 'collapse', 'collapsed',
+  'devastated', 'devastating', 'destroyed', 'destroyed',
+  // Legal / political
+  'arrested', 'detained', 'indicted', 'impeached', 'sanctions', 'banned',
+  'convicted', 'sentenced', 'coup', 'protest', 'protests',
+  // Superlatives / firsts
+  'historic', 'unprecedented', 'record', 'worst', 'deadliest', 'largest',
+  'biggest', 'first', 'breakthrough',
+  // Warnings
+  'warning', 'threat', 'threatened', 'danger', 'dangerous', 'critical',
+  'severe', 'major', 'significant', 'nuclear', 'pandemic', 'epidemic',
+])
+
+// Split text into [{text, alert}] segments at alert-word boundaries
+function _segments(text) {
+  const pattern = new RegExp(`\\b(${[...ALERT_WORDS].join('|')})\\b`, 'gi')
+  const out = []
+  let last = 0, m
+  while ((m = pattern.exec(text)) !== null) {
+    if (m.index > last) out.push({ text: text.slice(last, m.index), alert: false })
+    out.push({ text: m[0], alert: true })
+    last = m.index + m[0].length
+  }
+  if (last < text.length) out.push({ text: text.slice(last), alert: false })
+  return out
+}
+
+function _utter(text, rate = 0.82, pitch = 1.0) {
   return new Promise(resolve => {
     const u = new SpeechSynthesisUtterance(text)
-    u.rate = rate
+    u.rate  = rate
+    u.pitch = pitch
     u.onend   = resolve
     u.onerror = resolve
     window.speechSynthesis.speak(u)
   })
+}
+
+// Speak text with dramatic pauses + pitch lift on alert words
+async function _speakRich(text) {
+  for (const seg of _segments(text)) {
+    if (!speaking.value) break
+    if (seg.alert) {
+      await _utter(seg.text, 0.65, 1.15)   // slow + raised pitch = emphasis
+    } else {
+      await _utter(seg.text, 0.82, 1.0)
+    }
+  }
 }
 
 async function toggleTTS() {
@@ -36,18 +86,29 @@ async function toggleTTS() {
   speaking.value = true
   const list = filtered.value
   const regionLabel = activeRegion.value === 'all' ? '' : ` ${activeRegion.value}`
-  await _utter(`Here are today's top${regionLabel} news stories.`)
+
+  // Authoritative intro
+  await _utter(`Here are today's top${regionLabel} news stories.`, 0.78, 0.95)
 
   for (let i = 0; i < list.length; i++) {
     if (!speaking.value) break
     activeIdx.value = i
-    // Scroll card into view
     document.getElementById(`news-item-${i}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-    await _utter(`Story ${i + 1}. ${list[i].title}. ${list[i].summary || ''}`)
+
+    // Story number — deliberate, anchor-like
+    await _utter(`Story ${i + 1}.`, 0.72, 0.95)
+    // Title — slower, clearly enunciated
+    await _speakRich(list[i].title + '.')
+    // Brief pause between title and summary
+    await _utter('', 0.5)
+    // Summary — steady news-reader pace with alert-word emphasis
+    await _speakRich(list[i].summary || '')
+
     if (!speaking.value) break
-    if (i < list.length - 1) await _utter('Next.', 1.2)
+    if (i < list.length - 1) await _utter('Next story.', 0.88, 0.9)
   }
 
+  if (speaking.value) await _utter('That is all for now.', 0.78, 0.95)
   speaking.value = false
   activeIdx.value = -1
 }
