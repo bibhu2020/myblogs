@@ -120,51 +120,23 @@ onMounted(load)
     <!-- Hero -->
     <div class="bg-gradient-to-r from-slate-800 to-slate-900 text-white py-10">
       <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <div class="flex items-center gap-3 mb-1">
-              <span class="text-3xl">🗞️</span>
-              <h1 class="text-3xl font-bold tracking-tight">Today's Top News</h1>
-            </div>
-            <p class="text-slate-400 text-sm">
-              AI-curated headlines from around the world · Updated every 12 hours
-            </p>
-          </div>
-
-          <!-- Right: last-updated + TTS button -->
-          <div class="flex flex-col items-end gap-3">
-            <div v-if="lastUpdated" class="text-xs text-slate-400 flex items-center gap-1.5">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              </svg>
-              Last refreshed {{ format(new Date(lastUpdated), 'MMM d · h:mm a') }}
-            </div>
-
-            <!-- TTS button -->
-            <button v-if="ttsSupported && filtered.length"
-              @click="toggleTTS"
-              class="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all"
-              :class="speaking
-                ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-lg shadow-rose-900/40'
-                : 'bg-white/10 hover:bg-white/20 text-white border border-white/20'"
-            >
-              <!-- Animated bars when speaking -->
-              <span v-if="speaking" class="flex items-end gap-0.5 h-4">
-                <span class="w-0.5 bg-white rounded-full animate-[bounce_0.6s_ease-in-out_infinite]" style="height:60%"></span>
-                <span class="w-0.5 bg-white rounded-full animate-[bounce_0.6s_ease-in-out_0.15s_infinite]" style="height:100%"></span>
-                <span class="w-0.5 bg-white rounded-full animate-[bounce_0.6s_ease-in-out_0.3s_infinite]" style="height:70%"></span>
-                <span class="w-0.5 bg-white rounded-full animate-[bounce_0.6s_ease-in-out_0.1s_infinite]" style="height:40%"></span>
-              </span>
-              <svg v-else class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
-              </svg>
-              {{ speaking ? 'Stop' : 'Listen to all' }}
-            </button>
-          </div>
+        <!-- Title block — full width on all screens -->
+        <div class="flex items-center gap-3 mb-1">
+          <span class="text-3xl">🗞️</span>
+          <h1 class="text-3xl font-bold tracking-tight">Today's Top News</h1>
         </div>
+        <p class="text-slate-400 text-sm">
+          AI-curated headlines from around the world · Updated every 12 hours
+          <span v-if="lastUpdated" class="ml-2 inline-flex items-center gap-1">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            {{ format(new Date(lastUpdated), 'MMM d · h:mm a') }}
+          </span>
+        </p>
 
-        <!-- Region tabs -->
-        <div class="flex flex-wrap gap-2 mt-6">
+        <!-- Region tabs + TTS button in one flex row -->
+        <div class="flex flex-wrap items-center gap-2 mt-6">
           <button
             v-for="r in REGIONS" :key="r.key"
             @click="activeRegion = r.key"
@@ -174,6 +146,26 @@ onMounted(load)
               : 'bg-slate-700 text-slate-300 hover:bg-slate-600'"
           >
             {{ r.flag }} {{ r.label }}
+          </button>
+
+          <!-- TTS button — pushed to the end of the same row -->
+          <button v-if="ttsSupported && filtered.length"
+            @click="toggleTTS"
+            class="ml-auto flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold transition-all"
+            :class="speaking
+              ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-lg shadow-rose-900/40'
+              : 'bg-white/10 hover:bg-white/20 text-white border border-white/20'"
+          >
+            <span v-if="speaking" class="flex items-end gap-0.5 h-4">
+              <span class="w-0.5 bg-white rounded-full animate-[bounce_0.6s_ease-in-out_infinite]" style="height:60%"></span>
+              <span class="w-0.5 bg-white rounded-full animate-[bounce_0.6s_ease-in-out_0.15s_infinite]" style="height:100%"></span>
+              <span class="w-0.5 bg-white rounded-full animate-[bounce_0.6s_ease-in-out_0.3s_infinite]" style="height:70%"></span>
+              <span class="w-0.5 bg-white rounded-full animate-[bounce_0.6s_ease-in-out_0.1s_infinite]" style="height:40%"></span>
+            </span>
+            <svg v-else class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+            </svg>
+            {{ speaking ? 'Stop' : 'Listen to all' }}
           </button>
         </div>
       </div>
