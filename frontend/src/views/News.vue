@@ -78,7 +78,7 @@ function _segments(text) {
   return out
 }
 
-function _utter(text, rate = 0.95, pitch = 1.1) {
+function _utter(text, rate = 0.82, pitch = 1.05) {
   return new Promise(resolve => {
     if (!text.trim()) { resolve(); return }
     const u = new SpeechSynthesisUtterance(text)
@@ -91,12 +91,19 @@ function _utter(text, rate = 0.95, pitch = 1.1) {
   })
 }
 
-// Normal text at TV-anchor pace; alert words slow down just enough to land
-async function _speakRich(text) {
+// Silent pause between utterances (ms)
+function _pause(ms = 450) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+// Speak text at baseRate/basePitch; alert words slow down further for emphasis
+async function _speakRich(text, baseRate = 0.82, basePitch = 1.05) {
   for (const seg of _segments(text)) {
     if (!speaking.value) break
-    // alert: pull back to 0.80 + raise pitch slightly — feels weighted, not sluggish
-    await _utter(seg.text, seg.alert ? 0.80 : 0.95, seg.alert ? 1.18 : 1.1)
+    // Alert words: drop rate by 0.12 and raise pitch — clearly weighted
+    const rate  = seg.alert ? Math.max(0.64, baseRate - 0.12) : baseRate
+    const pitch = seg.alert ? basePitch + 0.10 : basePitch
+    await _utter(seg.text, rate, pitch)
   }
 }
 
@@ -112,22 +119,40 @@ async function toggleTTS() {
   const list = filtered.value
   const regionLabel = activeRegion.value === 'all' ? '' : ` ${activeRegion.value}`
 
-  await _utter(`Good day. Here are today's top${regionLabel} news stories.`, 0.92, 1.1)
+  // Intro — calm, unhurried welcome
+  await _utter(`Good day. Here are today's top${regionLabel} news stories.`, 0.82, 1.05)
+  await _pause(400)
 
   for (let i = 0; i < list.length; i++) {
     if (!speaking.value) break
     activeIdx.value = i
     document.getElementById(`news-item-${i}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
 
-    await _utter(`Story ${i + 1}.`, 0.88, 1.05)
-    await _speakRich(list[i].title + '.')
-    await _speakRich(list[i].summary || '')
+    // Story number — brief beat to set context
+    await _utter(`Story ${i + 1}.`, 0.80, 1.05)
+
+    // Headline — noticeably slower and more deliberate than body text
+    // rate 0.73 feels like a news anchor reading a bold headline
+    await _speakRich(list[i].title + '.', 0.73, 1.12)
+
+    // Meaningful pause between headline and body — gives listener time to absorb the title
+    if (!speaking.value) break
+    await _pause(600)
+
+    // Body / summary — comfortable pace for non-native English speakers
+    if (list[i].summary) {
+      await _speakRich(list[i].summary, 0.82, 1.05)
+    }
 
     if (!speaking.value) break
-    if (i < list.length - 1) await _utter('Next.', 1.0, 1.1)
+    if (i < list.length - 1) {
+      await _pause(350)
+      await _utter('Next.', 0.85, 1.05)
+      await _pause(250)
+    }
   }
 
-  if (speaking.value) await _utter('That is all for now. Stay informed.', 0.90, 1.1)
+  if (speaking.value) await _utter('That is all for now. Stay informed.', 0.82, 1.05)
   speaking.value = false
   activeIdx.value = -1
 }
