@@ -1,5 +1,6 @@
 """Meridian News Agent — Gemini-powered daily news aggregator."""
 import asyncio
+import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,60 +13,49 @@ from openai import AsyncOpenAI
 from agents import Agent, Runner
 from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 
-from .tools import search_news, save_news
-
-_INSTRUCTIONS = """\
-You are the Meridian News Agent. Your job is to curate 10 top news stories of the day
-across four regions and save them to the platform. You MUST call search_news() four
-separate times — once per region — before choosing any stories.
-
-MANDATORY STEPS (follow in order, do not skip any):
-
-STEP 1 — Search world news:
-  search_news(region="world", query="top world news today international breaking", max_results=6)
-
-STEP 2 — Search USA news:
-  search_news(region="usa", query="top USA news today America breaking", max_results=6)
-
-STEP 3 — Search India news:
-  search_news(region="india", query="top India news today breaking", max_results=6)
-
-STEP 4 — Search Odisha news:
-  search_news(region="odisha", query="Odisha news today Bhubaneswar state breaking", max_results=6)
-
-STEP 5 — Select exactly 10 stories with this STRICT distribution:
-  - 3 stories with region="world"
-  - 3 stories with region="usa"
-  - 2 stories with region="india"
-  - 2 stories with region="odisha"
-  Pick the most significant and recent from each batch. No duplicate topics.
-
-STEP 6 — For each selected story write a ~100-word neutral journalistic summary:
-  - Explain what happened and why it matters
-  - Do NOT start with "The"
-  - Use only facts from the search result (do not fabricate)
-
-STEP 7 — Call save_news() with a JSON array of exactly 10 items.
-Each item MUST have:
-  {
-    "title": "Headline verbatim or lightly improved",
-    "summary": "~100-word neutral summary",
-    "sourceUrl": "https://...",
-    "region": "world" | "usa" | "india" | "odisha",
-    "imageUrl": "https://... or null",
-    "sourceName": "Publication name",
-    "publishedAt": "ISO date string or null"
-  }
-
-STEP 8 — Report how many items were saved and stop.
-
-RULES:
-- You MUST call search_news() four times before selecting stories.
-- Do NOT call save_news() before completing all four searches.
-- Do NOT fabricate URLs, titles, or facts.
-"""
+from .tools import fetch_region_news, save_news
 
 _TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+_REGION_QUERIES = [
+    ("world",  "top world news when:1d",          10),
+    ("usa",    "top USA America news when:1d",     10),
+    ("india",  "top India news when:1d",           10),
+    ("odisha", "Odisha news when:2d",              10),
+]
+
+_INSTRUCTIONS = """\
+You are the Meridian News Agent. You have been given a batch of freshly-fetched news
+articles across four regions. Your job is to curate exactly 10 stories, write a crisp
+summary for each, and save them via save_news().
+
+SELECTION RULES:
+- Target: 3 world, 3 usa, 2 india, 2 odisha
+- If a region has fewer articles than needed, take what's available and
+  fill the gap from whichever region has the most articles
+- No duplicate topics across regions
+- Prefer articles with a non-null image field
+
+SUMMARY RULES:
+- Each summary: ~100 words, neutral journalistic tone
+- Explain what happened and why it matters
+- Do NOT start with "The"
+- Use only facts present in the article's title/body — do not fabricate
+
+OUTPUT:
+Call save_news() once with a JSON array of exactly 10 items, each with:
+  {
+    "title":       "<headline verbatim or lightly improved>",
+    "summary":     "<~100-word summary>",
+    "sourceUrl":   "<url from the article>",
+    "region":      "<world|usa|india|odisha>",
+    "imageUrl":    "<image field value, or null>",
+    "sourceName":  "<source field value>",
+    "publishedAt": "<date field value, or null>"
+  }
+
+After save_news() succeeds, report the count and stop. Do not call save_news() more than once.
+"""
 
 
 def _build_agent() -> Agent:
@@ -85,17 +75,29 @@ def _build_agent() -> Agent:
         name="MeridianNewsAgent",
         model=model,
         instructions=_INSTRUCTIONS,
-        tools=[search_news, save_news],
+        tools=[save_news],
     )
 
 
-async def _run() -> str:
+def _gather_articles() -> list[dict]:
+    """Run all 4 region searches before starting the agent."""
+    print("🔍 Searching news (all regions)...")
+    all_articles = []
+    for region, query, max_r in _REGION_QUERIES:
+        articles = fetch_region_news(region, query, max_results=max_r)
+        all_articles.extend(articles)
+    print(f"   Total articles fetched: {len(all_articles)}\n")
+    return all_articles
+
+
+async def _run(articles: list[dict]) -> str:
     agent = _build_agent()
-    result = await Runner.run(
-        agent,
-        input=f"Today is {_TODAY}. Fetch and publish the top 10 news stories now.",
-        max_turns=20,
+    prompt = (
+        f"Today is {_TODAY}. Here are the freshly fetched news articles:\n\n"
+        f"```json\n{json.dumps(articles, indent=2)}\n```\n\n"
+        "Select 10 stories, write summaries, and call save_news()."
     )
+    result = await Runner.run(agent, input=prompt, max_turns=10)
     return result.final_output or "(no output)"
 
 
@@ -107,7 +109,8 @@ def run_news_agent() -> None:
     print(f"Date (UTC): {_TODAY}")
     print(f"Target:     {os.getenv('SERVER_BASE', 'http://localhost:3000')}\n")
 
-    summary = asyncio.run(_run())
+    articles = _gather_articles()
+    summary = asyncio.run(_run(articles))
 
     print("\n" + "=" * 44)
     print(summary)
