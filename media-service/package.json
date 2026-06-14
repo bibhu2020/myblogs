@@ -24,7 +24,7 @@
     "uuid": "^9.0.0"
   },
   "devDependencies": {
-    "@nestjs/cli": "^10.0.0",
+    "@nestjs/cli": "^11.0.23",
     "@types/better-sqlite3": "^7.6.8",
     "@types/multer": "^1.4.11",
     "@types/node": "^20.11.5",
