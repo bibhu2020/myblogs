@@ -189,7 +189,7 @@ function ago(d) {
               <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
               <span class="text-xs font-bold uppercase tracking-widest text-indigo-600">Story Corner</span>
             </div>
-            <RouterLink to="/stories" class="text-xs text-gray-400 hover:text-indigo-600 font-medium transition-colors flex items-center gap-1">
+            <RouterLink to="/story" class="text-xs text-gray-400 hover:text-indigo-600 font-medium transition-colors flex items-center gap-1">
               All stories <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
             </RouterLink>
           </div>
@@ -407,7 +407,7 @@ function ago(d) {
               <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
               <span class="text-xs font-bold uppercase tracking-widest text-indigo-400">Story Corner</span>
             </div>
-            <RouterLink to="/stories" class="text-xs text-slate-500 hover:text-indigo-400 font-medium transition-colors flex items-center gap-1">
+            <RouterLink to="/story" class="text-xs text-slate-500 hover:text-indigo-400 font-medium transition-colors flex items-center gap-1">
               All stories <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
             </RouterLink>
           </div>
@@ -494,7 +494,7 @@ function ago(d) {
               <li><RouterLink to="/" class="text-slate-400 hover:text-violet-400 text-sm transition-colors">Home</RouterLink></li>
               <li><RouterLink to="/blog" class="text-slate-400 hover:text-violet-400 text-sm transition-colors">All Posts</RouterLink></li>
               <li><RouterLink to="/news" class="text-slate-400 hover:text-violet-400 text-sm transition-colors">News</RouterLink></li>
-              <li><RouterLink to="/stories" class="text-slate-400 hover:text-violet-400 text-sm transition-colors">Stories</RouterLink></li>
+              <li><RouterLink to="/story" class="text-slate-400 hover:text-violet-400 text-sm transition-colors">Stories</RouterLink></li>
               <li><RouterLink to="/search" class="text-slate-400 hover:text-violet-400 text-sm transition-colors">Search</RouterLink></li>
               <li><RouterLink to="/about" class="text-slate-400 hover:text-violet-400 text-sm transition-colors">About</RouterLink></li>
             </ul>
