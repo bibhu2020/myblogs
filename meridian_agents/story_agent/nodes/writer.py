@@ -1,14 +1,11 @@
 """Story writer node — generates a 4000+ word illustrated children's story."""
-import json
+import json as _json
 import os
 import random
 import re
 
-from openai import OpenAI
-
+from ...llm import chat_completion, extract_json
 from ..state import StoryAgentState
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
 
 THEMES = [
     {
@@ -169,17 +166,15 @@ Requirements:
 
 This is the FULL story — do not abbreviate, do not summarise, write every scene completely."""
 
-    response = client.chat.completions.create(
-        model="gpt-4o",
+    text, model = chat_completion(
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        response_format={"type": "json_object"},
         max_tokens=12000,
         temperature=0.85,
     )
-    data = json.loads(response.choices[0].message.content)
+    data = extract_json(text)
     wc = _word_count(data["content"])
     print(f"📊 Draft word count: {wc}")
 
@@ -195,7 +190,7 @@ This is the FULL story — do not abbreviate, do not summarise, write every scen
 
 def expand_story_node(state: StoryAgentState) -> dict:
     print("📝 Story too short — expanding to meet 4,000-word minimum...")
-    current = json.dumps({
+    current = _json.dumps({
         "title": state["story_title"],
         "excerpt": state["story_excerpt"],
         "content": state["story_content"],
@@ -203,8 +198,7 @@ def expand_story_node(state: StoryAgentState) -> dict:
         "moralLesson": state["moral_lesson"],
     })
 
-    response = client.chat.completions.create(
-        model="gpt-4o",
+    text, model = chat_completion(
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": f"Genre: {state['genre']}\nPremise: {state['premise']}"},
@@ -220,11 +214,10 @@ def expand_story_node(state: StoryAgentState) -> dict:
                 ),
             },
         ],
-        response_format={"type": "json_object"},
         max_tokens=14000,
         temperature=0.75,
     )
-    data = json.loads(response.choices[0].message.content)
+    data = extract_json(text)
     wc = _word_count(data["content"])
     print(f"📊 Expanded word count: {wc}")
 

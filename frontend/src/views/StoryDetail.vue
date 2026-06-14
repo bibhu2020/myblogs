@@ -16,6 +16,167 @@ const GENRE_ICONS = {
   'Science Fiction': '🚀', 'Historical Fiction': '🏛️', Mythology: '⚡',
 }
 
+// ── TTS player ────────────────────────────────────────────────────────────────
+const ttsState       = ref('idle')   // idle | loading | playing | paused
+const ttsProgress    = ref(0)        // 0–1 across all chunks
+const ttsChunkIdx    = ref(0)
+const ttsTotalChunks = ref(0)
+const playerOpen     = ref(false)
+
+let sessionId      = 0
+let audioEl        = null
+let currentBlobUrl = null
+let resolveChunk   = null
+let chunkFetches   = []
+let chunkTexts     = []
+
+function splitChunks(html, maxLen = 500) {
+  const div = document.createElement('div')
+  div.innerHTML = html
+  const full = (div.textContent || div.innerText || '').trim()
+  const chunks = []
+  let remaining = full
+  while (remaining.length > 0) {
+    if (remaining.length <= maxLen) { chunks.push(remaining); break }
+    let cut = remaining.lastIndexOf('. ', maxLen)
+    if (cut < maxLen * 0.4) cut = remaining.lastIndexOf(' ', maxLen)
+    if (cut < 0) cut = maxLen
+    else cut += 1
+    chunks.push(remaining.slice(0, cut).trim())
+    remaining = remaining.slice(cut).trim()
+  }
+  return chunks.filter(Boolean)
+}
+
+function fetchOneChunk(text) {
+  return api.post('/tts', { text }, { responseType: 'blob', timeout: 90_000 })
+    .then(r => r.data)
+    .catch(() => null)
+}
+
+function ensureAudioEl() {
+  if (!audioEl) {
+    audioEl = new Audio()
+    audioEl.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='
+    const p = audioEl.play(); if (p) p.catch(() => {})
+    audioEl.pause()
+    audioEl.src = ''
+  }
+  return audioEl
+}
+
+function playChunk(blob, chunkIdx) {
+  return new Promise(resolve => {
+    resolveChunk = resolve
+    const el = ensureAudioEl()
+    const url = URL.createObjectURL(blob)
+    currentBlobUrl = url
+    el.src = url
+    el.ontimeupdate = () => {
+      if (!el.duration) return
+      ttsProgress.value = (chunkIdx + el.currentTime / el.duration) / ttsTotalChunks.value
+    }
+    const cleanup = (reason) => {
+      URL.revokeObjectURL(url)
+      if (currentBlobUrl === url) currentBlobUrl = null
+      el.ontimeupdate = null; el.onended = null; el.onerror = null
+      resolveChunk = null
+      resolve(reason)
+    }
+    el.onended = () => cleanup('ended')
+    el.onerror = () => cleanup('error')
+    el.play().catch(() => cleanup('error'))
+  })
+}
+
+async function runFrom(startIdx, session) {
+  for (let i = startIdx; i < ttsTotalChunks.value; i++) {
+    if (session !== sessionId) return
+    ttsChunkIdx.value = i
+    ttsState.value = 'loading'
+    if (!chunkFetches[i]) chunkFetches[i] = fetchOneChunk(chunkTexts[i])
+    const next = i + 1
+    if (next < ttsTotalChunks.value && !chunkFetches[next]) {
+      chunkFetches[next] = fetchOneChunk(chunkTexts[next])
+    }
+    const blob = await chunkFetches[i]
+    if (session !== sessionId) return
+    if (!blob) { console.warn(`[TTS] chunk ${i} failed — skipping`); continue }
+    ttsState.value = 'playing'
+    await playChunk(blob, i)
+    if (session !== sessionId) return
+  }
+  ttsState.value = 'idle'
+  ttsProgress.value = 0
+  ttsChunkIdx.value = 0
+}
+
+function cancelCurrentChunk() {
+  if (audioEl) { audioEl.pause(); audioEl.src = '' }
+  if (currentBlobUrl) { URL.revokeObjectURL(currentBlobUrl); currentBlobUrl = null }
+  if (resolveChunk) { resolveChunk('cancelled'); resolveChunk = null }
+}
+
+async function openPlayer() {
+  playerOpen.value = true
+  if (ttsState.value !== 'idle') return
+  const bodyChunks = splitChunks(story.value.content, 200)
+  const chunks = story.value.title ? [story.value.title, ...bodyChunks] : bodyChunks
+  if (!chunks.length) return
+  chunkTexts = chunks
+  ttsTotalChunks.value = chunks.length
+  ttsProgress.value = 0
+  ttsChunkIdx.value = 0
+  chunkFetches = new Array(chunks.length).fill(null)
+  ensureAudioEl()
+  chunkFetches[0] = fetchOneChunk(chunkTexts[0])
+  if (chunks.length > 1) chunkFetches[1] = fetchOneChunk(chunkTexts[1])
+  ttsState.value = 'loading'
+  const session = ++sessionId
+  await runFrom(0, session)
+}
+
+function togglePlayPause() {
+  if (!audioEl) return
+  if (ttsState.value === 'playing') { audioEl.pause(); ttsState.value = 'paused' }
+  else if (ttsState.value === 'paused') { audioEl.play(); ttsState.value = 'playing' }
+}
+
+function stopPlayback() {
+  sessionId++
+  cancelCurrentChunk()
+  ttsState.value = 'idle'
+  ttsProgress.value = 0
+  ttsChunkIdx.value = 0
+}
+
+async function seekTo(fraction) {
+  if (!ttsTotalChunks.value || !chunkTexts.length) return
+  const target = Math.max(0, Math.min(Math.floor(fraction * ttsTotalChunks.value), ttsTotalChunks.value - 1))
+  const session = ++sessionId
+  cancelCurrentChunk()
+  ttsProgress.value = target / ttsTotalChunks.value
+  ttsChunkIdx.value = target
+  ttsState.value = 'loading'
+  await new Promise(r => setTimeout(r, 0))
+  if (session !== sessionId) return
+  await runFrom(target, session)
+}
+
+function closePlayer() {
+  sessionId++
+  cancelCurrentChunk()
+  if (audioEl) { audioEl.src = ''; audioEl = null }
+  chunkFetches = []
+  chunkTexts = []
+  ttsTotalChunks.value = 0
+  ttsState.value = 'idle'
+  ttsProgress.value = 0
+  ttsChunkIdx.value = 0
+  playerOpen.value = false
+}
+// ── end TTS ───────────────────────────────────────────────────────────────────
+
 onMounted(async () => {
   try {
     const res = await api.get(`/stories/${route.params.slug}`)
@@ -62,7 +223,7 @@ onMounted(async () => {
         <span class="text-gray-600 truncate max-w-xs">{{ story.title }}</span>
       </nav>
 
-      <!-- Genre + age badge -->
+      <!-- Genre + age + read-time badges -->
       <div class="flex items-center gap-3 mb-4 flex-wrap">
         <span v-if="story.genre" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold bg-indigo-100 text-indigo-700">
           {{ GENRE_ICONS[story.genre] || '📖' }} {{ story.genre }}
@@ -81,10 +242,65 @@ onMounted(async () => {
       </h1>
 
       <!-- Meta -->
-      <div class="flex items-center gap-3 text-sm text-gray-400 mb-8 border-b border-gray-100 pb-6">
+      <div class="flex items-center gap-3 text-sm text-gray-400 mb-6 pb-6 border-b border-gray-100">
         <span>By <strong class="text-gray-600">{{ story.authorName || 'Meridian Storyteller' }}</strong></span>
         <span>·</span>
         <span>{{ format(new Date(story.createdAt), 'MMMM d, yyyy') }}</span>
+        <span>·</span>
+        <span>{{ story.views }} readers</span>
+      </div>
+
+      <!-- Mobile TTS button — above featured image -->
+      <div class="sm:hidden mb-6">
+        <div v-if="!playerOpen">
+          <button @click="openPlayer"
+            class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors w-full justify-center">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+            </svg>
+            Listen to this story
+          </button>
+        </div>
+        <div v-else class="bg-white border border-indigo-100 rounded-2xl shadow-lg p-4">
+          <!-- Header -->
+          <div class="flex items-center gap-2 mb-3">
+            <div class="flex items-end gap-0.5 h-5 flex-shrink-0" aria-hidden="true">
+              <span v-for="i in 4" :key="i"
+                class="w-1 rounded-full bg-indigo-500"
+                :class="ttsState === 'playing' ? 'tts-bar' : 'h-1 opacity-40'"
+                :style="ttsState === 'playing' ? `animation-delay:${i * 80}ms` : ''"></span>
+            </div>
+            <p class="text-sm font-semibold text-gray-800 truncate flex-1">{{ story.title }}</p>
+            <span v-if="ttsTotalChunks" class="text-xs text-gray-500 flex-shrink-0">{{ ttsChunkIdx + 1 }}/{{ ttsTotalChunks }}</span>
+            <button @click="closePlayer" class="flex-shrink-0 ml-1 text-gray-400 hover:text-gray-600">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <!-- Seek -->
+          <input type="range" min="0" max="100"
+            :value="Math.round(ttsProgress * 100)"
+            :disabled="ttsState === 'loading'"
+            class="tts-slider w-full mb-3"
+            @change="seekTo($event.target.value / 100)" />
+          <!-- Controls -->
+          <div class="flex items-center gap-2">
+            <button @click="stopPlayback"
+              :disabled="ttsState === 'idle' || ttsState === 'loading'"
+              class="flex items-center justify-center w-8 h-8 rounded-lg transition-colors"
+              :class="ttsState === 'idle' || ttsState === 'loading' ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'"
+              title="Stop">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+            </button>
+            <button @click="ttsState === 'loading' ? null : togglePlayPause()"
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex-1 justify-center"
+              :class="ttsState === 'loading' ? 'bg-gray-100 text-gray-400 cursor-wait' : 'bg-indigo-600 text-white hover:bg-indigo-700'">
+              <svg v-if="ttsState === 'loading'" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+              <svg v-else-if="ttsState === 'playing'" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
+              <svg v-else class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              {{ ttsState === 'loading' ? 'Loading…' : ttsState === 'playing' ? 'Pause' : 'Resume' }}
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Featured image -->
@@ -127,6 +343,151 @@ onMounted(async () => {
       </div>
     </article>
 
+    <!-- Desktop TTS sliding panel — fixed right side, hidden on mobile -->
+    <Teleport to="body">
+      <div v-if="story" class="hidden sm:flex fixed right-0 top-1/2 -translate-y-1/2 z-50 items-stretch drop-shadow-2xl">
+        <!-- Always-visible tab -->
+        <button @click="playerOpen ? closePlayer() : openPlayer()"
+          class="flex flex-col items-center justify-center gap-2 w-10 rounded-l-2xl py-5 transition-colors text-white"
+          :class="playerOpen ? 'bg-indigo-700' : 'bg-indigo-600 hover:bg-indigo-700'">
+          <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+          </svg>
+          <span class="text-[10px] font-bold tracking-wider" style="writing-mode:vertical-lr;transform:rotate(180deg)">
+            {{ playerOpen ? 'CLOSE' : 'LISTEN' }}
+          </span>
+        </button>
+
+        <!-- Sliding player panel -->
+        <div class="overflow-hidden transition-all duration-300 ease-in-out"
+          :style="playerOpen ? 'width:288px' : 'width:0'">
+          <div class="w-[288px] h-full flex flex-col p-5 gap-4 bg-white border-l border-indigo-100">
+
+            <!-- Header -->
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wider mb-0.5 text-indigo-500">Now reading</p>
+                <p class="text-sm font-bold leading-snug line-clamp-2 text-gray-900">{{ story.title }}</p>
+              </div>
+              <button @click="closePlayer" class="flex-shrink-0 mt-0.5 text-gray-300 hover:text-gray-600" title="Close">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+
+            <!-- Waveform animation -->
+            <div class="flex items-end justify-center gap-1 h-10" aria-hidden="true">
+              <span v-for="i in 12" :key="i"
+                class="w-1.5 rounded-full bg-indigo-400"
+                :class="ttsState === 'playing' ? 'tts-bar' : 'h-1.5 opacity-30'"
+                :style="ttsState === 'playing' ? `animation-delay:${i * 60}ms` : ''"></span>
+            </div>
+
+            <!-- Seek slider -->
+            <div>
+              <input type="range" min="0" max="100"
+                :value="Math.round(ttsProgress * 100)"
+                :disabled="ttsState === 'loading' || ttsState === 'idle'"
+                class="tts-slider w-full"
+                @change="seekTo($event.target.value / 100)" />
+              <div class="flex justify-between mt-1.5 text-xs text-gray-500">
+                <span v-if="ttsTotalChunks">Segment {{ ttsChunkIdx + 1 }} / {{ ttsTotalChunks }}</span>
+                <span v-else>—</span>
+                <span>{{ Math.round(ttsProgress * 100) }}%</span>
+              </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="flex items-center justify-center gap-3">
+              <button @click="stopPlayback"
+                :disabled="ttsState === 'idle' || ttsState === 'loading'"
+                class="flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all"
+                :class="ttsState === 'idle' || ttsState === 'loading'
+                  ? 'border-gray-200 text-gray-300 cursor-not-allowed'
+                  : 'border-gray-300 text-gray-600 hover:border-gray-500 hover:text-gray-800'"
+                title="Stop">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+              </button>
+
+              <button @click="ttsState === 'loading' ? null : togglePlayPause()"
+                class="flex items-center justify-center w-14 h-14 rounded-full transition-all"
+                :class="ttsState === 'loading'
+                  ? 'bg-gray-100 text-gray-400 cursor-wait'
+                  : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:scale-105 active:scale-95'">
+                <svg v-if="ttsState === 'loading'" class="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+                <svg v-else-if="ttsState === 'playing'" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+                </svg>
+                <svg v-else class="w-6 h-6 ml-1" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+              </button>
+            </div>
+
+            <p class="text-xs text-center text-gray-400">Powered by local AI</p>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <Footer />
   </div>
 </template>
+
+<style scoped>
+@keyframes tts-wave {
+  0%, 100% { height: 4px; }
+  50%       { height: 24px; }
+}
+.tts-bar {
+  animation: tts-wave 0.8s ease-in-out infinite;
+}
+
+.tts-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 9999px;
+  background: #e5e7eb;
+  outline: none;
+  cursor: pointer;
+  background-image: linear-gradient(#4f46e5, #4f46e5);
+  background-size: v-bind("Math.round(ttsProgress * 100) + '% 100%'");
+  background-repeat: no-repeat;
+}
+.tts-slider:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.tts-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #4338ca;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+  transition: transform 0.1s;
+}
+.tts-slider:not(:disabled)::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+.tts-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #4338ca;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+}
+.tts-slider::-moz-range-progress {
+  background: #4f46e5;
+  height: 6px;
+  border-radius: 9999px;
+}
+</style>

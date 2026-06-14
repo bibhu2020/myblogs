@@ -1,12 +1,8 @@
-import json
 import os
 import re
 
-from openai import OpenAI
-
+from ...llm import chat_completion, extract_json
 from ..state import AgentState
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
 
 # Per-category writer persona: (role description, publication description,
 #   example category keywords, example tag keywords, structure hint)
@@ -153,17 +149,15 @@ Recommended structure (adapt as needed): {structure}"""
 
 def write_post_node(state: AgentState) -> dict:
     print("✍️  Writing blog post (this takes ~60s)...")
-    response = client.chat.completions.create(
-        model="gpt-4o",
+    text, model = chat_completion(
         messages=[
             {"role": "system", "content": _system_prompt(state["category_name"])},
             {"role": "user", "content": _user_prompt(state)},
         ],
-        response_format={"type": "json_object"},
         max_tokens=10000,
         temperature=0.8,
     )
-    post = json.loads(response.choices[0].message.content)
+    post = extract_json(text)
     wc = _word_count(post["content"])
     print(f"📊 Draft word count: {wc}")
 
@@ -181,7 +175,8 @@ def write_post_node(state: AgentState) -> dict:
 
 def expand_post_node(state: AgentState) -> dict:
     print("📝 Expanding post to meet length requirements...")
-    current_json = json.dumps({
+    import json as _json
+    current_json = _json.dumps({
         "title": state["post_title"],
         "excerpt": state["post_excerpt"],
         "featuredImagePrompt": state["post_featured_image_prompt"],
@@ -189,8 +184,7 @@ def expand_post_node(state: AgentState) -> dict:
         "suggestedTagKeywords": state["post_tag_keywords"],
         "content": state["post_content"],
     })
-    response = client.chat.completions.create(
-        model="gpt-4o",
+    text, model = chat_completion(
         messages=[
             {"role": "system", "content": _system_prompt(state["category_name"])},
             {"role": "user", "content": _user_prompt(state)},
@@ -205,11 +199,10 @@ def expand_post_node(state: AgentState) -> dict:
                 ),
             },
         ],
-        response_format={"type": "json_object"},
         max_tokens=10000,
         temperature=0.7,
     )
-    post = json.loads(response.choices[0].message.content)
+    post = extract_json(text)
     wc = _word_count(post["content"])
     print(f"📊 Final word count: {wc}")
 
