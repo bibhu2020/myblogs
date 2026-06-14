@@ -1,15 +1,64 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import Navbar from '../components/Navbar.vue'
 import Footer from '../components/Footer.vue'
 import api from '../api'
 import { format, parseISO, isValid } from 'date-fns'
 
-const items = ref([])
+const items       = ref([])
 const lastUpdated = ref(null)
-const loading = ref(true)
+const loading     = ref(true)
 const activeRegion = ref('all')
 
+// ── TTS state ────────────────────────────────────────────────────────────────
+const speaking   = ref(false)
+const activeIdx  = ref(-1)
+const ttsSupported = typeof window !== 'undefined' && 'speechSynthesis' in window
+
+function _utter(text, rate = 0.92) {
+  return new Promise(resolve => {
+    const u = new SpeechSynthesisUtterance(text)
+    u.rate = rate
+    u.onend   = resolve
+    u.onerror = resolve
+    window.speechSynthesis.speak(u)
+  })
+}
+
+async function toggleTTS() {
+  if (speaking.value) {
+    window.speechSynthesis.cancel()
+    speaking.value = false
+    activeIdx.value = -1
+    return
+  }
+
+  speaking.value = true
+  const list = filtered.value
+  const regionLabel = activeRegion.value === 'all' ? '' : ` ${activeRegion.value}`
+  await _utter(`Here are today's top${regionLabel} news stories.`)
+
+  for (let i = 0; i < list.length; i++) {
+    if (!speaking.value) break
+    activeIdx.value = i
+    // Scroll card into view
+    document.getElementById(`news-item-${i}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    await _utter(`Story ${i + 1}. ${list[i].title}. ${list[i].summary || ''}`)
+    if (!speaking.value) break
+    if (i < list.length - 1) await _utter('Next.', 1.2)
+  }
+
+  speaking.value = false
+  activeIdx.value = -1
+}
+
+// Stop TTS when region changes or user navigates away
+watch(activeRegion, () => {
+  if (speaking.value) { window.speechSynthesis.cancel(); speaking.value = false; activeIdx.value = -1 }
+})
+onUnmounted(() => { window.speechSynthesis.cancel() })
+
+// ── Regions / colours ────────────────────────────────────────────────────────
 const REGIONS = [
   { key: 'all',    label: 'All News',  flag: '🗞️' },
   { key: 'world',  label: 'World',     flag: '🌍' },
@@ -24,7 +73,6 @@ const REGION_COLORS = {
   india:  'bg-orange-100 text-orange-700',
   odisha: 'bg-purple-100 text-purple-700',
 }
-
 const REGION_FLAGS = { world: '🌍', usa: '🇺🇸', india: '🇮🇳', odisha: '🏛️' }
 
 const FALLBACK_IMAGES = {
@@ -72,21 +120,46 @@ onMounted(load)
     <!-- Hero -->
     <div class="bg-gradient-to-r from-slate-800 to-slate-900 text-white py-10">
       <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between flex-wrap gap-4">
+        <div class="flex items-start justify-between flex-wrap gap-4">
           <div>
             <div class="flex items-center gap-3 mb-1">
               <span class="text-3xl">🗞️</span>
               <h1 class="text-3xl font-bold tracking-tight">Today's Top News</h1>
             </div>
             <p class="text-slate-400 text-sm">
-              AI-curated headlines from around the world · Updated every morning
+              AI-curated headlines from around the world · Updated every 12 hours
             </p>
           </div>
-          <div v-if="lastUpdated" class="text-xs text-slate-400 flex items-center gap-1.5">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-            Last refreshed {{ format(new Date(lastUpdated), 'MMM d · h:mm a') }}
+
+          <!-- Right: last-updated + TTS button -->
+          <div class="flex flex-col items-end gap-3">
+            <div v-if="lastUpdated" class="text-xs text-slate-400 flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              Last refreshed {{ format(new Date(lastUpdated), 'MMM d · h:mm a') }}
+            </div>
+
+            <!-- TTS button -->
+            <button v-if="ttsSupported && filtered.length"
+              @click="toggleTTS"
+              class="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all"
+              :class="speaking
+                ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-lg shadow-rose-900/40'
+                : 'bg-white/10 hover:bg-white/20 text-white border border-white/20'"
+            >
+              <!-- Animated bars when speaking -->
+              <span v-if="speaking" class="flex items-end gap-0.5 h-4">
+                <span class="w-0.5 bg-white rounded-full animate-[bounce_0.6s_ease-in-out_infinite]" style="height:60%"></span>
+                <span class="w-0.5 bg-white rounded-full animate-[bounce_0.6s_ease-in-out_0.15s_infinite]" style="height:100%"></span>
+                <span class="w-0.5 bg-white rounded-full animate-[bounce_0.6s_ease-in-out_0.3s_infinite]" style="height:70%"></span>
+                <span class="w-0.5 bg-white rounded-full animate-[bounce_0.6s_ease-in-out_0.1s_infinite]" style="height:40%"></span>
+              </span>
+              <svg v-else class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+              </svg>
+              {{ speaking ? 'Stop' : 'Listen to all' }}
+            </button>
           </div>
         </div>
 
@@ -125,14 +198,16 @@ onMounted(load)
       <div v-else-if="!filtered.length" class="text-center py-24">
         <div class="text-5xl mb-4">📭</div>
         <p class="text-gray-500 text-lg font-medium">No news yet</p>
-        <p class="text-gray-400 text-sm mt-1">The agent runs every morning at 6 AM and will populate this page.</p>
+        <p class="text-gray-400 text-sm mt-1">The agent runs every 12 hours and will populate this page.</p>
       </div>
 
       <!-- News list -->
       <div v-else class="space-y-4">
         <article
           v-for="(item, idx) in filtered" :key="item.id"
-          class="bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col sm:flex-row gap-0"
+          :id="`news-item-${idx}`"
+          class="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col sm:flex-row gap-0"
+          :class="activeIdx === idx ? 'ring-2 ring-rose-400 shadow-md shadow-rose-100' : ''"
         >
           <!-- Thumbnail -->
           <div class="sm:w-48 sm:flex-shrink-0 relative overflow-hidden bg-gray-100">
@@ -144,9 +219,17 @@ onMounted(load)
               @error="e => e.target.src = FALLBACK_IMAGES[item.region] || FALLBACK_IMAGES.world"
             />
             <!-- Number badge -->
-            <span class="absolute top-2 left-2 w-7 h-7 flex items-center justify-center rounded-full bg-slate-900/80 text-white text-xs font-bold">
+            <span class="absolute top-2 left-2 w-7 h-7 flex items-center justify-center rounded-full text-white text-xs font-bold transition-colors"
+              :class="activeIdx === idx ? 'bg-rose-500' : 'bg-slate-900/80'">
               {{ idx + 1 }}
             </span>
+            <!-- Speaking indicator -->
+            <div v-if="activeIdx === idx"
+              class="absolute bottom-2 left-2 flex items-end gap-0.5 h-5 bg-rose-500/90 rounded-full px-1.5 py-1">
+              <span class="w-0.5 bg-white rounded-full animate-[bounce_0.6s_ease-in-out_infinite]" style="height:50%"></span>
+              <span class="w-0.5 bg-white rounded-full animate-[bounce_0.6s_ease-in-out_0.2s_infinite]" style="height:100%"></span>
+              <span class="w-0.5 bg-white rounded-full animate-[bounce_0.6s_ease-in-out_0.1s_infinite]" style="height:70%"></span>
+            </div>
           </div>
 
           <!-- Content -->
@@ -163,18 +246,18 @@ onMounted(load)
               </div>
 
               <!-- Title -->
-              <h2 class="text-base sm:text-lg font-bold text-gray-900 leading-snug mb-2 line-clamp-2">
+              <h2 class="text-base sm:text-lg font-bold text-gray-900 leading-snug mb-3">
                 {{ item.title }}
               </h2>
 
-              <!-- Summary -->
-              <p class="text-sm text-gray-600 leading-relaxed line-clamp-3">
+              <!-- Full summary — no clamp -->
+              <p class="text-sm text-gray-600 leading-relaxed">
                 {{ item.summary }}
               </p>
             </div>
 
             <!-- CTA -->
-            <div class="mt-4">
+            <div class="mt-4 flex items-center gap-3">
               <a
                 :href="item.sourceUrl"
                 target="_blank"
@@ -186,6 +269,18 @@ onMounted(load)
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                 </svg>
               </a>
+              <!-- Per-item listen button -->
+              <button v-if="ttsSupported"
+                @click="activeIdx === idx ? toggleTTS() : (toggleTTS().then ? null : null, activeRegion = activeRegion)"
+                class="text-xs text-gray-400 hover:text-rose-500 transition-colors flex items-center gap-1"
+                :class="activeIdx === idx ? 'text-rose-500' : ''"
+                :title="activeIdx === idx ? 'Stop' : 'Listen to this story'"
+              >
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+                </svg>
+                {{ activeIdx === idx ? 'Reading…' : 'Listen' }}
+              </button>
             </div>
           </div>
         </article>
