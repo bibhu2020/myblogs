@@ -15,30 +15,56 @@ const speaking     = ref(false)
 const activeIdx    = ref(-1)
 const ttsSupported = typeof window !== 'undefined' && 'speechSynthesis' in window
 
-// Words that get read slower + raised pitch to feel weighty
+// ── Female voice selection ───────────────────────────────────────────────────
+let _voice = null
+
+function _pickVoice() {
+  const voices = window.speechSynthesis.getVoices()
+  if (!voices.length) return
+  // Prefer natural-sounding female English voices by known name
+  const PREFER = [
+    'Google UK English Female',
+    'Microsoft Zira',           // Windows
+    'Microsoft Jenny',          // Windows neural
+    'Microsoft Aria',           // Windows neural
+    'Samantha',                 // macOS / iOS
+    'Karen',                    // macOS Australian
+    'Victoria',                 // macOS
+    'Moira',                    // macOS Irish
+    'Fiona',                    // macOS Scottish
+    'Tessa',                    // macOS South African
+  ]
+  for (const name of PREFER) {
+    const v = voices.find(v => v.name.includes(name))
+    if (v) { _voice = v; return }
+  }
+  // Fallback: any voice with "female" in the name
+  _voice = voices.find(v => /female/i.test(v.name))
+        || voices.find(v => v.lang.startsWith('en-'))
+        || voices[0]
+}
+
+if (ttsSupported) {
+  _pickVoice()
+  window.speechSynthesis.onvoiceschanged = _pickVoice
+}
+
+// ── Alert words — read with a slight slowdown + pitch lift ───────────────────
 const ALERT_WORDS = new Set([
-  // Breaking / urgency
   'breaking', 'urgent', 'alert', 'exclusive', 'developing',
-  // Conflict / violence
   'war', 'conflict', 'attack', 'attacked', 'killed', 'dead', 'death', 'deaths',
   'bomb', 'bombing', 'explosion', 'exploded', 'strike', 'airstrike', 'missile',
   'troops', 'invasion', 'invaded', 'ceasefire', 'hostage', 'hostages', 'shooting',
   'massacre', 'genocide', 'casualties',
-  // Crisis
   'crisis', 'emergency', 'disaster', 'catastrophe', 'collapse', 'collapsed',
-  'devastated', 'devastating', 'destroyed', 'destroyed',
-  // Legal / political
+  'devastated', 'devastating', 'destroyed',
   'arrested', 'detained', 'indicted', 'impeached', 'sanctions', 'banned',
   'convicted', 'sentenced', 'coup', 'protest', 'protests',
-  // Superlatives / firsts
-  'historic', 'unprecedented', 'record', 'worst', 'deadliest', 'largest',
-  'biggest', 'first', 'breakthrough',
-  // Warnings
+  'historic', 'unprecedented', 'record', 'worst', 'deadliest', 'largest', 'breakthrough',
   'warning', 'threat', 'threatened', 'danger', 'dangerous', 'critical',
-  'severe', 'major', 'significant', 'nuclear', 'pandemic', 'epidemic',
+  'severe', 'major', 'nuclear', 'pandemic', 'epidemic',
 ])
 
-// Split text into [{text, alert}] segments at alert-word boundaries
 function _segments(text) {
   const pattern = new RegExp(`\\b(${[...ALERT_WORDS].join('|')})\\b`, 'gi')
   const out = []
@@ -52,26 +78,25 @@ function _segments(text) {
   return out
 }
 
-function _utter(text, rate = 0.82, pitch = 1.0) {
+function _utter(text, rate = 0.95, pitch = 1.1) {
   return new Promise(resolve => {
+    if (!text.trim()) { resolve(); return }
     const u = new SpeechSynthesisUtterance(text)
     u.rate  = rate
     u.pitch = pitch
+    if (_voice) u.voice = _voice
     u.onend   = resolve
     u.onerror = resolve
     window.speechSynthesis.speak(u)
   })
 }
 
-// Speak text with dramatic pauses + pitch lift on alert words
+// Normal text at TV-anchor pace; alert words slow down just enough to land
 async function _speakRich(text) {
   for (const seg of _segments(text)) {
     if (!speaking.value) break
-    if (seg.alert) {
-      await _utter(seg.text, 0.65, 1.15)   // slow + raised pitch = emphasis
-    } else {
-      await _utter(seg.text, 0.82, 1.0)
-    }
+    // alert: pull back to 0.80 + raise pitch slightly — feels weighted, not sluggish
+    await _utter(seg.text, seg.alert ? 0.80 : 0.95, seg.alert ? 1.18 : 1.1)
   }
 }
 
@@ -87,28 +112,22 @@ async function toggleTTS() {
   const list = filtered.value
   const regionLabel = activeRegion.value === 'all' ? '' : ` ${activeRegion.value}`
 
-  // Authoritative intro
-  await _utter(`Here are today's top${regionLabel} news stories.`, 0.78, 0.95)
+  await _utter(`Good day. Here are today's top${regionLabel} news stories.`, 0.92, 1.1)
 
   for (let i = 0; i < list.length; i++) {
     if (!speaking.value) break
     activeIdx.value = i
     document.getElementById(`news-item-${i}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
 
-    // Story number — deliberate, anchor-like
-    await _utter(`Story ${i + 1}.`, 0.72, 0.95)
-    // Title — slower, clearly enunciated
+    await _utter(`Story ${i + 1}.`, 0.88, 1.05)
     await _speakRich(list[i].title + '.')
-    // Brief pause between title and summary
-    await _utter('', 0.5)
-    // Summary — steady news-reader pace with alert-word emphasis
     await _speakRich(list[i].summary || '')
 
     if (!speaking.value) break
-    if (i < list.length - 1) await _utter('Next story.', 0.88, 0.9)
+    if (i < list.length - 1) await _utter('Next.', 1.0, 1.1)
   }
 
-  if (speaking.value) await _utter('That is all for now.', 0.78, 0.95)
+  if (speaking.value) await _utter('That is all for now. Stay informed.', 0.90, 1.1)
   speaking.value = false
   activeIdx.value = -1
 }
