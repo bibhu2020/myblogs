@@ -260,6 +260,19 @@ export class AppController {
     return this.proxy.forward('blog', `/stories/${id}`, 'DELETE', null, { Authorization: this.getAuthHeader(req) });
   }
 
+  // NEWS ROUTES
+  @Get('news')
+  getNews(@Query() query: any) {
+    const params = new URLSearchParams(query).toString();
+    return this.proxy.forward('blog', `/news?${params}`, 'GET');
+  }
+
+  @Post('news/refresh')
+  @UseGuards(AuthGuard('jwt'))
+  refreshNews(@Body() body: any, @Request() req: any) {
+    return this.proxy.forward('blog', '/news/refresh', 'POST', body, { Authorization: this.getAuthHeader(req) });
+  }
+
   // AGENT RUNS
   @Post('agent-runs')
   createAgentRun(@Body() body: any) {

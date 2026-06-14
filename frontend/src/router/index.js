@@ -9,6 +9,7 @@ const routes = [
   { path: '/search', component: () => import('../views/Search.vue'), meta: { title: 'Search' } },
   { path: '/story', component: () => import('../views/StoryList.vue'), meta: { title: 'Stories' } },
   { path: '/story/:slug', component: () => import('../views/StoryDetail.vue'), meta: { title: 'Story' } },
+  { path: '/news', component: () => import('../views/News.vue'), meta: { title: 'News' } },
   { path: '/about', component: () => import('../views/About.vue'), meta: { title: 'About' } },
   { path: '/admin/login', component: () => import('../views/admin/Login.vue'), meta: { title: 'Admin Login' } },
   {
