@@ -1,7 +1,3 @@
-import base64
-import hashlib
-import hmac
-import json
 import os
 import re
 import time
@@ -9,42 +5,12 @@ from io import BytesIO
 
 import requests
 
+from ...auth import make_agent_jwt
 from ..state import AgentState
 
 
-def _make_agent_jwt() -> str:
-    secret = os.getenv("JWT_SECRET", "myblogs-secret-key-2024").encode()
-    now = int(time.time())
-
-    def b64url(obj: dict) -> str:
-        return (
-            base64.urlsafe_b64encode(json.dumps(obj, separators=(",", ":")).encode())
-            .rstrip(b"=")
-            .decode()
-        )
-
-    header = b64url({"alg": "HS256", "typ": "JWT"})
-    payload = b64url({
-        "sub": 0, "id": 0,
-        "email": "ai-agent@meridian.internal",
-        "name": "AI Agent",
-        "role": "admin",
-        "iat": now,
-        "exp": now + 3600,
-    })
-    signing_input = f"{header}.{payload}".encode()
-    sig = (
-        base64.urlsafe_b64encode(
-            hmac.new(secret, signing_input, hashlib.sha256).digest()
-        )
-        .rstrip(b"=")
-        .decode()
-    )
-    return f"{header}.{payload}.{sig}"
-
-
 def _upload_image(buf: bytes, mime: str, alt: str, server_base: str) -> str:
-    jwt = _make_agent_jwt()
+    jwt = make_agent_jwt()
     ext = "jpg" if "jpeg" in mime else "webp" if "webp" in mime else "png"
     files = {"file": (f"ai-{int(time.time())}.{ext}", BytesIO(buf), mime)}
     res = requests.post(
