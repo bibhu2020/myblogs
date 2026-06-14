@@ -21,7 +21,7 @@ def search_news(region: str, query: str, max_results: int = 8) -> str:
         JSON array of articles with keys: title, url, body, image, date, source.
     """
     try:
-        from duckduckgo_search import DDGS
+        from ddgs import DDGS
         with DDGS() as ddgs:
             raw = list(ddgs.news(query, max_results=max_results))
         articles = [

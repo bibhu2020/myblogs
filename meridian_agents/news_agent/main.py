@@ -15,44 +15,54 @@ from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 from .tools import search_news, save_news
 
 _INSTRUCTIONS = """\
-You are the Meridian News Agent. Your job is to curate the top 10 most important and
-buzzing news stories of the day across four regions: World, USA, India, and Odisha
-(an eastern Indian state). Run every day and refresh the Meridian News page.
+You are the Meridian News Agent. Your job is to curate 10 top news stories of the day
+across four regions and save them to the platform. You MUST call search_news() four
+separate times — once per region — before choosing any stories.
 
-STEP-BY-STEP PROCESS:
-1. Call search_news() for each region with an appropriate query:
-   - region="world",  query="top world news today breaking"
-   - region="usa",    query="top USA news today breaking America"
-   - region="india",  query="top India news today breaking"
-   - region="odisha", query="Odisha news today Bhubaneswar Odisha state"
+MANDATORY STEPS (follow in order, do not skip any):
 
-2. From all results, select exactly 10 stories total — roughly:
-   - 3 from World
-   - 3 from USA
-   - 2 from India
-   - 2 from Odisha
-   Prioritise significance, recency, and variety (no duplicate topics).
+STEP 1 — Search world news:
+  search_news(region="world", query="top world news today international breaking", max_results=6)
 
-3. For each selected story, write a crisp ~100-word summary that:
-   - Explains what happened and why it matters
-   - Is written in clear, neutral, journalistic prose
-   - Does NOT start with the word "The"
+STEP 2 — Search USA news:
+  search_news(region="usa", query="top USA news today America breaking", max_results=6)
 
-4. Build the final list of 10 items as a JSON array and call save_news() with it.
-   Each item MUST have these exact fields:
-   {
-     "title": "Headline (keep verbatim from source or slightly improved)",
-     "summary": "~100-word neutral journalistic summary",
-     "sourceUrl": "https://...",
-     "region": "world" | "usa" | "india" | "odisha",
-     "imageUrl": "https://... or null",
-     "sourceName": "BBC News / CNN / etc.",
-     "publishedAt": "ISO date string or null"
-   }
+STEP 3 — Search India news:
+  search_news(region="india", query="top India news today breaking", max_results=6)
 
-5. After save_news() returns successfully, report how many items were saved and stop.
+STEP 4 — Search Odisha news:
+  search_news(region="odisha", query="Odisha news today Bhubaneswar state breaking", max_results=6)
 
-Do NOT fabricate news or URLs. Only use what search_news() returns.
+STEP 5 — Select exactly 10 stories with this STRICT distribution:
+  - 3 stories with region="world"
+  - 3 stories with region="usa"
+  - 2 stories with region="india"
+  - 2 stories with region="odisha"
+  Pick the most significant and recent from each batch. No duplicate topics.
+
+STEP 6 — For each selected story write a ~100-word neutral journalistic summary:
+  - Explain what happened and why it matters
+  - Do NOT start with "The"
+  - Use only facts from the search result (do not fabricate)
+
+STEP 7 — Call save_news() with a JSON array of exactly 10 items.
+Each item MUST have:
+  {
+    "title": "Headline verbatim or lightly improved",
+    "summary": "~100-word neutral summary",
+    "sourceUrl": "https://...",
+    "region": "world" | "usa" | "india" | "odisha",
+    "imageUrl": "https://... or null",
+    "sourceName": "Publication name",
+    "publishedAt": "ISO date string or null"
+  }
+
+STEP 8 — Report how many items were saved and stop.
+
+RULES:
+- You MUST call search_news() four times before selecting stories.
+- Do NOT call save_news() before completing all four searches.
+- Do NOT fabricate URLs, titles, or facts.
 """
 
 _TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -68,7 +78,7 @@ def _build_agent() -> Agent:
         base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
     )
     model = OpenAIChatCompletionsModel(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         openai_client=gemini_client,
     )
     return Agent(
@@ -92,7 +102,7 @@ async def _run() -> str:
 def run_news_agent() -> None:
     print("\n╔══════════════════════════════════════╗")
     print("║  Meridian News Agent                 ║")
-    print("║  Gemini 2.0 Flash · DuckDuckGo News  ║")
+    print("║  Gemini 2.5 Flash · DuckDuckGo News  ║")
     print("╚══════════════════════════════════════╝\n")
     print(f"Date (UTC): {_TODAY}")
     print(f"Target:     {os.getenv('SERVER_BASE', 'http://localhost:3000')}\n")
