@@ -12,6 +12,7 @@ _HF_JSON_INSTRUCTION = (
 
 _HF_MODEL = "Qwen/Qwen2.5-72B-Instruct"
 _OAI_MODEL = "gpt-4o"
+_HF_MAX_TOKENS = 8000  # HF serverless inference hard cap for this model
 
 
 def chat_completion(
@@ -33,7 +34,7 @@ def chat_completion(
             response = client.chat.completions.create(
                 model=_HF_MODEL,
                 messages=_inject_json_instruction(messages),
-                max_tokens=max_tokens,
+                max_tokens=min(max_tokens, _HF_MAX_TOKENS),
                 temperature=temperature,
             )
             text = (response.choices[0].message.content or "").strip()
