@@ -8,7 +8,7 @@ on:
 jobs:
   maintenance-agent:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     permissions:
       contents: write        # git push fix branches + merge PRs
       pull-requests: write   # create / merge / close PRs
@@ -33,6 +33,16 @@ jobs:
 
       - name: Install Python dependencies
         run: pip install -e ".[maintenance]" --quiet
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm --prefix frontend install --frozen-lockfile
 
       - name: Run maintenance agent
         env:

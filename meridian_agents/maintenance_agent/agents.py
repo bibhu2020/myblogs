@@ -77,7 +77,7 @@ _CODE_TOOLS = [
     tools.revert_file,
 ]
 
-_BUILD_TOOL = [tools.run_frontend_build]
+_BUILD_TOOL = [tools.install_frontend_deps, tools.run_frontend_build]
 
 # ── Branch/PR workflow block injected into every fix agent system message ──────
 
@@ -295,8 +295,73 @@ If there are no fixable issues: report that clearly and stop.
     summaries.append(f"Phase 3 (SEO/ADA): {result[:800]}")
     findings.extend(_extract_findings(result, "seo_ada"))
 
-    # ── Ensure local main is clean after all phases ────────────────────────────
-    tools.git_pull_main()
+    # ══════════════════════════════════════════════════════════════════════════
+    # PHASE 4 — Build Verification on main
+    # ══════════════════════════════════════════════════════════════════════════
+    print("\n╔══════════════════════════════════════╗")
+    print("║  Phase 4: Build Verification         ║")
+    print("╚══════════════════════════════════════╝\n")
+
+    build_agent = AssistantAgent(
+        name="BuildVerifier",
+        model_client=client,
+        tools=[
+            tools.git_pull_main,
+            tools.install_frontend_deps,
+            tools.run_frontend_build,
+            *_BRANCH_PR_TOOLS,
+            *_CODE_TOOLS,
+        ],
+        system_message=f"""You verify that the main branch builds successfully after all maintenance work.
+GitHub repo: {github_repo}
+
+STEPS:
+
+STEP 1 — Sync main:
+  Call git_pull_main() to pull all changes merged by previous phases (Dependabot PRs,
+  sitemap fixes, SEO/ADA fixes).
+
+STEP 2 — Install dependencies:
+  Call install_frontend_deps() to sync node_modules with any updated package.json
+  (important if Dependabot merged dependency bumps in Phase 1).
+  If verdict == "SKIPPED", npm is unavailable — skip to STEP 5.
+
+STEP 3 — Build:
+  Call run_frontend_build().
+  Evaluate verdict:
+  • "BUILD PASSED"  → report success and stop.
+  • "BUILD SKIPPED" → npm not available; report and stop.
+  • "BUILD FAILED"  → proceed to STEP 4.
+
+STEP 4 — Fix build error (via branch/PR):
+  Read the stdout/stderr from run_frontend_build() carefully.
+  Identify the exact file and line causing the failure.
+  Read that file with read_source_file to see its current content.
+  Apply a targeted fix with apply_file_patch.
+  Then use the branch/PR workflow:
+{_BRANCH_PR_INSTRUCTIONS}
+  Branch name: "fix/build-error".
+  After the fix PR is merged, call git_pull_main(), then install_frontend_deps(),
+  then run_frontend_build() again.
+  Repeat STEP 3-4 until BUILD PASSED (or max 3 attempts).
+
+STEP 5 — Report:
+  "Build verification: PASSED / FAILED / SKIPPED — <brief reason>"
+
+IMPORTANT:
+- Only fix genuine TypeScript/JavaScript/Vue compilation errors.
+- Do NOT modify package.json or lock files — only source files.
+- Do NOT make unrequested refactoring or style changes.
+""",
+    )
+    build_task = (
+        "Verify the main branch frontend build after all maintenance changes. "
+        "Pull latest main, install deps, run the Vite build, fix any errors via branch/PR, "
+        "and report the final build status."
+    )
+    result = await _run_agent(build_agent, build_task, max_turns=60)
+    summaries.append(f"Phase 4 (Build): {result[:600]}")
+    findings.extend(_extract_findings(result, "build"))
 
     summary = "\n\n".join(summaries)
     return summary, findings

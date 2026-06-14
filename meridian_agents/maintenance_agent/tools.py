@@ -786,14 +786,51 @@ def revert_file(file_path: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def install_frontend_deps() -> str:
+    """Run npm install in the frontend directory to sync dependencies after package.json changes.
+
+    Call this before run_frontend_build() whenever package.json or package-lock.json may
+    have been updated (e.g. after Dependabot PRs were merged).
+    Returns JSON with success (bool) and output/error strings.
+    """
+    import shutil
+    if not shutil.which("npm"):
+        return json.dumps({"success": False, "verdict": "SKIPPED",
+                           "message": "npm not available — dependency install skipped"})
+    frontend_dir = os.path.join(REPO_ROOT, "frontend")
+    try:
+        result = subprocess.run(
+            ["npm", "install", "--prefer-offline"],
+            cwd=frontend_dir,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        return json.dumps({
+            "success": result.returncode == 0,
+            "returnCode": result.returncode,
+            "output": result.stdout[-2000:] if result.stdout else "",
+            "error": result.stderr[-1000:] if result.returncode != 0 else "",
+        })
+    except subprocess.TimeoutExpired:
+        return json.dumps({"success": False, "error": "npm install timed out after 300s"})
+    except Exception as exc:
+        return json.dumps({"success": False, "error": str(exc)})
+
+
 def run_frontend_build() -> str:
     """Run the Vite frontend build (npm run build) to verify the frontend compiles without errors.
 
     Returns JSON with: success (bool), returnCode, stdout (last 3000 chars),
-    stderr (last 2000 chars), durationSeconds, and verdict ('BUILD PASSED' or 'BUILD FAILED').
-    Chunk-size warnings do NOT indicate failure — only returnCode != 0 means failure.
+    stderr (last 2000 chars), durationSeconds, and verdict:
+      'BUILD PASSED'  — returnCode 0 (chunk-size warnings are NOT failures)
+      'BUILD FAILED'  — returnCode != 0
+      'BUILD SKIPPED' — npm not available in this environment
     """
-    import time
+    import shutil, time
+    if not shutil.which("npm"):
+        return json.dumps({"success": False, "verdict": "BUILD SKIPPED",
+                           "message": "npm not available in this environment — build check skipped"})
     frontend_dir = os.path.join(REPO_ROOT, "frontend")
     try:
         t0 = time.time()
