@@ -786,6 +786,99 @@ def revert_file(file_path: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def build_nodejs_service(service: str) -> str:
+    """Install deps and run 'npm run build' for a specific Node.js / NestJS service.
+
+    Covers all five services: api-gateway, auth-service, blog-service,
+    media-service, and frontend.  Each build is self-contained — it runs
+    'npm install --prefer-offline' first so stale node_modules after a
+    Dependabot merge are handled automatically.
+
+    Args:
+        service: One of 'frontend', 'api-gateway', 'auth-service',
+                 'blog-service', 'media-service'.
+    """
+    import shutil, time
+
+    allowed = {"frontend", "api-gateway", "auth-service", "blog-service", "media-service"}
+    if service not in allowed:
+        return json.dumps({"error": f"Unknown service '{service}'. Valid: {sorted(allowed)}"})
+    if not shutil.which("npm"):
+        return json.dumps({"service": service, "verdict": "BUILD SKIPPED",
+                           "message": "npm not available in this environment"})
+    service_dir = os.path.join(REPO_ROOT, service)
+    if not os.path.isdir(service_dir):
+        return json.dumps({"service": service, "verdict": "BUILD SKIPPED",
+                           "message": f"Directory not found: {service_dir}"})
+    try:
+        t0 = time.time()
+        # Sync deps first (fast when already installed; catches Dependabot package.json changes)
+        install = subprocess.run(
+            ["npm", "install", "--prefer-offline"],
+            cwd=service_dir, capture_output=True, text=True, timeout=300,
+        )
+        if install.returncode != 0:
+            return json.dumps({
+                "service": service, "success": False, "verdict": "BUILD FAILED",
+                "error": f"npm install failed:\n{install.stderr[-1500:]}",
+            })
+        # Build
+        result = subprocess.run(
+            ["npm", "run", "build"],
+            cwd=service_dir, capture_output=True, text=True, timeout=300,
+        )
+        elapsed = round(time.time() - t0, 1)
+        success = result.returncode == 0
+        return json.dumps({
+            "service": service,
+            "success": success,
+            "returnCode": result.returncode,
+            "stdout": result.stdout[-2000:] if result.stdout else "",
+            "stderr": result.stderr[-1000:] if result.stderr else "",
+            "durationSeconds": elapsed,
+            "verdict": "BUILD PASSED" if success else "BUILD FAILED",
+        })
+    except subprocess.TimeoutExpired:
+        return json.dumps({"service": service, "success": False,
+                           "verdict": "BUILD FAILED", "error": "Timed out after 300s"})
+    except Exception as exc:
+        return json.dumps({"service": service, "success": False,
+                           "verdict": "BUILD FAILED", "error": str(exc)})
+
+
+def check_python_syntax() -> str:
+    """Check Python syntax for every .py file under meridian_agents/.
+
+    Uses py_compile (no imports executed) to detect syntax errors without
+    running the modules.  Returns a JSON report listing any bad files.
+    """
+    import py_compile
+
+    agents_dir = os.path.join(REPO_ROOT, "meridian_agents")
+    errors: list[dict] = []
+    checked = 0
+
+    for root, dirs, files in os.walk(agents_dir):
+        dirs[:] = [d for d in dirs if d not in ("__pycache__", ".venv", "node_modules")]
+        for fname in sorted(files):
+            if not fname.endswith(".py"):
+                continue
+            fpath = os.path.join(root, fname)
+            rel = os.path.relpath(fpath, REPO_ROOT)
+            checked += 1
+            try:
+                py_compile.compile(fpath, doraise=True)
+            except py_compile.PyCompileError as exc:
+                errors.append({"file": rel, "error": str(exc)})
+
+    return json.dumps({
+        "checked": checked,
+        "errorCount": len(errors),
+        "errors": errors,
+        "verdict": "SYNTAX OK" if not errors else "SYNTAX ERRORS FOUND",
+    })
+
+
 def install_frontend_deps() -> str:
     """Run npm install in the frontend directory to sync dependencies after package.json changes.
 

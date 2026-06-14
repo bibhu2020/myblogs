@@ -77,7 +77,8 @@ _CODE_TOOLS = [
     tools.revert_file,
 ]
 
-_BUILD_TOOL = [tools.install_frontend_deps, tools.run_frontend_build]
+_BUILD_TOOL = [tools.install_frontend_deps, tools.run_frontend_build,
+               tools.build_nodejs_service, tools.check_python_syntax]
 
 # ── Branch/PR workflow block injected into every fix agent system message ──────
 
@@ -307,57 +308,69 @@ If there are no fixable issues: report that clearly and stop.
         model_client=client,
         tools=[
             tools.git_pull_main,
+            tools.build_nodejs_service,
+            tools.check_python_syntax,
             tools.install_frontend_deps,
             tools.run_frontend_build,
             *_BRANCH_PR_TOOLS,
             *_CODE_TOOLS,
         ],
-        system_message=f"""You verify that the main branch builds successfully after all maintenance work.
+        system_message=f"""You verify that the ENTIRE codebase (Node.js + Python) builds cleanly on
+the main branch after all maintenance work has been merged.
 GitHub repo: {github_repo}
 
-STEPS:
-
 STEP 1 — Sync main:
-  Call git_pull_main() to pull all changes merged by previous phases (Dependabot PRs,
-  sitemap fixes, SEO/ADA fixes).
+  Call git_pull_main() to pull all changes merged by previous phases.
 
-STEP 2 — Install dependencies:
-  Call install_frontend_deps() to sync node_modules with any updated package.json
-  (important if Dependabot merged dependency bumps in Phase 1).
-  If verdict == "SKIPPED", npm is unavailable — skip to STEP 5.
+STEP 2 — Build all Node.js services:
+  Call build_nodejs_service(service) for EACH of the five services, one at a time:
+    "frontend", "api-gateway", "auth-service", "blog-service", "media-service"
+  Each call installs deps then runs 'npm run build'.
+  Collect every service where verdict == "BUILD FAILED".
 
-STEP 3 — Build:
-  Call run_frontend_build().
-  Evaluate verdict:
-  • "BUILD PASSED"  → report success and stop.
-  • "BUILD SKIPPED" → npm not available; report and stop.
-  • "BUILD FAILED"  → proceed to STEP 4.
+STEP 3 — Check Python syntax:
+  Call check_python_syntax() to verify all .py files under meridian_agents/.
+  Collect any files listed under "errors".
 
-STEP 4 — Fix build error (via branch/PR):
-  Read the stdout/stderr from run_frontend_build() carefully.
-  Identify the exact file and line causing the failure.
-  Read that file with read_source_file to see its current content.
-  Apply a targeted fix with apply_file_patch.
-  Then use the branch/PR workflow:
+STEP 4 — Report intermediate status:
+  Print a table like:
+    frontend      : BUILD PASSED
+    api-gateway   : BUILD PASSED
+    auth-service  : BUILD FAILED  ← fix needed
+    blog-service  : BUILD PASSED
+    media-service : BUILD PASSED
+    Python syntax : SYNTAX OK
+
+STEP 5 — Fix failures (via branch/PR):
+  For each FAILED service or Python syntax error:
+    a. Read the error output carefully to find the broken file and line.
+    b. Call read_source_file to get the exact current content.
+    c. Apply a targeted fix with apply_file_patch.
+       • For Node.js/TypeScript/Vue: fix only .ts, .js, .vue, .html, .css source files.
+       • For Python: fix only .py source files.
+       • NEVER modify package.json, package-lock.json, or any lock files.
+    d. Use the branch/PR workflow:
 {_BRANCH_PR_INSTRUCTIONS}
-  Branch name: "fix/build-error".
-  After the fix PR is merged, call git_pull_main(), then install_frontend_deps(),
-  then run_frontend_build() again.
-  Repeat STEP 3-4 until BUILD PASSED (or max 3 attempts).
+       Branch name: "fix/build-<service>" (e.g. "fix/build-auth-service" or "fix/build-python").
+    e. After the fix PR merges, call git_pull_main() then re-run the affected build tool.
+    f. Repeat until that service/check passes (max 3 attempts per failure).
 
-STEP 5 — Report:
-  "Build verification: PASSED / FAILED / SKIPPED — <brief reason>"
+STEP 6 — Final report:
+  List every service with its final verdict. Example:
+    "Build verification complete:
+     frontend PASSED | api-gateway PASSED | auth-service PASSED |
+     blog-service PASSED | media-service PASSED | Python SYNTAX OK"
 
 IMPORTANT:
-- Only fix genuine TypeScript/JavaScript/Vue compilation errors.
-- Do NOT modify package.json or lock files — only source files.
-- Do NOT make unrequested refactoring or style changes.
+- If verdict is "BUILD SKIPPED" for any service (npm not available), note it and continue.
+- Fix genuine compilation/syntax errors only. Do not refactor or clean up unrelated code.
+- Only end when ALL services either PASSED or SKIPPED, and Python syntax is OK.
 """,
     )
     build_task = (
-        "Verify the main branch frontend build after all maintenance changes. "
-        "Pull latest main, install deps, run the Vite build, fix any errors via branch/PR, "
-        "and report the final build status."
+        "Verify that the entire codebase builds cleanly on main after all maintenance changes. "
+        "Pull latest main, then build all 5 Node.js services and check Python syntax. "
+        "Fix any build failures via branch/PR. Report final status for every service."
     )
     result = await _run_agent(build_agent, build_task, max_turns=60)
     summaries.append(f"Phase 4 (Build): {result[:600]}")
