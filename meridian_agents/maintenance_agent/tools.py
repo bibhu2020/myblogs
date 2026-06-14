@@ -302,6 +302,138 @@ def read_source_file(relative_path: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Internal-link auditor
+# ---------------------------------------------------------------------------
+
+
+def check_internal_links(root: str = "") -> str:
+    """Scan all Vue/JS frontend source files for internal navigation links whose
+    paths don't match any route defined in frontend/src/router/index.js.
+
+    Catches broken RouterLink to="..." and <a href="..."> destinations.
+    Returns JSON: routesFound, filesScanned, brokenLinks, broken[{file, line, path}].
+
+    Args:
+        root: Repo root path. Defaults to the myblogs project root.
+    """
+    base = Path(root or REPO_ROOT)
+
+    # ── 1. Parse router: collect valid absolute paths + parent→child mapping ──
+    router_file = base / "frontend/src/router/index.js"
+    router_text = router_file.read_text(encoding="utf-8") if router_file.exists() else ""
+
+    valid_paths: set[str] = set()
+
+    # Collect absolute paths (direct valid routes), excluding catch-all patterns
+    abs_paths = [
+        p for p in re.findall(r"\bpath:\s*['\"](/[^'\"]+)['\"]", router_text)
+        if not re.search(r"[*().]", p)  # skip catch-all like /:pathMatch(.*)*
+    ]
+    valid_paths.update(abs_paths)
+
+    # Resolve children: for each "children: [...]" block, find its nearest
+    # preceding absolute-path parent and combine.
+    segments = re.split(r"(children\s*:\s*\[)", router_text)
+    accumulated = segments[0]
+    for i in range(1, len(segments), 2):
+        children_marker = segments[i]
+        rest = segments[i + 1] if i + 1 < len(segments) else ""
+
+        # Most-recent absolute path before this children block = parent
+        parent_candidates = re.findall(r"\bpath:\s*['\"](/[^'\"]+)['\"]", accumulated)
+        parent = parent_candidates[-1] if parent_candidates else None
+
+        if parent:
+            # Read content inside [ ... ] respecting bracket nesting
+            depth = 1
+            child_text: list[str] = []
+            for ch in rest:
+                if ch == "[":
+                    depth += 1
+                elif ch == "]":
+                    depth -= 1
+                    if depth == 0:
+                        break
+                child_text.append(ch)
+
+            child_block = "".join(child_text)
+            for child in re.findall(r"\bpath:\s*['\"]([^'\"]+)['\"]", child_block):
+                if child and not child.startswith("/") and not re.search(r"[*().]", child):
+                    valid_paths.add(f"{parent.rstrip('/')}/{child}")
+
+        accumulated += children_marker + rest
+
+    def _route_to_regex(path: str) -> re.Pattern:
+        parts = path.split("/")
+        pats = ["[^/]+" if part.startswith(":") else re.escape(part) for part in parts]
+        return re.compile("^" + "/".join(pats) + "$")
+
+    route_regexes = [_route_to_regex(p) for p in valid_paths]
+
+    def _is_valid(path: str) -> bool:
+        path = path.split("?")[0].split("#")[0].rstrip("/") or "/"
+        return any(rx.match(path) for rx in route_regexes)
+
+    _IGNORE_PREFIXES = ("/api/", "/uploads/", "//")
+    _SKIP = {"", "/", "#"}
+    # Static assets are not SPA routes — ignore paths with file extensions
+    _STATIC_EXTS = {".svg", ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".ico",
+                    ".css", ".js", ".json", ".txt", ".woff", ".woff2", ".ttf", ".xml"}
+
+    # ── 2. Patterns to extract internal link paths from templates ─────────────
+    #   to="/path"      — static RouterLink (unbound)
+    #   to='/path'      — same, single-quoted
+    #   :to="'/path'"   — bound but literal string value
+    #   href="/path"    — anchor tag (non-external)
+    _link_patterns = [
+        re.compile(r'''\bto="(/[^"<>{}`\s]+)"'''),
+        re.compile(r"""\bto='(/[^'<>{}`\s]+)'"""),
+        re.compile(r""":to="'(/[^']+)'"''"""),
+        re.compile(r'''\bhref="(/[^"<>\s]+)"'''),
+        re.compile(r"""\bhref='(/[^'<>\s]+)'"""),
+    ]
+
+    # ── 3. Walk frontend/src Vue/JS files ─────────────────────────────────────
+    src_dir = base / "frontend/src"
+    vue_files = sorted(
+        f for f in src_dir.rglob("*")
+        if f.suffix in {".vue", ".js"} and "node_modules" not in f.parts
+    )
+
+    broken: list[dict] = []
+    for vf in vue_files:
+        try:
+            lines = vf.read_text(encoding="utf-8").splitlines()
+        except Exception:
+            continue
+        for lineno, line in enumerate(lines, 1):
+            for pat in _link_patterns:
+                for m in pat.finditer(line):
+                    path = m.group(1)
+                    if path in _SKIP:
+                        continue
+                    if any(path.startswith(pfx) for pfx in _IGNORE_PREFIXES):
+                        continue
+                    # Ignore static assets (have a file extension in the path)
+                    bare = path.split("#")[0].split("?")[0]
+                    if any(bare.lower().endswith(ext) for ext in _STATIC_EXTS):
+                        continue
+                    if not _is_valid(path):
+                        broken.append({
+                            "file": str(vf.relative_to(base)),
+                            "line": lineno,
+                            "path": path,
+                        })
+
+    return json.dumps({
+        "routesFound": len(valid_paths),
+        "filesScanned": len(vue_files),
+        "brokenLinks": len(broken),
+        "broken": broken,
+    }, indent=2)
+
+
+# ---------------------------------------------------------------------------
 # SEOAnalyzer tools
 # ---------------------------------------------------------------------------
 
