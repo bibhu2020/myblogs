@@ -96,7 +96,7 @@ onMounted(load)
 <template>
   <!-- Light variant -->
   <div v-if="variant === 'light'"
-    class="rounded-2xl overflow-hidden"
+    class="rounded-2xl overflow-hidden h-full"
     :class="state === 'ready'
       ? 'bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-lg shadow-blue-200'
       : 'bg-gray-50 border border-gray-200'"
@@ -164,7 +164,7 @@ onMounted(load)
 
   <!-- Dark variant -->
   <div v-else
-    class="rounded-2xl overflow-hidden"
+    class="rounded-2xl overflow-hidden h-full"
     :class="state === 'ready'
       ? 'bg-gradient-to-br from-[#0c2340] to-[#1a3a5c] border border-blue-800/60'
       : 'bg-[#162236] border border-slate-700'"
