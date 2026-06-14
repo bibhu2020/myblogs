@@ -114,18 +114,23 @@ function ago(d) {
             </div>
           </RouterLink>
 
-          <!-- Weather widget -->
-          <WeatherWidget variant="light" />
+        </div>
+      </div>
+    </section>
 
-          <!-- Newsletter -->
-          <div class="bg-gradient-to-br from-primary-600 to-primary-800 rounded-2xl p-6 text-white">
+    <!-- Weather + Newsletter full-width row -->
+    <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 items-stretch">
+        <WeatherWidget variant="light" />
+        <div class="bg-gradient-to-br from-primary-600 to-primary-800 rounded-2xl p-6 text-white flex flex-col justify-between">
+          <div>
             <h2 class="font-bold text-lg mb-2" style="font-family:'Playfair Display',serif">Stay in the Loop</h2>
             <p class="text-primary-100 text-sm mb-4">Get the latest stories delivered to your inbox.</p>
-            <div class="flex gap-2">
-              <input type="email" placeholder="your@email.com" aria-label="Email address for newsletter"
-                class="flex-1 px-3 py-2 rounded-lg bg-white/20 text-white placeholder-primary-200 text-sm border border-white/30 focus:outline-none focus:border-white" />
-              <button class="bg-white text-primary-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-50 transition-colors">Subscribe</button>
-            </div>
+          </div>
+          <div class="flex gap-2">
+            <input type="email" placeholder="your@email.com" aria-label="Email address for newsletter"
+              class="flex-1 px-3 py-2 rounded-lg bg-white/20 text-white placeholder-primary-200 text-sm border border-white/30 focus:outline-none focus:border-white" />
+            <button class="bg-white text-primary-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-50 transition-colors">Subscribe</button>
           </div>
         </div>
       </div>
@@ -282,19 +287,24 @@ function ago(d) {
           </div>
           <PostCard v-for="post in morePosts.slice(0, 4)" :key="post.id" :post="post" />
 
-          <!-- Weather widget (dark) -->
-          <WeatherWidget variant="dark" class="mt-2" />
+        </div>
+      </div>
+    </section>
 
-          <!-- Newsletter (dark variant) -->
-          <div class="mt-6 bg-[#162236] border border-violet-700/40 rounded-2xl p-6">
+    <!-- Weather + Newsletter full-width row (dark) -->
+    <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 items-stretch">
+        <WeatherWidget variant="dark" />
+        <div class="bg-[#162236] border border-violet-700/40 rounded-2xl p-6 flex flex-col justify-between">
+          <div>
             <div class="text-violet-400 text-xs font-bold uppercase tracking-widest mb-2">Newsletter</div>
             <h3 class="font-bold text-white text-lg mb-2" style="font-family:'Playfair Display',serif">Stay Ahead</h3>
             <p class="text-slate-400 text-sm mb-4">Daily dispatches from AI, science, and beyond.</p>
-            <div class="flex gap-2">
-              <input type="email" placeholder="your@email.com" aria-label="Email address for newsletter"
-                class="flex-1 px-3 py-2 rounded-lg bg-slate-900 text-slate-200 placeholder-slate-600 text-sm border border-slate-700 focus:outline-none focus:border-violet-500" />
-              <button class="bg-violet-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-violet-700 transition-colors">Go</button>
-            </div>
+          </div>
+          <div class="flex gap-2">
+            <input type="email" placeholder="your@email.com" aria-label="Email address for newsletter"
+              class="flex-1 px-3 py-2 rounded-lg bg-slate-900 text-slate-200 placeholder-slate-600 text-sm border border-slate-700 focus:outline-none focus:border-violet-500" />
+            <button class="bg-violet-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-violet-700 transition-colors">Go</button>
           </div>
         </div>
       </div>
