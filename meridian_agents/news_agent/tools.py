@@ -1,13 +1,17 @@
 """Tools and search helpers for the Meridian News Agent."""
 import json
+import os
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
+from io import BytesIO
 
 import feedparser
 import requests
 from agents import function_tool
 
+from ..auth import make_agent_jwt
 from .publisher import save_news_items as _save
 
 _HEADERS = {
@@ -166,6 +170,132 @@ def fetch_region_news(region: str, _query: str = "", max_results: int = 10) -> l
     return result
 
 
+# ── Image enhancement via Gemini ─────────────────────────────────────────────
+
+def _download_image(url: str, timeout: int = 15) -> tuple[bytes, str] | None:
+    """Download an image and return (bytes, mime_type), or None on failure."""
+    try:
+        resp = requests.get(url, headers=_HEADERS, timeout=timeout, allow_redirects=True)
+        if resp.status_code != 200:
+            return None
+        ct = resp.headers.get("content-type", "image/jpeg").split(";")[0].strip()
+        if not ct.startswith("image/"):
+            return None
+        return resp.content, ct
+    except Exception:
+        return None
+
+
+def _upload_to_media(buf: bytes, mime: str, alt: str) -> str | None:
+    """Upload image bytes to the Meridian media service and return the URL."""
+    server_base = os.getenv("SERVER_BASE", "http://localhost:3000")
+    try:
+        jwt = make_agent_jwt(name="News Agent", email="news-agent@meridian.internal")
+        ext = "jpg" if "jpeg" in mime else "webp" if "webp" in mime else "png"
+        files = {"file": (f"news-{int(time.time())}.{ext}", BytesIO(buf), mime)}
+        res = requests.post(
+            f"{server_base}/api/media/upload",
+            headers={"Authorization": f"Bearer {jwt}"},
+            files=files,
+            data={"alt": alt[:200]},
+            timeout=60,
+        )
+        if not res.ok:
+            return None
+        return res.json().get("url")
+    except Exception:
+        return None
+
+
+_ENHANCE_MODELS = [
+    "gemini-3.1-flash-image",
+    "gemini-2.5-flash-image",
+    "gemini-3-pro-image",
+]
+
+_ENHANCE_PROMPT = (
+    "Enhance this news thumbnail: sharpen focus, remove blur and noise, "
+    "improve brightness and contrast. Keep the same subject and composition. "
+    "Return a crisp, professional image suitable for a news website."
+)
+
+
+def _gemini_enhance(image_bytes: bytes, mime: str) -> tuple[bytes, str] | None:
+    """Send an image to Gemini for enhancement and return (enhanced_bytes, mime)."""
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    if not api_key:
+        return None
+    try:
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=api_key)
+        parts = [
+            types.Part.from_bytes(data=image_bytes, mime_type=mime),
+            types.Part.from_text(text=_ENHANCE_PROMPT),
+        ]
+        cfg = types.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"])
+
+        for model_name in _ENHANCE_MODELS:
+            try:
+                response = client.models.generate_content(
+                    model=model_name, contents=parts, config=cfg
+                )
+                for part in response.candidates[0].content.parts:
+                    if getattr(part, "inline_data", None):
+                        return part.inline_data.data, part.inline_data.mime_type
+            except Exception:
+                continue
+        return None
+    except Exception as exc:
+        print(f"      ⚠️  Gemini enhance: {exc}")
+        return None
+
+
+def _enhance_item_image(idx_item: tuple[int, dict]) -> tuple[int, str | None]:
+    """Download, enhance via Gemini, upload, and return (idx, new_url or None)."""
+    idx, item = idx_item
+    url = item.get("imageUrl")
+    if not url:
+        return idx, None
+
+    downloaded = _download_image(url)
+    if not downloaded:
+        return idx, None
+    raw_bytes, mime = downloaded
+
+    enhanced = _gemini_enhance(raw_bytes, mime)
+    if not enhanced:
+        return idx, None
+    enh_bytes, enh_mime = enhanced
+
+    new_url = _upload_to_media(enh_bytes, enh_mime, item.get("title", "news thumbnail")[:120])
+    return idx, new_url
+
+
+def _enhance_all_images(items: list[dict]) -> list[dict]:
+    """Enhance every item that has an imageUrl using Gemini, upload to media service."""
+    candidates = [(i, it) for i, it in enumerate(items) if it.get("imageUrl")]
+    if not candidates:
+        return items
+
+    print(f"   ✨ Enhancing {len(candidates)} thumbnail(s) with Gemini…")
+    enhanced = [dict(it) for it in items]
+
+    with ThreadPoolExecutor(max_workers=min(len(candidates), 5)) as pool:
+        futures = {pool.submit(_enhance_item_image, pair): pair[0] for pair in candidates}
+        for f in as_completed(futures):
+            idx, new_url = f.result()
+            title = items[idx].get("title", "")[:55]
+            if new_url:
+                enhanced[idx]["imageUrl"] = new_url
+                print(f"      ✓ {title}")
+            else:
+                print(f"      ✗ {title} (kept original)")
+
+    return enhanced
+
+
 # ── Image enrichment (run after agent selects articles) ──────────────────────
 
 def _enrich_images(items: list[dict]) -> list[dict]:
@@ -217,6 +347,7 @@ def save_news(items_json: str) -> str:
     try:
         items = json.loads(items_json)
         items = _enrich_images(items)
+        items = _enhance_all_images(items)
         result = _save(items)
         got = sum(1 for it in items if it.get("imageUrl"))
         print(f"   💾  Saved {len(items)} items ({got} with thumbnail)")
