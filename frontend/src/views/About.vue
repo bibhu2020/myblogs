@@ -46,6 +46,20 @@ const approvalSteps = [
   { step: '3', label: 'Admin Reviews', desc: 'The Pending Approval tab in the admin panel shows the full post with Approve and Reject buttons.' },
   { step: '4', label: 'Publish or Discard', desc: 'Approve promotes the post to "published". Reject deletes it permanently. Either action can also be taken from the CLI.' },
 ]
+
+const recentFeatures = [
+  { icon: '📰', label: 'AI News Agent', desc: 'Daily headlines from 20+ RSS feeds across 4 regions, curated and summarised by Gemini.' },
+  { icon: '✨', label: 'Gemini Image Enhancement', desc: 'All news thumbnails are sharpened and upscaled by Gemini before being stored locally.' },
+  { icon: '📖', label: 'Story Corner', desc: 'Weekly AI-written children\'s stories for ages 8–15 with AI-generated illustrated thumbnails.' },
+  { icon: '🔊', label: 'Text-to-Speech', desc: 'Every post and news story streams as audio via a progressive built-in TTS player.' },
+]
+
+const newsRegions = [
+  { flag: '🌍', label: 'World', sources: 'BBC World, CNN, The Guardian, Al Jazeera' },
+  { flag: '🇺🇸', label: 'USA', sources: 'BBC US & Canada, CNN US, NPR' },
+  { flag: '🇮🇳', label: 'India', sources: 'NDTV, Times of India, The Hindu' },
+  { flag: '🏛️', label: 'Odisha', sources: 'OTV, Pragativadi, The Hindu Odisha' },
+]
 </script>
 
 <template>
@@ -65,6 +79,22 @@ const approvalSteps = [
         </p>
       </div>
     </section>
+
+    <!-- Recent Additions strip -->
+    <div class="bg-gradient-to-r from-primary-600 to-violet-600 text-white">
+      <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <p class="text-xs font-bold uppercase tracking-widest text-white/70 mb-4">Recent Additions</p>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div v-for="f in recentFeatures" :key="f.label" class="flex gap-3 items-start">
+            <span class="text-2xl flex-shrink-0">{{ f.icon }}</span>
+            <div>
+              <div class="font-bold text-sm leading-snug">{{ f.label }}</div>
+              <div class="text-white/70 text-xs leading-snug mt-0.5">{{ f.desc }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-20">
 
@@ -184,6 +214,65 @@ const approvalSteps = [
         </div>
       </section>
 
+      <!-- AI News Agent -->
+      <section>
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 rounded-xl bg-slate-700 flex items-center justify-center text-white text-xl">📰</div>
+          <h2 class="text-2xl font-bold text-gray-900" style="font-family:'Playfair Display',serif">AI News Agent</h2>
+        </div>
+        <div class="prose prose-gray max-w-none text-gray-600 leading-relaxed space-y-4 mb-8">
+          <p>
+            Meridian's <strong>News Agent</strong> runs every 12 hours and autonomously aggregates, curates, and publishes the day's top stories — no human editor required. Powered by <strong>Gemini 2.5 Flash</strong>, it pulls from over 20 live RSS feeds, selects 10 stories across four regions, writes a crisp 100-word neutral summary for each, and saves them directly to the platform.
+          </p>
+          <p>
+            Before saving, every thumbnail is downloaded, sent to <strong>Gemini's image-enhancement model</strong> to sharpen focus and improve clarity, and then uploaded to Meridian's own media service — replacing low-resolution news thumbnails with locally-hosted, high-quality images. The News page also features a built-in <strong>text-to-speech player</strong> that can read all stories aloud in sequence.
+          </p>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+          <div v-for="r in newsRegions" :key="r.label" class="bg-gray-50 border border-gray-100 rounded-2xl p-4">
+            <div class="text-2xl mb-2">{{ r.flag }}</div>
+            <div class="font-bold text-gray-900 text-sm mb-1">{{ r.label }}</div>
+            <div class="text-gray-400 text-xs leading-snug">{{ r.sources }}</div>
+          </div>
+        </div>
+        <div class="bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm text-gray-600 leading-relaxed">
+          <strong class="text-slate-800">How it works:</strong> RSS feeds → Gemini curates 10 stories + writes summaries → og:image fallback scraping for articles missing thumbnails → Gemini image enhancement → upload to media service → published to the News page. Schedule: <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">0 6,18 * * *</code> UTC.
+        </div>
+      </section>
+
+      <!-- Story Corner -->
+      <section>
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 rounded-xl bg-rose-500 flex items-center justify-center text-white text-xl">📖</div>
+          <h2 class="text-2xl font-bold text-gray-900" style="font-family:'Playfair Display',serif">Story Corner</h2>
+        </div>
+        <div class="prose prose-gray max-w-none text-gray-600 leading-relaxed space-y-4 mb-6">
+          <p>
+            Every week, the <strong>Story Agent</strong> writes an original children's story for readers aged 8–15. Each story is crafted by Gemini to be imaginative, age-appropriate, and engaging — with a distinct narrative arc, memorable characters, and a gentle moral. A matching illustrated thumbnail is generated via AI image synthesis (Imagen 4 / FLUX.1) and uploaded alongside the story.
+          </p>
+          <p>
+            Stories live in their own <strong>Story Corner</strong> section, separate from the main blog feed. Like blog posts, they can be listened to with the built-in TTS player — making them accessible even for younger readers who prefer to hear rather than read.
+          </p>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="bg-rose-50 border border-rose-100 rounded-2xl p-5">
+            <div class="text-2xl mb-2">🎯</div>
+            <div class="font-bold text-gray-900 text-sm mb-1">Audience</div>
+            <p class="text-gray-500 text-xs leading-relaxed">Written for ages 8–15 with vocabulary and themes calibrated to the target age group.</p>
+          </div>
+          <div class="bg-rose-50 border border-rose-100 rounded-2xl p-5">
+            <div class="text-2xl mb-2">🖼️</div>
+            <div class="font-bold text-gray-900 text-sm mb-1">AI Illustrations</div>
+            <p class="text-gray-500 text-xs leading-relaxed">Each story gets a unique cover image generated by Imagen 4 or FLUX.1 and stored in the media service.</p>
+          </div>
+          <div class="bg-rose-50 border border-rose-100 rounded-2xl p-5">
+            <div class="text-2xl mb-2">🔊</div>
+            <div class="font-bold text-gray-900 text-sm mb-1">Listen Mode</div>
+            <p class="text-gray-500 text-xs leading-relaxed">Every story streams as audio via the same TTS engine used for blog posts and news.</p>
+          </div>
+        </div>
+      </section>
+
       <!-- System Design Download -->
       <section>
         <div class="bg-gradient-to-r from-primary-50 to-violet-50 border border-primary-100 rounded-2xl p-8 flex flex-col sm:flex-row items-center gap-6">
@@ -271,6 +360,22 @@ const approvalSteps = [
         </p>
       </div>
     </section>
+
+    <!-- Recent Additions strip -->
+    <div class="bg-gradient-to-r from-violet-900/60 to-primary-900/60 border-b border-violet-900/40">
+      <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <p class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Recent Additions</p>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div v-for="f in recentFeatures" :key="f.label" class="flex gap-3 items-start">
+            <span class="text-2xl flex-shrink-0">{{ f.icon }}</span>
+            <div>
+              <div class="font-bold text-slate-200 text-sm leading-snug">{{ f.label }}</div>
+              <div class="text-slate-500 text-xs leading-snug mt-0.5">{{ f.desc }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-20">
 
@@ -387,6 +492,65 @@ const approvalSteps = [
         </div>
         <div class="mt-6 bg-[#1a1500] border border-amber-900/40 rounded-xl p-4 text-sm text-slate-400 leading-relaxed">
           <span class="text-amber-400 font-semibold">Self-correcting loops:</span> If ReviewerAgent finds a WCAG AA contrast failure (ratio &lt; 4.5:1), it hands back to IdeationAgent for a palette revision. Markup or ARIA issues route to CodingAgent. Build failures send TesterAgent back to CodingAgent. The pipeline allows up to three revision cycles before committing.
+        </div>
+      </section>
+
+      <!-- AI News Agent -->
+      <section>
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 rounded-xl bg-slate-600 flex items-center justify-center text-white text-xl">📰</div>
+          <h2 class="text-2xl font-bold text-white" style="font-family:'Playfair Display',serif">AI News Agent</h2>
+        </div>
+        <div class="text-slate-400 leading-relaxed space-y-4 mb-8">
+          <p>
+            Meridian's <span class="text-slate-200 font-semibold">News Agent</span> runs every 12 hours and autonomously aggregates, curates, and publishes the day's top stories — no human editor required. Powered by <span class="text-violet-300 font-semibold">Gemini 2.5 Flash</span>, it pulls from over 20 live RSS feeds, selects 10 stories across four regions, writes a crisp 100-word neutral summary for each, and saves them directly to the platform.
+          </p>
+          <p>
+            Before saving, every thumbnail is downloaded, sent to <span class="text-violet-300 font-semibold">Gemini's image-enhancement model</span> to sharpen focus and improve clarity, and then uploaded to Meridian's own media service — replacing low-resolution news thumbnails with locally-hosted, high-quality images. The News page also features a built-in <span class="text-violet-300 font-semibold">text-to-speech player</span> that can read all stories aloud in sequence.
+          </p>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+          <div v-for="r in newsRegions" :key="r.label" class="bg-[#162236] border border-[#2d3f5f] rounded-2xl p-4">
+            <div class="text-2xl mb-2">{{ r.flag }}</div>
+            <div class="font-bold text-slate-200 text-sm mb-1">{{ r.label }}</div>
+            <div class="text-slate-500 text-xs leading-snug">{{ r.sources }}</div>
+          </div>
+        </div>
+        <div class="bg-[#162236] border border-[#2d3f5f] rounded-xl p-4 text-sm text-slate-400 leading-relaxed">
+          <span class="text-slate-300 font-semibold">How it works:</span> RSS feeds → Gemini curates 10 stories + writes summaries → og:image fallback scraping for articles missing thumbnails → Gemini image enhancement → upload to media service → published to the News page. Schedule: <code class="bg-slate-800 px-1.5 py-0.5 rounded text-xs font-mono text-violet-300">0 6,18 * * *</code> UTC.
+        </div>
+      </section>
+
+      <!-- Story Corner -->
+      <section>
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 rounded-xl bg-rose-700 flex items-center justify-center text-white text-xl">📖</div>
+          <h2 class="text-2xl font-bold text-white" style="font-family:'Playfair Display',serif">Story Corner</h2>
+        </div>
+        <div class="text-slate-400 leading-relaxed space-y-4 mb-6">
+          <p>
+            Every week, the <span class="text-slate-200 font-semibold">Story Agent</span> writes an original children's story for readers aged 8–15. Each story is crafted by Gemini to be imaginative, age-appropriate, and engaging — with a distinct narrative arc, memorable characters, and a gentle moral. A matching illustrated thumbnail is generated via AI image synthesis (Imagen 4 / FLUX.1) and uploaded alongside the story.
+          </p>
+          <p>
+            Stories live in their own <span class="text-rose-400 font-semibold">Story Corner</span> section, separate from the main blog feed. Like blog posts, they can be listened to with the built-in TTS player — making them accessible even for younger readers who prefer to hear rather than read.
+          </p>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="bg-[#1e1520] border border-rose-900/40 rounded-2xl p-5">
+            <div class="text-2xl mb-2">🎯</div>
+            <div class="font-bold text-slate-200 text-sm mb-1">Audience</div>
+            <p class="text-slate-400 text-xs leading-relaxed">Written for ages 8–15 with vocabulary and themes calibrated to the target age group.</p>
+          </div>
+          <div class="bg-[#1e1520] border border-rose-900/40 rounded-2xl p-5">
+            <div class="text-2xl mb-2">🖼️</div>
+            <div class="font-bold text-slate-200 text-sm mb-1">AI Illustrations</div>
+            <p class="text-slate-400 text-xs leading-relaxed">Each story gets a unique cover image generated by Imagen 4 or FLUX.1 and stored in the media service.</p>
+          </div>
+          <div class="bg-[#1e1520] border border-rose-900/40 rounded-2xl p-5">
+            <div class="text-2xl mb-2">🔊</div>
+            <div class="font-bold text-slate-200 text-sm mb-1">Listen Mode</div>
+            <p class="text-slate-400 text-xs leading-relaxed">Every story streams as audio via the same TTS engine used for blog posts and news.</p>
+          </div>
         </div>
       </section>
 

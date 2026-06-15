@@ -116,9 +116,11 @@ async function _runFrom(start, session) {
     }
     ttsState.value = 'loading'
     if (!chunkFetches[i]) chunkFetches[i] = _fetchChunk(chunkData[i].text)
-    const next = i + 1
-    if (next < ttsTotalChunks.value && !chunkFetches[next])
-      chunkFetches[next] = _fetchChunk(chunkData[next].text)
+    for (let p = 1; p <= 3; p++) {
+      const ahead = i + p
+      if (ahead < ttsTotalChunks.value && !chunkFetches[ahead])
+        chunkFetches[ahead] = _fetchChunk(chunkData[ahead].text)
+    }
     const blob = await chunkFetches[i]
     if (session !== sessionId) return
     if (!blob) continue
@@ -144,8 +146,8 @@ async function openPlayer() {
   ttsChunkIdx.value = 0
   chunkFetches = new Array(chunkData.length).fill(null)
   _ensureAudio()
-  chunkFetches[0] = _fetchChunk(chunkData[0].text)
-  if (chunkData.length > 1) chunkFetches[1] = _fetchChunk(chunkData[1].text)
+  for (let k = 0; k < Math.min(4, chunkData.length); k++)
+    chunkFetches[k] = _fetchChunk(chunkData[k].text)
   ttsState.value = 'loading'
   const session = ++sessionId
   await _runFrom(0, session)

@@ -35,7 +35,7 @@ let sessionId      = 0        // incremented on each new playback/seek to invali
 let audioEl        = null     // single reused <audio> element (avoids Safari per-element activation)
 let currentBlobUrl = null     // blob URL to revoke on cleanup
 let resolveChunk   = null     // exposes the current playChunk resolver for instant cancellation
-let chunkFetches   = []       // per-chunk fetch promises, filled lazily (1-ahead window)
+let chunkFetches   = []       // per-chunk fetch promises, filled lazily (3-ahead pipeline)
 let chunkTexts     = []       // text for each chunk, required for lazy fetching
 
 function splitChunks(html, maxLen = 500) {
@@ -116,10 +116,11 @@ async function runFrom(startIdx, session) {
     // Start this chunk's fetch lazily if not already in flight
     if (!chunkFetches[i]) chunkFetches[i] = fetchOneChunk(chunkTexts[i])
 
-    // 1-ahead: pre-fetch the next chunk so the server is never idle between chunks
-    const next = i + 1
-    if (next < ttsTotalChunks.value && !chunkFetches[next]) {
-      chunkFetches[next] = fetchOneChunk(chunkTexts[next])
+    // 3-ahead: keep a pipeline of up to 3 chunks in-flight so playback never stalls
+    for (let p = 1; p <= 3; p++) {
+      const ahead = i + p
+      if (ahead < ttsTotalChunks.value && !chunkFetches[ahead])
+        chunkFetches[ahead] = fetchOneChunk(chunkTexts[ahead])
     }
 
     const blob = await chunkFetches[i]
@@ -166,10 +167,9 @@ async function openPlayer() {
   // before any async work begins — required by Safari's autoplay policy.
   ensureAudioEl()
 
-  // Kick off the first two chunks immediately so the server is already
-  // synthesising chunk 1 while chunk 0 (the title) is playing.
-  chunkFetches[0] = fetchOneChunk(chunkTexts[0])
-  if (chunks.length > 1) chunkFetches[1] = fetchOneChunk(chunkTexts[1])
+  // Warm up the first 4 chunks immediately so the pipeline is full before playback starts.
+  for (let k = 0; k < Math.min(4, chunks.length); k++)
+    chunkFetches[k] = fetchOneChunk(chunkTexts[k])
 
   ttsState.value = 'loading'
   const session = ++sessionId
