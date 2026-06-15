@@ -79,14 +79,65 @@ def extract_json(text: str) -> dict:
     # Find outermost { ... } block
     match = re.search(r"\{[\s\S]*\}", cleaned)
     if match:
+        candidate = match.group()
         try:
-            return json.loads(match.group())
+            return json.loads(candidate)
         except json.JSONDecodeError:
             pass
+
+        # Field-by-field extraction — robust against unescaped double quotes in
+        # the "content" HTML (dialogue, HTML attributes, etc.).
+        # Assumes "content" is the last field (true for all Meridian agent prompts).
+        result = _extract_fields(candidate)
+        if result and ("title" in result or "content" in result):
+            return result
 
     raise ValueError(
         f"No valid JSON found in LLM response. First 300 chars: {text[:300]!r}"
     )
+
+
+def _extract_fields(text: str) -> dict:
+    """Extract individual fields from a JSON string that may have unescaped quotes.
+
+    Handles simple string fields with a standard JSON regex, and the 'content' field
+    specially: everything from '"content": "' up to the last '"' before the final '}'
+    is treated as the content value, regardless of embedded double quotes.
+    """
+    result: dict = {}
+
+    # Simple string fields (no HTML, no embedded quotes expected)
+    for field in ("title", "excerpt", "featuredImagePrompt", "moralLesson",
+                  "unsplashSearchQuery", "genre", "ageGroup"):
+        m = re.search(
+            rf'"{re.escape(field)}"\s*:\s*(?:"((?:[^"\\]|\\.)*)"|null)',
+            text,
+        )
+        if m:
+            result[field] = m.group(1)  # None if matched null
+
+    # 'content' field: take everything between '"content": "' and the last '"'
+    # that immediately precedes optional whitespace and the closing '}'.
+    content_m = re.search(r'"content"\s*:\s*"', text)
+    if content_m:
+        content_start = content_m.end()
+        rest = text[content_start:]
+        # The JSON object closes with  "  (optional whitespace)  }
+        # Find the rightmost such pattern.
+        end_m = re.search(r'"\s*\}\s*$', rest)
+        if end_m:
+            raw = rest[: end_m.start()]
+        else:
+            # Fallback: strip trailing quote/brace manually
+            raw = rest.rstrip()
+            if raw.endswith("}"):
+                raw = raw[:-1].rstrip()
+            if raw.endswith('"'):
+                raw = raw[:-1]
+        # Unescape \" sequences the LLM may have correctly written
+        result["content"] = raw.replace('\\"', '"')
+
+    return result
 
 
 def _inject_json_instruction(messages: list[dict]) -> list[dict]:

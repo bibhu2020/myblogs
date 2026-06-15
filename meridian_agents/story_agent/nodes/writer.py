@@ -114,7 +114,15 @@ OUTPUT FORMAT — return a single JSON object:
   "content": "Full story HTML using ONLY: <h2> (chapter titles) <h3> <p> <strong> <em> <blockquote> (for inner thoughts or speech) <ul> <ol> <li>"
 }
 
-IMPORTANT: The 'content' field must be at least 4,000 words of story text. Do not summarise — write the full story with complete scenes, dialogue, and description. No markdown, only valid HTML."""
+IMPORTANT: The 'content' field must be at least 4,000 words of story text. Do not summarise — write the full story with complete scenes, dialogue, and description. No markdown, only valid HTML.
+
+JSON VALIDITY — CRITICAL:
+- Use single quotes for all HTML attribute values: class='chapter' not class="chapter"
+- For spoken dialogue inside the content HTML, use curly/typographic quotes (“Hello”) or
+  the HTML entities &ldquo; and &rdquo; — never raw double-quote characters (") inside the content
+  string, as they will break the JSON wrapper
+- Escape all double-quotes inside any JSON string value with a backslash: \\"
+- Do not include markdown, only valid HTML in the content field"""
 
 
 def _word_count(html: str) -> int:
@@ -171,7 +179,7 @@ This is the FULL story — do not abbreviate, do not summarise, write every scen
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        max_tokens=12000,
+        max_tokens=16000,
         temperature=0.85,
     )
     data = extract_json(text)
@@ -214,7 +222,7 @@ def expand_story_node(state: StoryAgentState) -> dict:
                 ),
             },
         ],
-        max_tokens=14000,
+        max_tokens=16000,
         temperature=0.75,
     )
     data = extract_json(text)
