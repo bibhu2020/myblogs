@@ -2,7 +2,7 @@ name: Run Story Agent
 
 on:
   schedule:
-    - cron: '0 6 * * 1'  # Every Monday 06:00 UTC — one story per week
+    - cron: '0 6 * * 2'  # Every Monday 06:00 UTC — one story per week
   workflow_dispatch:
     inputs:
       genre:
