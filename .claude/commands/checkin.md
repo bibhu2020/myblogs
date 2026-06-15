@@ -8,7 +8,9 @@ Perform a full git check-in to the `local` branch and open a PR into `main`. Fol
 
 ### Step 1 — Ensure we are on `local`
 
-Run `git branch --show-current`. If not on `local`, switch: `git checkout local`.
+Run `git branch --show-current`. If the result is `main`, **immediately warn the user**: "⚠️ You are currently on `main`. Your working branch is `local`. Moving your changes there now." Then stash all changes (`git stash push --include-untracked`), switch to `local`, and apply the stash (`git stash pop`) before continuing.
+
+If already on `local`, proceed.
 
 ### Step 2 — Inspect changes
 
