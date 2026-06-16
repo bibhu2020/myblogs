@@ -26,12 +26,16 @@ import { NewsService } from './news.service';
 import { JwtStrategy } from './jwt.strategy';
 import { SeedService } from './seed.service';
 
+const DB_URL = process.env.DATABASE_URL;
+
+const dbConfig: any = DB_URL
+  ? { type: 'postgres', url: DB_URL, ssl: { rejectUnauthorized: false } }
+  : { type: 'better-sqlite3', database: 'blog.db' };
+
 @Module({
   imports: [
     TypeOrmModule.forRoot({
-      type: 'postgres',
-      url: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_96zZibhKwEcG@ep-delicate-fire-atgeeiwh-pooler.c-9.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
-      ssl: { rejectUnauthorized: false },
+      ...dbConfig,
       entities: [Post, Category, Tag, Comment, AgentRun, Story, NewsItem],
       synchronize: true,
     }),

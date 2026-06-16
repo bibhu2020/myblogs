@@ -2,7 +2,7 @@ name: Run Rebranding Agent
 
 on:
   schedule:
-    - cron: '0 3 * * 0'   # Every Sunday 03:00 UTC — agent enforces first-Sunday-only guard
+    - cron: '0 3 * * 1'   # Every Sunday 03:00 UTC — agent enforces first-Sunday-only guard
   workflow_dispatch:
     inputs:
       force_rebrand:

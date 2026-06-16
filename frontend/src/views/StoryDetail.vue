@@ -5,7 +5,7 @@ import Navbar from '../components/Navbar.vue'
 import Footer from '../components/Footer.vue'
 import api from '../api'
 import { format } from 'date-fns'
-import hljs from 'highlight.js'
+// highlight.js is loaded lazily only when code blocks are present in the story
 
 const route = useRoute()
 const story = ref(null)
@@ -189,7 +189,11 @@ onMounted(async () => {
     const res = await api.get(`/stories/${route.params.slug}`)
     story.value = res.data
     await nextTick()
-    document.querySelectorAll('.story-content pre code').forEach(el => hljs.highlightElement(el))
+    const codeBlocks = document.querySelectorAll('.story-content pre code')
+    if (codeBlocks.length) {
+      const { default: hljs } = await import('highlight.js')
+      codeBlocks.forEach(el => hljs.highlightElement(el))
+    }
   } catch {
     error.value = 'Story not found.'
   }
