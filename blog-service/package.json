@@ -10,6 +10,7 @@
     "test:cov": "jest --coverage --passWithNoTests"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/jwt": "^11.0.0",
@@ -25,7 +26,8 @@
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.1",
     "slugify": "^1.6.6",
-    "typeorm": "^0.3.19"
+    "typeorm": "^0.3.19",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
@@ -40,13 +42,26 @@
     "typescript": "^5.3.3"
   },
   "jest": {
-    "moduleFileExtensions": ["js", "json", "ts"],
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
-    "transform": { "^.+\\.(t|j)s$": "ts-jest" },
-    "collectCoverageFrom": ["**/*.(t|j)s", "!**/main.ts", "!**/seed.service.ts"],
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "collectCoverageFrom": [
+      "**/*.(t|j)s",
+      "!**/main.ts",
+      "!**/seed.service.ts"
+    ],
     "coverageDirectory": "../coverage",
-    "coverageReporters": ["lcov", "text"],
+    "coverageReporters": [
+      "lcov",
+      "text"
+    ],
     "testEnvironment": "node"
   }
 }
