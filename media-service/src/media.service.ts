@@ -7,7 +7,7 @@ import * as fs from 'fs';
 const GH_OWNER = 'bibhu2020';
 const GH_REPO  = 'media';
 const GH_BRANCH = 'main';
-const GH_PATH   = 'uploads';
+const GH_PATH   = 'myblogs/uploads';
 const RAW_BASE  = `https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/${GH_BRANCH}/${GH_PATH}`;
 const API_BASE  = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`;
 
