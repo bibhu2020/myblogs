@@ -26,7 +26,7 @@
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.1",
     "slugify": "^1.6.6",
-    "typeorm": "^0.3.19",
+    "typeorm": "^1.0.0",
     "ws": "^8.21.0"
   },
   "devDependencies": {
