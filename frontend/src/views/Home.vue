@@ -168,8 +168,8 @@ function ago(d) {
           <div class="divide-y divide-gray-100">
             <a v-for="item in newsItems" :key="item.id" :href="item.sourceUrl" target="_blank" rel="noopener"
               class="group flex gap-3 py-4 hover:bg-gray-50 rounded-xl px-2 -mx-2 transition-colors">
-              <div v-if="item.imageUrl" class="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
-                <img :src="item.imageUrl" :alt="item.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+              <div class="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
+                <img :src="item.imageUrl || 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=128&q=80'" :alt="item.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" @error="e => e.target.src='https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=128&q=80'" />
               </div>
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-1">
@@ -386,8 +386,8 @@ function ago(d) {
           <div class="divide-y divide-[#1e2d44]">
             <a v-for="item in newsItems" :key="item.id" :href="item.sourceUrl" target="_blank" rel="noopener"
               class="group flex gap-3 py-4 hover:bg-[#162236] rounded-xl px-2 -mx-2 transition-colors">
-              <div v-if="item.imageUrl" class="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-slate-800">
-                <img :src="item.imageUrl" :alt="item.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+              <div class="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-slate-800">
+                <img :src="item.imageUrl || 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=128&q=80'" :alt="item.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" @error="e => e.target.src='https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=128&q=80'" />
               </div>
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-1">
