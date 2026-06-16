@@ -5,7 +5,9 @@
     "build": "nest build",
     "start": "node dist/main",
     "start:dev": "nest start --watch",
-    "start:debug": "nest start --debug --watch"
+    "start:debug": "nest start --debug --watch",
+    "test": "jest --passWithNoTests",
+    "test:cov": "jest --coverage --passWithNoTests"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
@@ -28,11 +30,25 @@
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
+    "@nestjs/testing": "^11.0.0",
     "@types/bcryptjs": "^3.0.0",
     "@types/better-sqlite3": "^7.6.8",
+    "@types/jest": "^29.5.12",
     "@types/node": "^25.9.3",
     "@types/passport-jwt": "^4.0.1",
     "@types/passport-local": "^1.0.38",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.0",
     "typescript": "^5.3.3"
+  },
+  "jest": {
+    "moduleFileExtensions": ["js", "json", "ts"],
+    "rootDir": "src",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": { "^.+\\.(t|j)s$": "ts-jest" },
+    "collectCoverageFrom": ["**/*.(t|j)s", "!**/main.ts"],
+    "coverageDirectory": "../coverage",
+    "coverageReporters": ["lcov", "text"],
+    "testEnvironment": "node"
   }
 }

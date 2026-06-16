@@ -4,6 +4,15 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  test: {
+    environment: 'happy-dom',
+    coverage: {
+      provider: 'v8',
+      reporter: ['lcov', 'text'],
+      include: ['src/**/*.{js,vue}'],
+      exclude: ['src/main.js', 'src/router/**'],
+    },
+  },
   plugins: [
     vue(),
     tailwindcss(),
