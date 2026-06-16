@@ -37,18 +37,37 @@ jobs:
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
 
       - name: SonarQube Quality Gate check
-        id: quality-gate
-        uses: SonarSource/sonarqube-quality-gate-action@v1
-        timeout-minutes: 10
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
-      - name: Report Quality Gate status
-        if: always()
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
         run: |
-          echo "Quality Gate status: ${{ steps.quality-gate.outputs.quality-gate-status }}"
-          if [ "${{ steps.quality-gate.outputs.quality-gate-status }}" = "FAILED" ]; then
-            echo "::error::Quality Gate FAILED — merge blocked. Check SonarQube for Critical/High vulnerabilities."
+          TASK_ID=$(grep "^ceTaskId=" .scannerwork/report-task.txt | cut -d= -f2)
+          echo "Polling background task: $TASK_ID"
+
+          for i in $(seq 1 30); do
+            RESPONSE=$(curl -sf -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/ce/task?id=$TASK_ID")
+            STATUS=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['task']['status'])")
+            echo "Attempt $i: $STATUS"
+            if [ "$STATUS" = "SUCCESS" ]; then break; fi
+            if [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "CANCELED" ]; then
+              echo "::error::SonarQube background task $STATUS — check Administration → Background Tasks"
+              exit 1
+            fi
+            sleep 10
+          done
+
+          if [ "$STATUS" != "SUCCESS" ]; then
+            echo "::error::Timed out waiting for SonarQube analysis to complete"
+            exit 1
+          fi
+
+          QG=$(curl -sf -u "$SONAR_TOKEN:" \
+            "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=$SONAR_PROJECT_KEY" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['projectStatus']['status'])")
+          echo "Quality Gate status: $QG"
+
+          if [ "$QG" != "OK" ]; then
+            echo "::error::Quality Gate FAILED — merge blocked. Fix Critical/High vulnerabilities in SonarQube before merging."
             exit 1
           fi
