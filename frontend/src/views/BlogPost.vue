@@ -8,7 +8,7 @@ import Footer from '../components/Footer.vue'
 import PostCard from '../components/PostCard.vue'
 import api from '../api'
 import { format } from 'date-fns'
-import hljs from 'highlight.js'
+// highlight.js is loaded lazily only when code blocks are present in the post
 
 const blog = useBlogStore()
 const layout = useLayoutStore()
@@ -223,19 +223,19 @@ function closePlayer() {
   playerOpen.value = false
 }
 
-function applyHighlighting() {
-  nextTick(() => {
-    document.querySelectorAll('.post-content pre code').forEach(block => {
-      hljs.highlightElement(block)
-    })
-    // also handle bare <pre> without inner <code>
-    document.querySelectorAll('.post-content pre:not(:has(code))').forEach(block => {
-      const code = document.createElement('code')
-      code.innerHTML = block.innerHTML
-      block.innerHTML = ''
-      block.appendChild(code)
-      hljs.highlightElement(code)
-    })
+async function applyHighlighting() {
+  await nextTick()
+  const codeBlocks = document.querySelectorAll('.post-content pre code')
+  const barePre = document.querySelectorAll('.post-content pre:not(:has(code))')
+  if (!codeBlocks.length && !barePre.length) return
+  const { default: hljs } = await import('highlight.js')
+  codeBlocks.forEach(block => hljs.highlightElement(block))
+  barePre.forEach(block => {
+    const code = document.createElement('code')
+    code.innerHTML = block.innerHTML
+    block.innerHTML = ''
+    block.appendChild(code)
+    hljs.highlightElement(code)
   })
 }
 

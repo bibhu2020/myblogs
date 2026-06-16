@@ -15,7 +15,12 @@
     "start:backend": "dotenv -e .env -- concurrently \"npm --prefix auth-service run start:dev\" \"npm --prefix blog-service run start:dev\" \"npm --prefix media-service run start:dev\" \"npm --prefix api-gateway run start:dev\"",
     "seed": "npm --prefix blog-service run seed"
   },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
+    "ws": "^8.18.0"
+  },
   "devDependencies": {
+    "@types/ws": "^8.5.14",
     "concurrently": "^8.2.2",
     "dotenv-cli": "^11.0.0"
   }

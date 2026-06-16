@@ -10,12 +10,23 @@ import { UsersService } from './users.service';
 import { JwtStrategy } from './jwt.strategy';
 import { LocalStrategy } from './local.strategy';
 
+const DB_URL = process.env.DATABASE_URL;
+
+const dbConfig: any = DB_URL
+  ? {
+      type: 'postgres',
+      url: DB_URL,
+      ssl: { rejectUnauthorized: false },
+    }
+  : {
+      type: 'better-sqlite3',
+      database: 'auth.db',
+    };
+
 @Module({
   imports: [
     TypeOrmModule.forRoot({
-      type: 'postgres',
-      url: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_96zZibhKwEcG@ep-delicate-fire-atgeeiwh-pooler.c-9.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
-      ssl: { rejectUnauthorized: false },
+      ...dbConfig,
       entities: [User],
       synchronize: true,
     }),
