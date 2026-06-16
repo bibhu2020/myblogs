@@ -35,7 +35,8 @@ jobs:
         with:
           args: >
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
-            -Dsonar.ws.timeout=300
+            -Dsonar.scanner.socketTimeout=300
+            -Dsonar.scanner.responseTimeout=300
 
       - name: SonarQube Quality Gate check
         env:
