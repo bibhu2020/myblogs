@@ -9,6 +9,7 @@ import { Comment } from './comment.entity';
 import { AgentRun } from './agent-run.entity';
 import { Story } from './story.entity';
 import { NewsItem } from './news-item.entity';
+import { PushSubscription } from './push-subscription.entity';
 import { PostsController } from './posts.controller';
 import { PostsService } from './posts.service';
 import { CategoriesController } from './categories.controller';
@@ -23,6 +24,8 @@ import { StoriesController } from './stories.controller';
 import { StoriesService } from './stories.service';
 import { NewsController } from './news.controller';
 import { NewsService } from './news.service';
+import { PushController } from './push.controller';
+import { PushService } from './push.service';
 import { JwtStrategy } from './jwt.strategy';
 import { SeedService } from './seed.service';
 
@@ -36,14 +39,14 @@ const dbConfig: any = DB_URL
   imports: [
     TypeOrmModule.forRoot({
       ...dbConfig,
-      entities: [Post, Category, Tag, Comment, AgentRun, Story, NewsItem],
+      entities: [Post, Category, Tag, Comment, AgentRun, Story, NewsItem, PushSubscription],
       synchronize: true,
     }),
-    TypeOrmModule.forFeature([Post, Category, Tag, Comment, AgentRun, Story, NewsItem]),
+    TypeOrmModule.forFeature([Post, Category, Tag, Comment, AgentRun, Story, NewsItem, PushSubscription]),
     PassportModule,
     JwtModule.register({ secret: 'myblogs-secret-key-2024' }),
   ],
-  controllers: [PostsController, CategoriesController, TagsController, CommentsController, AgentRunsController, StoriesController, NewsController],
-  providers: [PostsService, CategoriesService, TagsService, CommentsService, AgentRunsService, StoriesService, NewsService, JwtStrategy, SeedService],
+  controllers: [PostsController, CategoriesController, TagsController, CommentsController, AgentRunsController, StoriesController, NewsController, PushController],
+  providers: [PostsService, CategoriesService, TagsService, CommentsService, AgentRunsService, StoriesService, NewsService, PushService, JwtStrategy, SeedService],
 })
 export class AppModule {}

@@ -20,7 +20,7 @@ def save_pending_node(state: StoryAgentState) -> dict:
         "status": "pending",
         "authorName": state.get("author_name", "Meridian Storyteller"),
         "genre": state.get("genre", ""),
-        "ageGroup": "8-15",
+        "ageGroup": state.get("age_group", "8-15"),
         "moralLesson": state.get("moral_lesson", ""),
     }
     if state.get("featured_image_url"):

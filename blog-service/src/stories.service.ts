@@ -2,12 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Story, StoryStatus } from './story.entity';
+import { PushService } from './push.service';
 import slugify from 'slugify';
 
 @Injectable()
 export class StoriesService {
   constructor(
     @InjectRepository(Story) private storyRepo: Repository<Story>,
+    private readonly pushService: PushService,
   ) {}
 
   async findAll(query: any = {}) {
@@ -96,7 +98,9 @@ export class StoriesService {
       throw new Error(`Story ${id} is not pending approval (status: ${story.status})`);
     }
     story.status = StoryStatus.PUBLISHED;
-    return this.storyRepo.save(story);
+    const saved = await this.storyRepo.save(story);
+    void this.pushService.send({ title: 'New Story on Meridian', body: saved.title, url: `/story/${saved.slug}` });
+    return saved;
   }
 
   async reject(id: number) {

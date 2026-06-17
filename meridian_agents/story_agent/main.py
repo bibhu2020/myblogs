@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
-from .nodes.writer import pick_theme_node, write_story_node, expand_story_node  # noqa: E402
+from .nodes.writer import pick_theme_node, write_story_node, expand_story_node, _MIN_WORDS  # noqa: E402
 from .nodes.images import generate_story_images_node                              # noqa: E402
 from .nodes.publisher import save_pending_node                                    # noqa: E402
 from .tracer import start_run, complete_run                                       # noqa: E402
@@ -65,8 +65,8 @@ def _remove_pending(story_id: int) -> None:
 
 def run_agent() -> dict:
     print("\n╔═══════════════════════════════════════════════╗")
-    print("║   Meridian Story Agent — Weekly Story Run     ║")
-    print("║   Illustrated stories for ages 8–15           ║")
+    print("║   Meridian Story Agent — Daily Story Run      ║")
+    print("║   Ages 3-7 / 8-15 / 16-20 (random pick)      ║")
     print("╚═══════════════════════════════════════════════╝\n")
 
     if not os.getenv("OPENAI_API_KEY"):
@@ -78,6 +78,7 @@ def run_agent() -> dict:
     state: dict = {
         "server_base": SERVER_BASE,
         "author_name": AUTHOR_NAME,
+        "age_group": "",
         "theme": "",
         "genre": "",
         "premise": "",
@@ -97,7 +98,7 @@ def run_agent() -> dict:
         state.update(pick_theme_node(state))
         state.update(write_story_node(state))
 
-        if state["word_count"] < 4000:
+        if state["word_count"] < _MIN_WORDS.get(state.get("age_group", "8-15"), 4000):
             state.update(expand_story_node(state))
 
         state.update(generate_story_images_node(state))

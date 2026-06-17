@@ -273,6 +273,22 @@ export class AppController {
     return this.proxy.forward('blog', '/news/refresh', 'POST', body, { Authorization: this.getAuthHeader(req) });
   }
 
+  // PUSH NOTIFICATION ROUTES
+  @Get('push/vapid-key')
+  getPushVapidKey() {
+    return this.proxy.forward('blog', '/push/vapid-key', 'GET');
+  }
+
+  @Post('push/subscribe')
+  subscribePush(@Body() body: any) {
+    return this.proxy.forward('blog', '/push/subscribe', 'POST', body);
+  }
+
+  @Delete('push/unsubscribe')
+  unsubscribePush(@Body() body: any) {
+    return this.proxy.forward('blog', '/push/unsubscribe', 'DELETE', body);
+  }
+
   // AGENT RUNS
   @Post('agent-runs')
   createAgentRun(@Body() body: any) {

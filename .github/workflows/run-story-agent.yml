@@ -2,7 +2,7 @@ name: Run Story Agent
 
 on:
   schedule:
-    - cron: '0 6 * * 2'  # Every Monday 06:00 UTC — one story per week
+    - cron: '0 6 * * *'  # Daily at 06:00 UTC
   workflow_dispatch:
     inputs:
       genre:
@@ -19,6 +19,18 @@ on:
           - Science Fiction
           - Historical Fiction
           - Mythology
+          - Thriller
+          - Horror
+      age_group:
+        description: 'Target age group (leave blank for random)'
+        required: false
+        default: ''
+        type: choice
+        options:
+          - ''
+          - '3-7'
+          - '8-15'
+          - '16-20'
 
 jobs:
   story-agent:
@@ -38,11 +50,12 @@ jobs:
       - name: Install Python dependencies
         run: pip install -e ".[story_agent]" --quiet
 
-      - name: Generate weekly story
+      - name: Generate daily story
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SERVER_BASE: ${{ vars.HF_SPACE_URL }}
           STORY_GENRE: ${{ inputs.genre }}
+          STORY_AGE_GROUP: ${{ inputs.age_group }}
         run: python3 -m meridian_agents.story_agent
