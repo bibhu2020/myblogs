@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useBlogStore } from '../stores/blog'
 import { useLayoutStore } from '../stores/layout'
 import LogoMark from './LogoMark.vue'
+import PushNotificationButton from './PushNotificationButton.vue'
 
 const blog = useBlogStore()
 const layout = useLayoutStore()
@@ -158,6 +159,8 @@ const isB = () => layout.variant === 'b'
           </div>
         </form>
 
+        <PushNotificationButton class="hidden md:flex" />
+
         <RouterLink to="/admin"
           class="hidden md:block px-4 py-2 rounded-full text-sm font-medium transition-colors flex-shrink-0"
           :class="layout.variant === 'b'
@@ -209,7 +212,13 @@ const isB = () => layout.variant === 'b'
           class="block px-4 py-2.5 font-medium rounded-lg"
           :class="layout.variant === 'b' ? 'text-slate-300 hover:text-violet-400 hover:bg-slate-900' : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'"
         >About</RouterLink>
-        <div class="border-t mt-2 pt-2" :class="layout.variant === 'b' ? 'border-slate-800' : 'border-gray-100'">
+        <div class="border-t mt-2 pt-2 space-y-1" :class="layout.variant === 'b' ? 'border-slate-800' : 'border-gray-100'">
+          <div class="flex items-center gap-3 px-4 py-2.5">
+            <PushNotificationButton />
+            <span class="text-sm font-medium"
+              :class="layout.variant === 'b' ? 'text-slate-300' : 'text-gray-700'"
+            >Push Notifications</span>
+          </div>
           <RouterLink to="/admin" @click="mobileOpen=false"
             class="block px-4 py-2.5 font-medium rounded-lg"
             :class="layout.variant === 'b' ? 'text-violet-400 hover:bg-slate-900' : 'text-primary-600 hover:bg-primary-50'"

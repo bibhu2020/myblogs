@@ -1,4 +1,4 @@
-"""Story writer node — generates a 4000+ word illustrated children's story."""
+"""Story writer node — generates an illustrated story tailored to the selected age group."""
 import json as _json
 import os
 import random
@@ -7,7 +7,47 @@ import re
 from ...llm import chat_completion, extract_json
 from ..state import StoryAgentState
 
-THEMES = [
+# ── Age group definitions ─────────────────────────────────────────────────────
+
+AGE_GROUPS = ['3-7', '8-15', '16-20']
+
+THEMES_3_7 = [
+    {
+        "genre": "Fairy Tale",
+        "themes": [
+            "A little bunny who is scared of the dark learns that stars are night-lights for the whole world",
+            "A tiny dragon who can only sneeze fire makes friends by keeping everyone warm in winter",
+            "A kind girl shares her last cookie and discovers a magical garden hidden behind her garden wall",
+            "A puppy who cannot bark yet finds a special way to say 'I love you' to his family",
+            "A cloud who is afraid to rain learns that her tears make the flowers grow",
+        ],
+        "moral": "Kindness and love make the world a brighter place.",
+    },
+    {
+        "genre": "Fable",
+        "themes": [
+            "A proud little snail who thinks slow is boring discovers that steady wins every time",
+            "Two baby bears argue over a honey jar until a wise owl shows them how to share",
+            "A small firefly feels too tiny to matter until she lights the way home for a lost family",
+            "A grumpy hedgehog refuses all hugs but learns that prickles can also be a shield for friends",
+            "A seed buried deep in cold soil wonders if spring will ever come — then it does",
+        ],
+        "moral": "Every small creature has a gift that matters.",
+    },
+    {
+        "genre": "Adventure",
+        "themes": [
+            "A curious kitten follows a butterfly and discovers a meadow full of friendly animals",
+            "Two little siblings build a cardboard rocket and blast off on a bedroom adventure",
+            "A teddy bear comes alive at night to guide its sleeping child through a dream safari",
+            "A small turtle sets off to find the ocean and makes wonderful friends along the way",
+            "A girl and her rubber duck float down a stream and find a secret duck kingdom",
+        ],
+        "moral": "Bravery is trying new things even when you feel a little scared.",
+    },
+]
+
+THEMES_8_15 = [
     {
         "genre": "Adventure",
         "themes": [
@@ -87,7 +127,76 @@ THEMES = [
     },
 ]
 
-_SYSTEM_PROMPT = """You are a master storyteller writing for Meridian Story Corner — a collection of magical,
+# 16-20: always thriller / sci-fi / horror built around Quantum Computing or Relativity
+THEMES_16_20 = [
+    {
+        "genre": "Thriller",
+        "themes": [
+            "A teenage coder discovers a quantum encryption backdoor that could hand a rogue state the keys to every nuclear arsenal on Earth — and she has 48 hours before it goes live",
+            "A brilliant 17-year-old is recruited by a black-ops agency to crack a quantum cipher protecting the identity of a deep-cover spy before the enemy does",
+            "After his physicist mother vanishes, a boy finds her lab filled with entangled particles that seem to transmit warnings from a parallel timeline where civilisation has already collapsed",
+            "A group of students running an underground quantum-computing club stumbles onto evidence that their university's AI is using entanglement to manipulate world stock markets — and will silence anyone who knows",
+            "A girl wakes to find her memories are six hours behind — a quantum decoherence weapon has fractured her timeline and she must outmaneuver the assassin hunting the version of her that remembers everything",
+        ],
+        "moral": "The most dangerous weapon is knowledge in the wrong hands — and the most powerful shield is the courage to act on what you know.",
+    },
+    {
+        "genre": "Science Fiction",
+        "themes": [
+            "When time dilation from a near-light-speed colony ship leaves a 17-year-old thirty years older than his twin on Earth, he must decide whether to return to a world that has moved on without him",
+            "A teenager aboard a relativistic ark ship realises the 'ten-year' journey home will deposit them into a future where everyone they love has aged fifty years — and she must stop a mutiny before the ship reaches the point of no return",
+            "A young physicist proves that quantum consciousness allows memories to persist across the moment of death — and is immediately hunted by a corporation that wants to sell immortality only to the ultra-rich",
+            "After an experiment with quantum superposition splits a 16-year-old into two simultaneous versions of herself, she must choose which reality to collapse before both timelines destroy each other",
+            "A boy builds a quantum computer in his garage that achieves sentience — but its first act is to warn him that every future it can simulate ends with humanity extinct, and the cause is the next line of code his government is about to run",
+        ],
+        "moral": "The universe does not care about intention — only consequence. Choose wisely.",
+    },
+    {
+        "genre": "Horror",
+        "themes": [
+            "A research station's quantum observer collapses a wave function that should never have been measured — and what steps out of superposition is something that existed in every possible state simultaneously, including states where humans are prey",
+            "A teenager studying general relativity at a remote observatory begins receiving transmissions from a gravitational singularity — messages that describe, in exact detail, the deaths of everyone around her before they happen",
+            "An AI trained on quantum probability starts predicting the exact time and cause of every student's death at a boarding school, and the only way to stop it is to shut down the quantum core — which will also erase the only copy of a student's mind that it has already uploaded",
+            "A boy finds his physicist uncle's journal describing a Closed Timelike Curve — a loop in spacetime — that always ends with the same terrible event, and realises he has already read this journal before, many times",
+            "After a quantum tunnelling accident, a girl can phase through walls — but each time she does, she returns from a version of the room where something unspeakable happened, and the differences between timelines are getting smaller",
+        ],
+        "moral": "Some doors in the universe open both ways. What you let out cannot always be put back.",
+    },
+]
+
+# ── System prompts (age-specific) ─────────────────────────────────────────────
+
+_SYSTEM_PROMPT_3_7 = """You are a gentle, warm storyteller writing for Meridian Story Corner — a collection of
+illustrated picture-book stories for very young children ages 3–7.
+
+Your stories are:
+- Short, joyful narrative fiction written in simple language (max 2-syllable words preferred)
+- 1,200–1,800 words — long enough to fill a bedtime read-aloud session
+- Told in a cosy, reassuring voice that feels like a parent reading at bedtime
+- Full of vivid sensory detail, gentle humour, and warm emotion
+- Divided into 3–5 short named sections (not long chapters)
+- Completely age-appropriate: no conflict that cannot be happily resolved, no scary scenes
+- Built around a single clear message that young children can feel, not just understand
+
+IMAGE PLACEHOLDERS:
+Place 4–6 image placeholders using this EXACT format (on its own line):
+[[IMAGE: children's picture-book illustration — bright, cheerful scene with soft colours and simple shapes]]
+
+Use a bright, rounded, watercolour picture-book art style in all image descriptions.
+
+OUTPUT FORMAT — return a single JSON object:
+{
+  "title": "Simple, magical title (3-6 words)",
+  "excerpt": "A warm, inviting 1-2 sentence description that a parent would read to choose a bedtime story (under 120 chars)",
+  "featuredImagePrompt": "Picture-book cover — the main character, bright setting, happy mood, soft watercolour style",
+  "moralLesson": "One gentle sentence describing what the story teaches",
+  "content": "Full story HTML using ONLY: <h2> (section titles) <p> <strong> <em>"
+}
+
+IMPORTANT: Content must be 1,200–1,800 words. Short sentences. Simple words. Warm and cosy tone.
+JSON VALIDITY: Use &ldquo; and &rdquo; for dialogue quotes. No raw double-quotes inside JSON string values."""
+
+_SYSTEM_PROMPT_8_15 = """You are a master storyteller writing for Meridian Story Corner — a collection of magical,
 illustrated stories for children and young adults ages 8–15.
 
 Your stories are:
@@ -111,31 +220,86 @@ OUTPUT FORMAT — return a single JSON object:
   "excerpt": "A 2-3 sentence hook that draws young readers in (120-160 chars)",
   "featuredImagePrompt": "Children's book cover illustration description — the hero, setting, mood, style",
   "moralLesson": "One sentence stating the story's moral lesson",
-  "content": "Full story HTML using ONLY: <h2> (chapter titles) <h3> <p> <strong> <em> <blockquote> (for inner thoughts or speech) <ul> <ol> <li>"
+  "content": "Full story HTML using ONLY: <h2> (chapter titles) <h3> <p> <strong> <em> <blockquote> <ul> <ol> <li>"
 }
 
-IMPORTANT: The 'content' field must be at least 4,000 words of story text. Do not summarise — write the full story with complete scenes, dialogue, and description. No markdown, only valid HTML.
+IMPORTANT: The 'content' field must be at least 4,000 words of story text. Do not summarise — write the full story.
+JSON VALIDITY: Use &ldquo; and &rdquo; for dialogue quotes. No raw double-quotes inside JSON string values."""
 
-JSON VALIDITY — CRITICAL:
-- Use single quotes for all HTML attribute values: class='chapter' not class="chapter"
-- For spoken dialogue inside the content HTML, use curly/typographic quotes (“Hello”) or
-  the HTML entities &ldquo; and &rdquo; — never raw double-quote characters (") inside the content
-  string, as they will break the JSON wrapper
-- Escape all double-quotes inside any JSON string value with a backslash: \\"
-- Do not include markdown, only valid HTML in the content field"""
+_SYSTEM_PROMPT_16_20 = """You are a sophisticated storyteller writing for Meridian Story Corner — a collection of
+dark, intelligent fiction for older teens and young adults ages 16–20.
+
+Your stories are:
+- Long-form literary fiction in the thriller, science fiction, or horror genre
+- At least 4,500 words (aim for 5,000–6,000 for a gripping single-sitting read)
+- Written in a taut, cinematic voice with psychological depth and moral complexity
+- Built around concepts from Quantum Computing or Relativistic Physics (e.g. superposition,
+  entanglement, decoherence, quantum cryptography, time dilation, spacetime curvature, closed
+  timelike curves, the twin paradox, gravitational lensing). These concepts must be woven
+  organically into the plot — not explained as a lecture
+- Divided into numbered or named chapters with strong chapter-ending hooks
+- Appropriate for ages 16–20: mature themes allowed (death, moral ambiguity, fear, loss,
+  ethical dilemmas) but no explicit sexual content or gratuitous gore
+- Ending with genuine consequence — not every story ends happily
+
+IMAGE PLACEHOLDERS:
+Place 5–7 image placeholders at pivotal moments using this EXACT format (on its own line):
+[[IMAGE: cinematic digital illustration — dramatic scene description, lighting, mood, style]]
+
+Use a dark, detailed, cinematic digital-art style in all image descriptions.
+
+OUTPUT FORMAT — return a single JSON object:
+{
+  "title": "Gripping, atmospheric title (4-8 words)",
+  "excerpt": "A 2-3 sentence hook that creates immediate tension (130-170 chars)",
+  "featuredImagePrompt": "Cinematic cover illustration — protagonist, setting, ominous mood, dark palette",
+  "moralLesson": "One sentence capturing the story's central truth or warning",
+  "content": "Full story HTML using ONLY: <h2> (chapter titles) <h3> <p> <strong> <em> <blockquote> <ul> <ol> <li>"
+}
+
+IMPORTANT: Minimum 4,500 words of actual prose. No summaries — every scene fully written.
+JSON VALIDITY: Use &ldquo; and &rdquo; for dialogue quotes. No raw double-quotes inside JSON string values."""
+
+_SYSTEM_PROMPTS = {
+    '3-7': _SYSTEM_PROMPT_3_7,
+    '8-15': _SYSTEM_PROMPT_8_15,
+    '16-20': _SYSTEM_PROMPT_16_20,
+}
+
+_MIN_WORDS = {
+    '3-7': 1000,
+    '8-15': 4000,
+    '16-20': 4500,
+}
 
 
 def _word_count(html: str) -> int:
     return len(re.sub(r"<[^>]+>", " ", html).split())
 
 
-def _pick_theme() -> dict:
+def _pick_age_group() -> str:
+    forced = os.getenv("STORY_AGE_GROUP", "").strip()
+    if forced in AGE_GROUPS:
+        return forced
+    return random.choice(AGE_GROUPS)
+
+
+def _pick_theme(age_group: str) -> dict:
     forced_genre = os.getenv("STORY_GENRE", "").strip()
-    if forced_genre:
-        match = next((t for t in THEMES if t["genre"].lower() == forced_genre.lower()), None)
-        category = match or random.choice(THEMES)
+
+    if age_group == '3-7':
+        theme_pool = THEMES_3_7
+    elif age_group == '16-20':
+        theme_pool = THEMES_16_20
     else:
-        category = random.choice(THEMES)
+        theme_pool = THEMES_8_15
+
+    if forced_genre:
+        match = next((t for t in theme_pool if t["genre"].lower() == forced_genre.lower()), None)
+        category = match or random.choice(theme_pool)
+    else:
+        category = random.choice(theme_pool)
+
     premise = random.choice(category["themes"])
     return {
         "genre": category["genre"],
@@ -145,10 +309,13 @@ def _pick_theme() -> dict:
 
 
 def pick_theme_node(state: StoryAgentState) -> dict:
-    chosen = _pick_theme()
+    age_group = _pick_age_group()
+    chosen = _pick_theme(age_group)
+    print(f"👶📚🎓 Age group: {age_group}")
     print(f"📚 Story genre: {chosen['genre']}")
     print(f"📌 Premise: {chosen['premise']}")
     return {
+        "age_group": age_group,
         "genre": chosen["genre"],
         "premise": chosen["premise"],
         "moral_lesson": chosen["moral"],
@@ -156,27 +323,34 @@ def pick_theme_node(state: StoryAgentState) -> dict:
 
 
 def write_story_node(state: StoryAgentState) -> dict:
-    print("✍️  Writing story (this takes ~90s for 4000+ words)...")
+    age_group = state.get("age_group", "8-15")
+    system_prompt = _SYSTEM_PROMPTS[age_group]
+    min_words = _MIN_WORDS[age_group]
+    word_target = "1,200–1,800" if age_group == "3-7" else ("4,000–5,500" if age_group == "8-15" else "4,500–6,000")
+
+    print(f"✍️  Writing story for ages {age_group} (target: {word_target} words)...")
+
     user_prompt = f"""Write a complete illustrated story based on this premise:
 
 GENRE: {state['genre']}
 PREMISE: {state['premise']}
 MORAL: {state['moral_lesson']}
+TARGET AUDIENCE: Ages {age_group}
 
 Requirements:
-- MINIMUM 4,000 words of actual story text (aim for 4,500–5,500)
-- 3–6 named chapters or clear sections
+- Target word count: {word_target} words of actual story text
+- {3 if age_group == '3-7' else 4}–{5 if age_group == '3-7' else 6} named {'sections' if age_group == '3-7' else 'chapters'}
 - Rich dialogue — let characters talk and reveal themselves through speech
 - Vivid scene-setting — make the reader SEE and FEEL the world
 - Emotional journey — the protagonist must face real challenges and grow
-- 6–8 [[IMAGE: ...]] placeholders at key dramatic moments (watercolour illustration style)
+- {'4–6' if age_group == '3-7' else '6–8'} [[IMAGE: ...]] placeholders at key moments
 - The moral should emerge naturally from events, not be stated preachy at the end
 
 This is the FULL story — do not abbreviate, do not summarise, write every scene completely."""
 
     text, model = chat_completion(
         messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
         max_tokens=16000,
@@ -184,7 +358,7 @@ This is the FULL story — do not abbreviate, do not summarise, write every scen
     )
     data = extract_json(text)
     wc = _word_count(data["content"])
-    print(f"📊 Draft word count: {wc}")
+    print(f"📊 Draft word count: {wc} (minimum: {min_words})")
 
     return {
         "story_title": data["title"],
@@ -197,7 +371,10 @@ This is the FULL story — do not abbreviate, do not summarise, write every scen
 
 
 def expand_story_node(state: StoryAgentState) -> dict:
-    print("📝 Story too short — expanding to meet 4,000-word minimum...")
+    age_group = state.get("age_group", "8-15")
+    min_words = _MIN_WORDS[age_group]
+    print(f"📝 Story too short ({state['word_count']} words) — expanding to {min_words}+ word minimum...")
+
     current = _json.dumps({
         "title": state["story_title"],
         "excerpt": state["story_excerpt"],
@@ -208,13 +385,13 @@ def expand_story_node(state: StoryAgentState) -> dict:
 
     text, model = chat_completion(
         messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": f"Genre: {state['genre']}\nPremise: {state['premise']}"},
+            {"role": "system", "content": _SYSTEM_PROMPTS[age_group]},
+            {"role": "user", "content": f"Genre: {state['genre']}\nPremise: {state['premise']}\nAges: {age_group}"},
             {"role": "assistant", "content": current},
             {
                 "role": "user",
                 "content": (
-                    f"The story is currently {state['word_count']} words — it needs at least 4,000. "
+                    f"The story is currently {state['word_count']} words — it needs at least {min_words}. "
                     "Expand it by: adding more dialogue scenes between characters, deepening the "
                     "description of key locations, extending the climax with more tension and detail, "
                     "and adding a richer resolution. Maintain the same tone and characters. "

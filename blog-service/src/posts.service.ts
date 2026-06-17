@@ -4,6 +4,7 @@ import { Repository, Like } from 'typeorm';
 import { Post, PostStatus } from './post.entity';
 import { Category } from './category.entity';
 import { Tag } from './tag.entity';
+import { PushService } from './push.service';
 import slugify from 'slugify';
 
 // Fallback repo slug — non-sensitive (repo is public), avoids silent no-op
@@ -18,6 +19,7 @@ export class PostsService {
     @InjectRepository(Post) private postRepo: Repository<Post>,
     @InjectRepository(Category) private catRepo: Repository<Category>,
     @InjectRepository(Tag) private tagRepo: Repository<Tag>,
+    private readonly pushService: PushService,
   ) {}
 
   async findAll(query: any = {}) {
@@ -138,6 +140,7 @@ export class PostsService {
     post.status = PostStatus.PUBLISHED;
     const saved = await this.postRepo.save(post);
     void this.dispatchPostDecision('approve', id);
+    void this.pushService.send({ title: 'New Post on Meridian', body: saved.title, url: `/post/${saved.slug}` });
     return saved;
   }
 

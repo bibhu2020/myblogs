@@ -2,12 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { NewsItem } from './news-item.entity';
+import { PushService } from './push.service';
 
 @Injectable()
 export class NewsService {
   constructor(
     @InjectRepository(NewsItem)
     private readonly repo: Repository<NewsItem>,
+    private readonly pushService: PushService,
   ) {}
 
   async findAll(region?: string): Promise<{ items: NewsItem[]; lastUpdated: Date | null }> {
@@ -22,6 +24,11 @@ export class NewsService {
     await this.repo.clear();
     const entities = this.repo.create(items);
     await this.repo.save(entities);
+    void this.pushService.send({
+      title: 'Meridian News Update',
+      body: `${entities.length} fresh articles are waiting for you`,
+      url: '/news',
+    });
     return { count: entities.length };
   }
 }
