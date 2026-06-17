@@ -140,7 +140,7 @@ export class PostsService {
     post.status = PostStatus.PUBLISHED;
     const saved = await this.postRepo.save(post);
     void this.dispatchPostDecision('approve', id);
-    void this.pushService.send({ title: 'New Post on Meridian', body: saved.title, url: `/post/${saved.slug}` });
+    void this.pushService.send({ title: `New Blog Post — ${saved.title}`, body: 'Tap to read it on Meridian', url: `/post/${saved.slug}` });
     return saved;
   }
 

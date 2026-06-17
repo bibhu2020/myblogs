@@ -25,8 +25,8 @@ export class NewsService {
     const entities = this.repo.create(items);
     await this.repo.save(entities);
     void this.pushService.send({
-      title: 'Meridian News Update',
-      body: `${entities.length} fresh articles are waiting for you`,
+      title: `News — ${entities.length} new articles`,
+      body: 'Tap to read the latest news on Meridian',
       url: '/news',
     });
     return { count: entities.length };

@@ -23,5 +23,11 @@
     "@types/ws": "^8.5.14",
     "concurrently": "^8.2.2",
     "dotenv-cli": "^11.0.0"
+  },
+  "overrides": {
+    "@nestjs/typeorm": {
+      "@nestjs/common": "^11.0.0",
+      "@nestjs/core": "^11.0.0"
+    }
   }
 }
