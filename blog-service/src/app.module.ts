@@ -37,11 +37,13 @@ const dbConfig: any = DB_URL
 
 @Module({
   imports: [
+    // @ts-ignore — DynamicModule type mismatch: @nestjs/typeorm (root, v10 peer) vs blog-service @nestjs/common (v11)
     TypeOrmModule.forRoot({
       ...dbConfig,
       entities: [Post, Category, Tag, Comment, AgentRun, Story, NewsItem, PushSubscription],
       synchronize: true,
     }),
+    // @ts-ignore
     TypeOrmModule.forFeature([Post, Category, Tag, Comment, AgentRun, Story, NewsItem, PushSubscription]),
     PassportModule,
     JwtModule.register({ secret: 'myblogs-secret-key-2024' }),

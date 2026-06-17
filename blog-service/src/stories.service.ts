@@ -99,7 +99,7 @@ export class StoriesService {
     }
     story.status = StoryStatus.PUBLISHED;
     const saved = await this.storyRepo.save(story);
-    void this.pushService.send({ title: 'New Story on Meridian', body: saved.title, url: `/story/${saved.slug}` });
+    void this.pushService.send({ title: `New Story Corner — ${saved.title}`, body: 'Tap to read it on Meridian', url: `/story/${saved.slug}` });
     return saved;
   }
 
