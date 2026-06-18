@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, computed, reactive, watch, onMounted, onUnmounted } from 'vue'
 import api from '../../api.js'
 
 // ── Agent run history ─────────────────────────────────────────────────────────
@@ -73,13 +73,19 @@ async function fetchRuns() {
 
 function scheduleRefresh() {
   if (refreshTimer) clearInterval(refreshTimer)
+  refreshTimer = null
   if (hasRunningRuns.value) {
     refreshTimer = setInterval(async () => {
       await fetchRuns()
       if (!hasRunningRuns.value) { clearInterval(refreshTimer); refreshTimer = null }
-    }, 30000)
+    }, 10000)
   }
 }
+
+// Auto-start the polling interval whenever running runs appear
+watch(hasRunningRuns, (isRunning) => {
+  if (isRunning && !refreshTimer) scheduleRefresh()
+})
 
 onMounted(async () => { await fetchRuns(); scheduleRefresh() })
 onUnmounted(() => { if (refreshTimer) clearInterval(refreshTimer) })
@@ -202,8 +208,8 @@ async function triggerAgent(agent) {
     await api.post('/agent-runs/dispatch', { workflow: agent.workflow, inputs })
     st.result = 'success'
     st.message = 'Queued on GitHub Actions — the run will appear in the table once it starts.'
-    // Refresh the runs table after a short delay so newly queued runs can appear
-    setTimeout(fetchRuns, 8000)
+    // Poll several times over ~90s to catch the run once the GitHub workflow starts
+    ;[10, 25, 45, 65, 90].forEach(s => setTimeout(fetchRuns, s * 1000))
   } catch (e) {
     st.result = 'error'
     st.message = e.response?.data?.message || e.message || 'Failed to trigger workflow'
@@ -325,7 +331,7 @@ async function triggerAgent(agent) {
     <div v-else class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
       <div v-if="hasRunningRuns" class="flex items-center gap-2 px-6 py-3 bg-blue-50 border-b border-blue-100 text-sm text-blue-700">
         <span class="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-        Active run detected — refreshing every 30 seconds
+        Active run detected — refreshing every 10 seconds
       </div>
 
       <div class="overflow-x-auto">
