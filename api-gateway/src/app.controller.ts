@@ -290,6 +290,12 @@ export class AppController {
   }
 
   // AGENT RUNS
+  @Post('agent-runs/dispatch')
+  @UseGuards(AuthGuard('jwt'))
+  dispatchAgent(@Body() body: any, @Request() req: any) {
+    return this.proxy.forward('blog', '/agent-runs/dispatch', 'POST', body, { Authorization: this.getAuthHeader(req) });
+  }
+
   @Post('agent-runs')
   createAgentRun(@Body() body: any) {
     return this.proxy.forward('blog', '/agent-runs', 'POST', body);
