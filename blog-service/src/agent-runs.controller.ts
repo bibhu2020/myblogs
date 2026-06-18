@@ -57,6 +57,12 @@ export class AgentRunsController {
     return this.agentRunsService.update(runId, body);
   }
 
+  @Post('dispatch')
+  @UseGuards(AuthGuard('jwt'))
+  dispatch(@Body() body: { workflow: string; inputs?: Record<string, string> }) {
+    return this.agentRunsService.dispatch(body.workflow, body.inputs ?? {});
+  }
+
   @Get()
   @UseGuards(AuthGuard('jwt'))
   findAll(@Query('limit') limit?: string) {
