@@ -67,7 +67,7 @@ async function remove(id) {
     </div>
 
     <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-      <table class="w-full">
+      <div class="overflow-x-auto"><table class="w-full">
         <thead class="bg-gray-50">
           <tr>
             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User</th>
@@ -103,7 +103,7 @@ async function remove(id) {
             </td>
           </tr>
         </tbody>
-      </table>
+      </table></div>
     </div>
   </div>
 </template>

@@ -328,6 +328,7 @@ async function triggerAgent(agent) {
         Active run detected — refreshing every 30 seconds
       </div>
 
+      <div class="overflow-x-auto">
       <table class="w-full text-sm">
         <thead>
           <tr class="border-b border-gray-100 bg-gray-50">
@@ -406,6 +407,7 @@ async function triggerAgent(agent) {
           </template>
         </tbody>
       </table>
+      </div>
     </div>
   </div>
 </template>
