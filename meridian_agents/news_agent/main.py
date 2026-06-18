@@ -14,6 +14,7 @@ from agents import Agent, Runner
 from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 
 from .tools import fetch_region_news, save_news
+from .tracer import start_run, complete_run
 
 _TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -104,8 +105,15 @@ def run_news_agent() -> None:
     print(f"Date (UTC): {_TODAY}")
     print(f"Target:     {os.getenv('SERVER_BASE', 'http://localhost:3000')}\n")
 
-    articles = _gather_articles()
-    summary = asyncio.run(_run(articles))
+    run_id = start_run()
+    try:
+        articles = _gather_articles()
+        summary = asyncio.run(_run(articles))
+    except Exception as exc:
+        complete_run(run_id, str(exc), failed=True)
+        raise
+
+    complete_run(run_id, summary or "News articles fetched and saved.")
 
     print("\n" + "=" * 44)
     print(summary)
