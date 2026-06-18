@@ -142,7 +142,7 @@ const pendingCount = computed(() => stats.value.pending || 0)
         <div class="text-sm mt-1">{{ statusFilter === 'pending' ? 'The story agent runs weekly.' : 'Try a different filter.' }}</div>
       </div>
 
-      <table v-else class="w-full">
+      <div v-else class="overflow-x-auto"><table class="w-full">
         <thead class="bg-gray-50 text-left">
           <tr>
             <th class="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Story</th>
@@ -207,7 +207,7 @@ const pendingCount = computed(() => stats.value.pending || 0)
             </td>
           </tr>
         </tbody>
-      </table>
+      </table></div>
 
       <div v-if="pagination.pages > 1" class="px-6 py-4 border-t border-gray-100 flex gap-2 flex-wrap">
         <button v-for="p in pagination.pages" :key="p" @click="page = p; loadStories()"

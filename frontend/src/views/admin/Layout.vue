@@ -82,7 +82,7 @@ const navItems = [
     </div>
 
     <!-- Main -->
-    <div class="flex-1 lg:ml-64 flex flex-col">
+    <div class="flex-1 lg:ml-64 flex flex-col min-w-0">
       <header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-30">
         <button @click="sidebarOpen=true" class="lg:hidden p-2 rounded-md text-gray-500">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>

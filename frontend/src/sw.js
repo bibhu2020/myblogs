@@ -87,3 +87,8 @@ self.addEventListener('notificationclick', (event) => {
     }),
   )
 })
+
+// Required for VitePWA prompt-based update flow: updateServiceWorker(true) sends this message
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting()
+})
