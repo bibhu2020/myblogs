@@ -172,16 +172,42 @@ def fetch_region_news(region: str, _query: str = "", max_results: int = 10) -> l
 
 # ── Image enhancement via Gemini ─────────────────────────────────────────────
 
+_MIN_DIMENSION = 100   # pixels — filters tracking pixels / tiny icons
+_MIN_BYTES     = 4096  # bytes  — filters empty or near-empty responses
+
+
+def _validate_image(data: bytes) -> tuple[bool, str]:
+    """Return (ok, mime) after verifying data is a real image with acceptable dimensions."""
+    if len(data) < _MIN_BYTES:
+        return False, ""
+    try:
+        from PIL import Image
+        img = Image.open(BytesIO(data))
+        img.verify()                       # raises on corrupt files
+        img = Image.open(BytesIO(data))    # re-open after verify (PIL limitation)
+        w, h = img.size
+        if w < _MIN_DIMENSION or h < _MIN_DIMENSION:
+            return False, ""
+        fmt = (img.format or "JPEG").lower()
+        mime = f"image/{fmt}" if fmt != "jpg" else "image/jpeg"
+        return True, mime
+    except Exception:
+        return False, ""
+
+
 def _download_image(url: str, timeout: int = 15) -> tuple[bytes, str] | None:
-    """Download an image and return (bytes, mime_type), or None on failure."""
+    """Download an image, validate it is a real image, and return (bytes, mime_type)."""
     try:
         resp = requests.get(url, headers=_HEADERS, timeout=timeout, allow_redirects=True)
         if resp.status_code != 200:
             return None
-        ct = resp.headers.get("content-type", "image/jpeg").split(";")[0].strip()
+        ct = resp.headers.get("content-type", "").split(";")[0].strip()
         if not ct.startswith("image/"):
             return None
-        return resp.content, ct
+        ok, mime = _validate_image(resp.content)
+        if not ok:
+            return None
+        return resp.content, mime
     except Exception:
         return None
 
@@ -243,7 +269,11 @@ def _gemini_enhance(image_bytes: bytes, mime: str) -> tuple[bytes, str] | None:
                 )
                 for part in response.candidates[0].content.parts:
                     if getattr(part, "inline_data", None):
-                        return part.inline_data.data, part.inline_data.mime_type
+                        enh_bytes = part.inline_data.data
+                        enh_mime  = part.inline_data.mime_type
+                        ok, _ = _validate_image(enh_bytes)
+                        if ok:
+                            return enh_bytes, enh_mime
             except Exception:
                 continue
         return None
@@ -291,7 +321,10 @@ def _enhance_all_images(items: list[dict]) -> list[dict]:
                 enhanced[idx]["imageUrl"] = new_url
                 print(f"      ✓ {title}")
             else:
-                print(f"      ✗ {title} (kept original)")
+                # Enhancement failed or produced invalid output — clear the URL so
+                # it doesn't pollute the media library with a broken image
+                enhanced[idx]["imageUrl"] = None
+                print(f"      ✗ {title} (image skipped — invalid or too small)")
 
     return enhanced
 
