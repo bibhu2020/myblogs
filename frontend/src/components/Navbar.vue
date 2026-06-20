@@ -133,13 +133,6 @@ const isB = () => layout.variant === 'b'
               : (route.path === '/news' ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50')"
           >News</RouterLink>
 
-          <RouterLink to="/music"
-            class="px-3 py-2 text-sm font-medium transition-colors rounded-lg"
-            :class="layout.variant === 'b'
-              ? (route.path === '/music' ? 'text-violet-400 bg-violet-950' : 'text-slate-400 hover:text-violet-400 hover:bg-slate-900')
-              : (route.path === '/music' ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50')"
-          >🎵 Music</RouterLink>
-
           <RouterLink to="/about"
             class="px-3 py-2 text-sm font-medium transition-colors rounded-lg"
             :class="layout.variant === 'b'
@@ -223,10 +216,6 @@ const isB = () => layout.variant === 'b'
             <PushNotificationButton />
             <span class="text-sm font-medium" :class="layout.variant === 'b' ? 'text-slate-300' : 'text-gray-700'">Push Notifications</span>
           </div>
-          <RouterLink to="/music" @click="mobileOpen=false"
-            class="block px-4 py-2.5 text-sm font-medium rounded-lg"
-            :class="layout.variant === 'b' ? 'text-violet-400 hover:bg-slate-900' : 'text-primary-600 hover:bg-primary-50'"
-          >🎵 Music Studio</RouterLink>
           <RouterLink to="/about" @click="mobileOpen=false"
             class="block px-4 py-2.5 text-sm font-medium rounded-lg"
             :class="layout.variant === 'b' ? 'text-slate-300 hover:text-white hover:bg-slate-900' : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'"

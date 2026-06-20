@@ -11,7 +11,6 @@ const routes = [
   { path: '/story/:slug', component: () => import('../views/StoryDetail.vue'), meta: { title: 'Story' } },
   { path: '/news', component: () => import('../views/News.vue'), meta: { title: 'News' } },
   { path: '/about', component: () => import('../views/About.vue'), meta: { title: 'About' } },
-  { path: '/music', component: () => import('../views/Music.vue'), meta: { title: 'Music Studio' } },
   { path: '/admin/login', component: () => import('../views/admin/Login.vue'), meta: { title: 'Admin Login' } },
   {
     path: '/admin',
