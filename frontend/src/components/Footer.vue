@@ -15,12 +15,11 @@ const layout = useLayoutStore()
       <!-- Mobile-only quick nav row -->
       <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 mb-10 md:hidden">
         <RouterLink v-for="link in [
-          { to: '/',       label: 'Home'    },
+          { to: '/about',  label: 'About'   },
           { to: '/blog',   label: 'Posts'   },
           { to: '/news',   label: 'News'    },
           { to: '/story',  label: 'Stories' },
           { to: '/music',  label: 'Music'   },
-          { to: '/about',  label: 'About'   },
         ]" :key="link.to" :to="link.to"
           class="text-sm font-medium transition-colors"
           :class="layout.variant === 'b' ? 'text-slate-300 hover:text-violet-400' : 'text-primary-100 hover:text-white'"
