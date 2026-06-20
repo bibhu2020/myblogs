@@ -76,12 +76,14 @@ function buildDOMChunks() {
   return items
 }
 
-// Fetch one chunk and cache the resolved blob so runFrom can skip the loading state.
+// Fetch one chunk with one automatic retry (3 s delay) to survive transient rate limits.
 function fetchChunkCached(idx) {
   if (!chunkFetches[idx]) {
-    chunkFetches[idx] = api
-      .post('/tts', { text: chunkItems[idx].text }, { responseType: 'blob', timeout: 90_000 })
-      .then(r => { chunkBlobs[idx] = r.data; return r.data })
+    const doFetch = () =>
+      api.post('/tts', { text: chunkItems[idx].text }, { responseType: 'blob', timeout: 90_000 })
+         .then(r => { chunkBlobs[idx] = r.data; return r.data })
+    chunkFetches[idx] = doFetch()
+      .catch(() => new Promise(res => setTimeout(res, 3000)).then(doFetch))
       .catch(() => { chunkBlobs[idx] = null; return null })
   }
 }
@@ -144,11 +146,10 @@ async function runFrom(startIdx, session) {
     ttsChunkIdx.value = i
     highlightChunk(i)
 
-    // Kick off this chunk + 5 ahead so the pipeline is always full
+    // Fetch this chunk + 2 ahead — keeps pipeline primed without blasting the rate limit
     fetchChunkCached(i)
-    for (let p = 1; p <= 5; p++) {
-      if (i + p < ttsTotalChunks.value) fetchChunkCached(i + p)
-    }
+    if (i + 1 < ttsTotalChunks.value) fetchChunkCached(i + 1)
+    if (i + 2 < ttsTotalChunks.value) fetchChunkCached(i + 2)
 
     // Only show the loading spinner if the blob isn't already cached
     if (!(i in chunkBlobs)) {
@@ -190,8 +191,9 @@ async function openPlayer() {
   chunkBlobs = []
 
   ensureAudioEl()
-  // Pre-warm the first 5 chunks immediately
-  for (let k = 0; k < Math.min(5, chunkItems.length); k++) fetchChunkCached(k)
+  // Pre-warm only the first chunk; runFrom will fetch 2 ahead as it plays
+  fetchChunkCached(0)
+  if (chunkItems.length > 1) fetchChunkCached(1)
 
   ttsState.value = 'loading'
   const session = ++sessionId
