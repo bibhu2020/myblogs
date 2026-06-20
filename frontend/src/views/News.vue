@@ -70,7 +70,7 @@ function _fetchChunk(idx) {
       api.post('/tts', { text: chunkData[idx].text }, { responseType: 'blob', timeout: 90_000 })
          .then(r => { chunkBlobs[idx] = r.data; return r.data })
     chunkFetches[idx] = doFetch()
-      .catch(() => new Promise(res => setTimeout(res, 3000)).then(doFetch))
+      .catch(() => new Promise(res => setTimeout(res, 500)).then(doFetch))
       .catch(() => { chunkBlobs[idx] = null; return null })
   }
 }
@@ -135,10 +135,11 @@ async function _runFrom(start, session) {
       activeIdx.value = -1
     }
 
-    // Fetch this chunk + 2 ahead — keeps pipeline primed without blasting the rate limit
+    // Fetch this chunk + 5 ahead so audio is always buffered well in advance
     _fetchChunk(i)
-    if (i + 1 < ttsTotalChunks.value) _fetchChunk(i + 1)
-    if (i + 2 < ttsTotalChunks.value) _fetchChunk(i + 2)
+    for (let p = 1; p <= 5; p++) {
+      if (i + p < ttsTotalChunks.value) _fetchChunk(i + p)
+    }
 
     // Only show the loading spinner if the blob isn't already cached
     if (!(i in chunkBlobs)) {
@@ -171,9 +172,8 @@ async function openPlayer() {
   chunkFetches = []
   chunkBlobs = []
   _ensureAudio()
-  // Pre-warm only the first 2 chunks; _runFrom will fetch 2 ahead as it plays
-  _fetchChunk(0)
-  if (chunkData.length > 1) _fetchChunk(1)
+  // Pre-warm first 5 chunks immediately so playback never has to wait
+  for (let k = 0; k < Math.min(5, chunkData.length); k++) _fetchChunk(k)
   ttsState.value = 'loading'
   const session = ++sessionId
   await _runFrom(0, session)

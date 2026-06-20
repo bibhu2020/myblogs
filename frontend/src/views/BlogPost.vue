@@ -86,7 +86,7 @@ function fetchChunkCached(idx) {
       api.post('/tts', { text: chunkItems[idx].text }, { responseType: 'blob', timeout: 90_000 })
          .then(r => { chunkBlobs[idx] = r.data; return r.data })
     chunkFetches[idx] = doFetch()
-      .catch(() => new Promise(res => setTimeout(res, 3000)).then(doFetch))
+      .catch(() => new Promise(res => setTimeout(res, 500)).then(doFetch))
       .catch(() => { chunkBlobs[idx] = null; return null })
   }
 }
@@ -154,10 +154,11 @@ async function runFrom(startIdx, session) {
     ttsChunkIdx.value = i
     highlightChunk(i)
 
-    // Fetch this chunk + 2 ahead — keeps pipeline primed without blasting the rate limit
+    // Fetch this chunk + 5 ahead so audio is always buffered well in advance
     fetchChunkCached(i)
-    if (i + 1 < ttsTotalChunks.value) fetchChunkCached(i + 1)
-    if (i + 2 < ttsTotalChunks.value) fetchChunkCached(i + 2)
+    for (let p = 1; p <= 5; p++) {
+      if (i + p < ttsTotalChunks.value) fetchChunkCached(i + p)
+    }
 
     // Only show the loading spinner if the blob isn't already cached
     if (!(i in chunkBlobs)) {
@@ -204,9 +205,8 @@ async function openPlayer() {
   // Activate audio NOW, synchronously in the gesture handler — Safari autoplay policy.
   ensureAudioEl()
 
-  // Pre-warm only the first 2 chunks; runFrom will fetch 2 ahead as it plays
-  fetchChunkCached(0)
-  if (chunkItems.length > 1) fetchChunkCached(1)
+  // Pre-warm first 5 chunks immediately so playback never has to wait
+  for (let k = 0; k < Math.min(5, chunkItems.length); k++) fetchChunkCached(k)
 
   ttsState.value = 'loading'
   const session = ++sessionId
