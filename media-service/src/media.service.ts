@@ -46,7 +46,7 @@ export class MediaService {
         console.warn(`GitHub upload failed (${res.status}) — using local storage: ${body.slice(0, 200)}`);
       }
     } catch (err) {
-      console.warn(`GitHub upload error — using local storage: ${err.message}`);
+      console.warn(`GitHub upload error — using local storage: ${(err as Error).message}`);
     }
 
     const media = this.mediaRepo.create({
