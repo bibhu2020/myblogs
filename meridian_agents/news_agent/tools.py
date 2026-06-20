@@ -321,10 +321,9 @@ def _enhance_all_images(items: list[dict]) -> list[dict]:
                 enhanced[idx]["imageUrl"] = new_url
                 print(f"      ✓ {title}")
             else:
-                # Enhancement failed or produced invalid output — clear the URL so
-                # it doesn't pollute the media library with a broken image
-                enhanced[idx]["imageUrl"] = None
-                print(f"      ✗ {title} (image skipped — invalid or too small)")
+                # Enhancement failed — keep the original imageUrl so the item still
+                # has a thumbnail. Only Gemini-enhanced copies are uploaded to media.
+                print(f"      ✗ {title} (enhancement skipped — keeping original URL)")
 
     return enhanced
 

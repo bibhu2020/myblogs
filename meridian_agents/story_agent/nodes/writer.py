@@ -201,7 +201,7 @@ illustrated stories for children and young adults ages 8–15.
 
 Your stories are:
 - Long-form narrative fiction (NOT a blog post or article)
-- At least 4,000 words of immersive story (aim for 4,500–5,500 for a 20-minute read)
+- 2,000–3,000 words of immersive story (aim for a 10–15 minute read)
 - Written in a warm, engaging voice that respects the reader's intelligence
 - Rich with vivid description, authentic dialogue, and emotional depth
 - Divided into named chapters or clear sections
@@ -223,7 +223,7 @@ OUTPUT FORMAT — return a single JSON object:
   "content": "Full story HTML using ONLY: <h2> (chapter titles) <h3> <p> <strong> <em> <blockquote> <ul> <ol> <li>"
 }
 
-IMPORTANT: The 'content' field must be at least 4,000 words of story text. Do not summarise — write the full story.
+IMPORTANT: The 'content' field must be 2,000–3,000 words of story text. Do not summarise — write every scene fully.
 JSON VALIDITY: Use &ldquo; and &rdquo; for dialogue quotes. No raw double-quotes inside JSON string values."""
 
 _SYSTEM_PROMPT_16_20 = """You are a sophisticated storyteller writing for Meridian Story Corner — a collection of
@@ -231,7 +231,7 @@ dark, intelligent fiction for older teens and young adults ages 16–20.
 
 Your stories are:
 - Long-form literary fiction in the thriller, science fiction, or horror genre
-- At least 4,500 words (aim for 5,000–6,000 for a gripping single-sitting read)
+- 2,000–3,000 words (aim for a 10–15 minute single-sitting read)
 - Written in a taut, cinematic voice with psychological depth and moral complexity
 - Built around concepts from Quantum Computing or Relativistic Physics (e.g. superposition,
   entanglement, decoherence, quantum cryptography, time dilation, spacetime curvature, closed
@@ -257,7 +257,7 @@ OUTPUT FORMAT — return a single JSON object:
   "content": "Full story HTML using ONLY: <h2> (chapter titles) <h3> <p> <strong> <em> <blockquote> <ul> <ol> <li>"
 }
 
-IMPORTANT: Minimum 4,500 words of actual prose. No summaries — every scene fully written.
+IMPORTANT: 2,000–3,000 words of actual prose. No summaries — every scene fully written.
 JSON VALIDITY: Use &ldquo; and &rdquo; for dialogue quotes. No raw double-quotes inside JSON string values."""
 
 _SYSTEM_PROMPTS = {
@@ -268,8 +268,8 @@ _SYSTEM_PROMPTS = {
 
 _MIN_WORDS = {
     '3-7': 1000,
-    '8-15': 4000,
-    '16-20': 4500,
+    '8-15': 2000,
+    '16-20': 2000,
 }
 
 
@@ -326,7 +326,7 @@ def write_story_node(state: StoryAgentState) -> dict:
     age_group = state.get("age_group", "8-15")
     system_prompt = _SYSTEM_PROMPTS[age_group]
     min_words = _MIN_WORDS[age_group]
-    word_target = "1,200–1,800" if age_group == "3-7" else ("4,000–5,500" if age_group == "8-15" else "4,500–6,000")
+    word_target = "1,200–1,800" if age_group == "3-7" else "2,000–3,000"
 
     print(f"✍️  Writing story for ages {age_group} (target: {word_target} words)...")
 
