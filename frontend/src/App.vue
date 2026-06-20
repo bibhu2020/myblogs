@@ -3,6 +3,7 @@ import { onMounted } from 'vue'
 import { useAuthStore } from './stores/auth'
 import { useLayoutStore } from './stores/layout'
 import PwaUpdatePrompt from './components/PwaUpdatePrompt.vue'
+import BottomNav from './components/BottomNav.vue'
 
 const auth = useAuthStore()
 const layout = useLayoutStore()
@@ -14,5 +15,6 @@ onMounted(() => auth.init())
   <div :data-layout="layout.variant" class="contents">
     <RouterView />
   </div>
+  <BottomNav />
   <PwaUpdatePrompt />
 </template>

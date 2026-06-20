@@ -271,7 +271,8 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50" :class="playerOpen ? 'pb-20' : ''">
+  <!-- pb-32: clears bottom-nav (64px) + TTS bar (~64px) on mobile; sm:pb-0 desktop has no bottom nav -->
+  <div class="min-h-screen bg-gray-50" :class="playerOpen ? 'pb-32 sm:pb-20' : ''">
     <Navbar />
 
     <!-- Hero -->
@@ -429,7 +430,8 @@ onMounted(load)
 
     <!-- Fixed bottom player bar — visible anywhere on the page while TTS is active -->
     <Teleport to="body">
-      <div v-if="playerOpen" class="fixed bottom-0 inset-x-0 z-50 bg-slate-900/95 backdrop-blur-sm border-t border-slate-700 shadow-2xl">
+      <!-- bottom-16 sm:bottom-0: sits above the mobile bottom nav (h-16); no bottom nav on desktop -->
+      <div v-if="playerOpen" class="fixed bottom-16 sm:bottom-0 inset-x-0 z-50 bg-slate-900/95 backdrop-blur-sm border-t border-slate-700 shadow-2xl">
         <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
           <!-- Animated waveform bars -->
           <div class="flex items-end gap-0.5 h-5 flex-shrink-0" aria-hidden="true">

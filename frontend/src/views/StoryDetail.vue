@@ -285,7 +285,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gradient-to-b from-indigo-50/30 to-white" :class="playerOpen ? 'pb-20 sm:pb-0' : ''">
+  <!-- pb-32 sm:pb-0 when TTS open: clears bottom-nav (64px) + TTS bar (~64px) stacked on mobile -->
+  <div class="min-h-screen bg-gradient-to-b from-indigo-50/30 to-white" :class="playerOpen ? 'pb-32 sm:pb-0' : ''">
     <Navbar />
 
     <div v-if="error" class="max-w-2xl mx-auto px-4 py-24 text-center">
@@ -488,7 +489,8 @@ onMounted(async () => {
 
     <!-- Mobile: fixed bottom player bar (replaces the inline player card) -->
     <Teleport to="body">
-      <div v-if="playerOpen && story" class="sm:hidden fixed bottom-0 inset-x-0 z-50 bg-white/95 backdrop-blur-sm border-t border-gray-200 shadow-2xl">
+      <!-- bottom-16: sits above the mobile bottom nav bar (h-16 = 64px) -->
+      <div v-if="playerOpen && story" class="sm:hidden fixed bottom-16 inset-x-0 z-50 bg-white/95 backdrop-blur-sm border-t border-gray-200 shadow-2xl">
         <div class="px-4 py-3 flex items-center gap-3">
           <!-- Waveform -->
           <div class="flex items-end gap-0.5 h-5 flex-shrink-0" aria-hidden="true">

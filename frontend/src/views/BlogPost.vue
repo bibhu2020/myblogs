@@ -325,7 +325,8 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
 </script>
 
 <template>
-  <div :class="[layout.variant === 'b' ? 'min-h-screen bg-[#0f172a]' : 'min-h-screen bg-white', playerOpen ? 'pb-20 sm:pb-0' : '']">
+  <!-- pb-32 sm:pb-0 when TTS open: clears bottom-nav (64px) + TTS bar (~64px) stacked on mobile -->
+  <div :class="[layout.variant === 'b' ? 'min-h-screen bg-[#0f172a]' : 'min-h-screen bg-white', playerOpen ? 'pb-32 sm:pb-0' : '']">
     <Navbar />
     <main id="main-content" tabindex="-1" class="outline-none">
 
@@ -556,7 +557,8 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
 
     <!-- Mobile: fixed bottom player bar (replaces the inline player card) -->
     <Teleport to="body">
-      <div v-if="playerOpen && post" class="sm:hidden fixed bottom-0 inset-x-0 z-50 backdrop-blur-sm border-t shadow-2xl"
+      <!-- bottom-16: sits above the mobile bottom nav bar (h-16 = 64px) -->
+      <div v-if="playerOpen && post" class="sm:hidden fixed bottom-16 inset-x-0 z-50 backdrop-blur-sm border-t shadow-2xl"
         :class="layout.variant === 'b' ? 'bg-[#162236]/95 border-[#2d3f5f]' : 'bg-white/95 border-gray-200'">
         <div class="px-4 py-3 flex items-center gap-3">
           <!-- Waveform -->
