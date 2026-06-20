@@ -441,7 +441,7 @@ Write only the lyrics. No explanations, no commentary, no extra text.`;
       if (!geminiKey) throw new Error('GEMINI_API_KEY not configured');
 
       const resp = await (await import('axios')).default.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
         { contents: [{ parts: [{ text: prompt }] }] },
         { timeout: 30_000 }
       );
