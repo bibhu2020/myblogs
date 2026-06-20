@@ -118,9 +118,40 @@ function _cancelCurrent() {
 }
 
 async function _runFrom(start, session) {
+  let failures = 0
   for (let i = start; i < ttsTotalChunks.value; i++) {
     if (session !== sessionId) return
     ttsChunkIdx.value = i
+
+    // Fetch this chunk + 5 ahead so audio is always buffered well in advance
+    _fetchChunk(i)
+    for (let p = 1; p <= 5; p++) {
+      if (i + p < ttsTotalChunks.value) _fetchChunk(i + p)
+    }
+
+    // Only show the loading spinner if the blob isn't already cached
+    if (!(i in chunkBlobs)) {
+      ttsState.value = 'loading'
+      await chunkFetches[i]
+    }
+    if (session !== sessionId) return
+
+    const blob = chunkBlobs[i]
+    if (!blob) {
+      failures++
+      console.warn(`[TTS] chunk ${i} failed (${failures} consecutive)`)
+      if (failures >= 3) {
+        ttsState.value = 'idle'
+        ttsProgress.value = 0
+        activeIdx.value = -1
+        playerOpen.value = false
+        return
+      }
+      continue
+    }
+    failures = 0
+
+    // Only highlight/scroll once we know audio is ready to play
     const si = chunkData[i]?.storyIdx ?? -1
     if (si >= 0) {
       activeIdx.value = si
@@ -135,20 +166,6 @@ async function _runFrom(start, session) {
       activeIdx.value = -1
     }
 
-    // Fetch this chunk + 5 ahead so audio is always buffered well in advance
-    _fetchChunk(i)
-    for (let p = 1; p <= 5; p++) {
-      if (i + p < ttsTotalChunks.value) _fetchChunk(i + p)
-    }
-
-    // Only show the loading spinner if the blob isn't already cached
-    if (!(i in chunkBlobs)) {
-      ttsState.value = 'loading'
-      await chunkFetches[i]
-    }
-    if (session !== sessionId) return
-    const blob = chunkBlobs[i]
-    if (!blob) continue
     ttsState.value = 'playing'
     await _playBlob(blob, i)
     if (session !== sessionId) return
