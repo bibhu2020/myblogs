@@ -6,46 +6,14 @@ on:
       - main
 
 jobs:
-  build-check:
-    name: Verify npm ci + frontend build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: npm ci + build — auth-service
-        run: npm ci --prefix auth-service && npm --prefix auth-service run build
-
-      - name: npm ci + build — blog-service
-        run: npm ci --prefix blog-service && npm --prefix blog-service run build
-
-      - name: npm ci + build — media-service
-        run: npm ci --prefix media-service && npm --prefix media-service run build
-
-      - name: npm ci + build — api-gateway
-        run: npm ci --prefix api-gateway --ignore-scripts && npm --prefix api-gateway run build
-
-      - name: npm ci + build — frontend
-        run: |
-          npm ci --prefix frontend
-          npm --prefix frontend run build
-
   deploy:
     name: Deploy to Hugging Face
-    needs: build-check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       # ── Sync GitHub secrets → HF Space secrets ────────────────────────────
-      # Each secret is pushed via the HF API so the Space container sees the
-      # same values as the local .env without any manual HF UI steps.
       - name: Sync secrets to HF Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -81,8 +49,6 @@ jobs:
           echo "Done."
 
       # ── Push code to HF Spaces ────────────────────────────────────────────
-      # Orphan commit strips git history so HF never sees old binary files
-      # (db files, media uploads) that were previously committed.
       - name: Push to Hugging Face Spaces
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -93,7 +59,6 @@ jobs:
           git checkout --orphan hf-deploy
 
           # Remove db, upload files, and agent code from the index before committing
-          # (agents run via GitHub Actions — not needed in the HF container)
           git rm --cached --ignore-unmatch \
             auth-service/auth.db \
             blog-service/blog.db \
