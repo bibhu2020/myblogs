@@ -10,19 +10,29 @@ from transformers import AutoTokenizer, VitsModel
 MODEL = 'facebook/mms-tts-eng'
 app = Flask(__name__)
 
-print(f'Loading {MODEL}...', flush=True)
-_tokenizer = AutoTokenizer.from_pretrained(MODEL)
-_model = VitsModel.from_pretrained(MODEL)
-_model.eval()
-# PyTorch VITS inference is not thread-safe — one inference at a time.
-# Gunicorn handles concurrent HTTP connections; this lock serialises the GPU/CPU work.
+_tokenizer = None
+_model = None
 _lock = threading.Lock()
-print('TTS model ready.', flush=True)
+_load_lock = threading.Lock()
+
+
+def _ensure_loaded():
+    global _tokenizer, _model
+    if _model is not None:
+        return
+    with _load_lock:
+        if _model is not None:
+            return
+        print(f'Loading {MODEL}...', flush=True)
+        _tokenizer = AutoTokenizer.from_pretrained(MODEL)
+        _model = VitsModel.from_pretrained(MODEL)
+        _model.eval()
+        print('TTS model ready.', flush=True)
 
 
 @lru_cache(maxsize=128)
 def _synthesize(text: str) -> bytes:
-    """Synthesize text → WAV bytes. Result is cached so replays and seeks are instant."""
+    _ensure_loaded()
     with _lock:
         inputs = _tokenizer(text, return_tensors='pt')
         with torch.no_grad():
@@ -35,7 +45,7 @@ def _synthesize(text: str) -> bytes:
 
 @app.route('/health')
 def health():
-    return jsonify({'status': 'ok'})
+    return jsonify({'status': 'ok', 'model_loaded': _model is not None})
 
 
 @app.route('/tts', methods=['POST'])
@@ -51,5 +61,4 @@ def synthesize():
 
 
 if __name__ == '__main__':
-    # Dev only — production uses gunicorn via start.sh
     app.run(host='0.0.0.0', port=5050, threaded=True)
