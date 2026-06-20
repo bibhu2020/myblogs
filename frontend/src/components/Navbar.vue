@@ -227,6 +227,10 @@ const isB = () => layout.variant === 'b'
             class="block px-4 py-2.5 text-sm font-medium rounded-lg"
             :class="layout.variant === 'b' ? 'text-violet-400 hover:bg-slate-900' : 'text-primary-600 hover:bg-primary-50'"
           >🎵 Music Studio</RouterLink>
+          <RouterLink to="/about" @click="mobileOpen=false"
+            class="block px-4 py-2.5 text-sm font-medium rounded-lg"
+            :class="layout.variant === 'b' ? 'text-slate-300 hover:text-white hover:bg-slate-900' : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'"
+          >About</RouterLink>
           <RouterLink to="/admin" @click="mobileOpen=false"
             class="block px-4 py-2.5 text-sm font-medium rounded-lg"
             :class="layout.variant === 'b' ? 'text-violet-400 hover:bg-slate-900' : 'text-primary-600 hover:bg-primary-50'"
