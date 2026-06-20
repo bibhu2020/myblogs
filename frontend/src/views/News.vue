@@ -225,18 +225,21 @@ const REGIONS = [
 ]
 
 const REGION_COLORS = {
-  world:  'bg-blue-100 text-blue-700',
-  usa:    'bg-red-100 text-red-700',
-  india:  'bg-orange-100 text-orange-700',
-  odisha: 'bg-purple-100 text-purple-700',
+  world:      'bg-blue-100 text-blue-700',
+  usa:        'bg-red-100 text-red-700',
+  india:      'bg-orange-100 text-orange-700',
+  odisha:     'bg-purple-100 text-purple-700',
+  ai_quantum: 'bg-cyan-100 text-cyan-700',
 }
-const REGION_FLAGS = { world: '🌍', usa: '🇺🇸', india: '🇮🇳', odisha: '🏛️' }
+const REGION_FLAGS  = { world: '🌍', usa: '🇺🇸', india: '🇮🇳', odisha: '🏛️', ai_quantum: '🤖' }
+const REGION_LABELS = { world: 'World', usa: 'USA', india: 'India', odisha: 'Odisha', ai_quantum: 'AI & Quantum' }
 
 const FALLBACK_IMAGES = {
-  world:  'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400&q=80',
-  usa:    'https://images.unsplash.com/photo-1485738422979-f5c462d49f74?w=400&q=80',
-  india:  'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=400&q=80',
-  odisha: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&q=80',
+  world:      'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400&q=80',
+  usa:        'https://images.unsplash.com/photo-1485738422979-f5c462d49f74?w=400&q=80',
+  india:      'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=400&q=80',
+  odisha:     'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&q=80',
+  ai_quantum: 'https://images.unsplash.com/photo-1677442135703-1787eea5ce01?w=400&q=80',
 }
 
 const filtered = computed(() =>
@@ -391,7 +394,7 @@ onMounted(load)
               <div class="flex flex-wrap items-center gap-2 mb-2">
                 <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold"
                   :class="REGION_COLORS[item.region] || 'bg-gray-100 text-gray-600'">
-                  {{ REGION_FLAGS[item.region] || '📰' }} {{ item.region?.charAt(0).toUpperCase() + item.region?.slice(1) }}
+                  {{ REGION_FLAGS[item.region] || '📰' }} {{ REGION_LABELS[item.region] || item.region }}
                 </span>
                 <span v-if="item.sourceName" class="text-xs text-gray-500 font-medium">{{ item.sourceName }}</span>
                 <span v-if="item.publishedAt" class="text-xs text-gray-400">· {{ formatDate(item.publishedAt) }}</span>
