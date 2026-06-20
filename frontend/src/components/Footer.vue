@@ -41,6 +41,9 @@ const layout = useLayoutStore()
           <h3 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Quick Links</h3>
           <ul class="space-y-2">
             <li><RouterLink to="/" class="text-sm transition-colors" :class="layout.variant === 'b' ? 'text-slate-400 hover:text-violet-400' : 'text-primary-200 hover:text-white'">Home</RouterLink></li>
+            <li><RouterLink to="/news" class="text-sm transition-colors" :class="layout.variant === 'b' ? 'text-slate-400 hover:text-violet-400' : 'text-primary-200 hover:text-white'">News</RouterLink></li>
+            <li><RouterLink to="/story" class="text-sm transition-colors" :class="layout.variant === 'b' ? 'text-slate-400 hover:text-violet-400' : 'text-primary-200 hover:text-white'">Stories</RouterLink></li>
+            <li><RouterLink to="/music" class="text-sm font-medium transition-colors flex items-center gap-1.5" :class="layout.variant === 'b' ? 'text-violet-400 hover:text-violet-300' : 'text-primary-100 hover:text-white'">🎵 Music Studio</RouterLink></li>
             <li><RouterLink to="/search" class="text-sm transition-colors" :class="layout.variant === 'b' ? 'text-slate-400 hover:text-violet-400' : 'text-primary-200 hover:text-white'">Search</RouterLink></li>
             <li><RouterLink to="/about" class="text-sm transition-colors" :class="layout.variant === 'b' ? 'text-slate-400 hover:text-violet-400' : 'text-primary-200 hover:text-white'">About</RouterLink></li>
             <li><RouterLink to="/admin" class="text-sm transition-colors" :class="layout.variant === 'b' ? 'text-slate-400 hover:text-violet-400' : 'text-primary-200 hover:text-white'">Admin Panel</RouterLink></li>
