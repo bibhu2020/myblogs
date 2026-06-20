@@ -330,21 +330,12 @@ export class AppController {
     return this.proxy.forward('blog', `/agent-runs/${runId}`, 'GET', null, { Authorization: this.getAuthHeader(req) });
   }
 
-  // TEXT-TO-SPEECH — one small chunk per request; chunking handled client-side.
-  // Priority: msedge-tts (free, no key) → local MMS-TTS → Gemini → OpenAI.
-  // Each provider is tried in order; on failure the next one is attempted automatically.
+  // TEXT-TO-SPEECH — Microsoft Edge TTS, female professional voice, paced for clarity.
   @Post('tts')
   async textToSpeech(@Body() body: { text: string }, @Res() res: Response) {
     const text = (body.text || '').trim();
     if (!text) { res.status(400).json({ message: 'text is required' }); return; }
 
-    const localTts  = process.env.TTS_SERVICE_URL;
-    const geminiKey = process.env.GEMINI_API_KEY;
-    const openaiKey = process.env.OPENAI_API_KEY;
-
-    const errors: string[] = [];
-
-    // ── 1. Microsoft Edge TTS — free, no key, fresh instance per request ────────────────
     try {
       const { MsEdgeTTS, OUTPUT_FORMAT } = await import('msedge-tts');
       const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -370,84 +361,9 @@ export class AppController {
       if (!buf.length) throw new Error('empty audio response');
       const mime = detectAudioMime(buf);
       res.set({ 'Content-Type': mime, 'Content-Length': String(buf.length) });
-      res.send(buf); return;
-    } catch (e) { errors.push(`EdgeTTS: ${(e as Error).message}`); }
-
-    // ── 2. Local Python TTS service ───────────────────────────────────────────────────
-    if (localTts) {
-      try {
-        const r = await fetch(`${localTts}/tts`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text }), signal: AbortSignal.timeout(120_000),
-        });
-        if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
-        const buf = Buffer.from(await r.arrayBuffer());
-        res.set({ 'Content-Type': 'audio/wav', 'Content-Length': String(buf.length) });
-        res.send(buf); return;
-      } catch (e) { errors.push(`LocalTTS: ${(e as Error).message}`); }
+      res.send(buf);
+    } catch (e) {
+      res.status(500).json({ message: `TTS failed: ${(e as Error).message}` });
     }
-
-    // ── 3. Gemini TTS ─────────────────────────────────────────────────────────────────
-    if (geminiKey) {
-      try {
-        const r = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${geminiKey}`,
-          {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: text.slice(0, 4096) }] }],
-              generationConfig: {
-                responseModalities: ['AUDIO'],
-                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
-              },
-            }),
-            signal: AbortSignal.timeout(30_000),
-          },
-        );
-        if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
-        const data: any = await r.json();
-        const inlineData = data?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
-        if (!inlineData?.data) throw new Error('no audio in response');
-        const buf = pcmToWav(Buffer.from(inlineData.data, 'base64'));
-        res.set({ 'Content-Type': 'audio/wav', 'Content-Length': String(buf.length) });
-        res.send(buf); return;
-      } catch (e) { errors.push(`Gemini: ${(e as Error).message}`); }
-    }
-
-    // ── 4. OpenAI TTS — paid last resort ─────────────────────────────────────────────
-    if (openaiKey) {
-      try {
-        const r = await fetch('https://api.openai.com/v1/audio/speech', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: 'tts-1', input: text.slice(0, 4096), voice: 'alloy' }),
-        });
-        if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
-        const buf = Buffer.from(await r.arrayBuffer());
-        res.set({ 'Content-Type': 'audio/mpeg', 'Content-Length': String(buf.length) });
-        res.send(buf); return;
-      } catch (e) { errors.push(`OpenAI: ${(e as Error).message}`); }
-    }
-
-    res.status(500).json({ message: `TTS failed — all providers exhausted: ${errors.join(' | ')}` });
   }
-}
-
-// Wrap raw 16-bit PCM (mono, 24 kHz) in a RIFF/WAV container so browsers can play it.
-function pcmToWav(pcm: Buffer): Buffer {
-  const header = Buffer.alloc(44);
-  header.write('RIFF', 0);
-  header.writeUInt32LE(36 + pcm.length, 4);
-  header.write('WAVE', 8);
-  header.write('fmt ', 12);
-  header.writeUInt32LE(16, 16);      // PCM chunk size
-  header.writeUInt16LE(1, 20);       // AudioFormat = PCM
-  header.writeUInt16LE(1, 22);       // mono
-  header.writeUInt32LE(24000, 24);   // sample rate
-  header.writeUInt32LE(48000, 28);   // byte rate (24000 * 1 * 2)
-  header.writeUInt16LE(2, 32);       // block align
-  header.writeUInt16LE(16, 34);      // bits per sample
-  header.write('data', 36);
-  header.writeUInt32LE(pcm.length, 40);
-  return Buffer.concat([header, pcm]);
 }
