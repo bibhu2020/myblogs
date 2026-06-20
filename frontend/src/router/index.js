@@ -30,6 +30,7 @@ const routes = [
       { path: 'stories', component: () => import('../views/admin/Stories.vue'), meta: { requiresAuth: true, title: 'Stories' } },
       { path: 'stories/new', component: () => import('../views/admin/StoryEditor.vue'), meta: { requiresAuth: true, title: 'New Story' } },
       { path: 'stories/:id/edit', component: () => import('../views/admin/StoryEditor.vue'), meta: { requiresAuth: true, title: 'Edit Story' } },
+      { path: 'profile', component: () => import('../views/admin/Profile.vue'), meta: { requiresAuth: true, title: 'My Profile' } },
     ]
   },
   { path: '/:pathMatch(.*)*', component: () => import('../views/NotFound.vue'), meta: { title: 'Not Found' } }
