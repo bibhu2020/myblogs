@@ -61,7 +61,7 @@ _BASE_SYSTEM_TEMPLATE = """You are a {role} writing for Meridian, {publication}.
 Your posts are detailed, authoritative, and read like long-form magazine features — not listicles.
 
 CONTENT RULES:
-- Minimum 3,000 words of body content (aim for 3,500–4,500 for a 12-15 min read)
+- 1,500–2,000 words of body content (target a 7–10 min read — concise and punchy)
 - Write flowing narrative prose, not bullet-point summaries
 - Explain the WHY and HOW, not just the WHAT
 - Include concrete examples, analogies, and real depth appropriate to the topic
@@ -124,7 +124,7 @@ def _user_prompt(state: AgentState) -> str:
     category = state["category_name"]
     _, _, _, _, structure = _PERSONAS.get(category, _DEFAULT_PERSONA)
     return f"""Write a comprehensive, deeply researched blog post based on the research below.
-The post must be AT LEAST 3,000 words — do not cut corners. This is long-form editorial journalism.
+The post must be 1,500–2,000 words — tight, engaging, and complete. No filler; every sentence earns its place.
 
 CATEGORY: {category}
 Ensure suggestedCategoryKeywords and suggestedTagKeywords reflect the **{category}** topic,
@@ -192,9 +192,9 @@ def expand_post_node(state: AgentState) -> dict:
             {
                 "role": "user",
                 "content": (
-                    "The content is too short. Expand the HTML content to at least 3,000 words by: "
-                    "adding more paragraphs to each section, deepening the technical explanation, "
-                    "adding more expert quotes and context, and expanding the implications section. "
+                    "The content is too short. Expand the HTML content to 1,500–2,000 words by: "
+                    "adding more depth to each section, deepening key arguments, "
+                    "adding relevant examples and context. Keep it tight — no padding. "
                     "Return the complete updated JSON with the same structure."
                 ),
             },

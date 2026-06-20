@@ -15,7 +15,7 @@ from .state import AgentState
 
 
 def _needs_expansion(state: AgentState) -> str:
-    return "expand_post" if state["word_count"] < 2200 else "generate_images"
+    return "expand_post" if state["word_count"] < 1200 else "generate_images"
 
 
 def build_graph(checkpointer=None):
