@@ -335,9 +335,21 @@ export class AppController {
     // ── 1. Microsoft Edge TTS — free, no key, neural voices, ~200ms latency ──────────
     try {
       const { MsEdgeTTS, OUTPUT_FORMAT } = await import('msedge-tts');
+      // Voice: en-US-AriaNeural (female, professional)
+      // Style: narration-professional — measured, clear delivery
+      // Rate: -15% — slightly slower for non-native listeners
+      const voice = 'en-US-AriaNeural';
+      const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US">
+        <voice name="${voice}">
+          <mstts:express-as style="narration-professional">
+            <prosody rate="-15%">${escaped}</prosody>
+          </mstts:express-as>
+        </voice>
+      </speak>`;
       const tts = new MsEdgeTTS();
-      await tts.setMetadata('en-US-AriaNeural', OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
-      const { audioStream } = tts.toStream(text);
+      await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+      const { audioStream } = tts.rawToStream(ssml);
       const buf = await new Promise<Buffer>((resolve, reject) => {
         const chunks: Buffer[] = [];
         audioStream.on('data', (chunk: Buffer) => chunks.push(chunk));
