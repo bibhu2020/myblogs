@@ -459,11 +459,11 @@ Write only the lyrics. No explanations, no commentary, no extra text.`;
     const language = (body.language || 'english').toLowerCase();
     if (!text) { res.status(400).json({ message: 'text is required' }); return; }
 
-    // Edge TTS voices per language (Odia not in Edge TTS → Indian-English fallback)
+    // Slower rate gives a more lyrical, song-like delivery over background music
     const VOICES: Record<string, { voice: string; rate: number; pitch: string }> = {
-      english: { voice: 'en-US-JennyNeural',   rate: 0.88, pitch: '+0Hz' },
-      hindi:   { voice: 'hi-IN-SwaraNeural',    rate: 0.88, pitch: '+0Hz' },
-      odia:    { voice: 'en-IN-NeerjaNeural',   rate: 0.88, pitch: '+0Hz' },
+      english: { voice: 'en-US-JennyNeural',   rate: 0.72, pitch: '+0Hz' },
+      hindi:   { voice: 'hi-IN-SwaraNeural',    rate: 0.72, pitch: '+0Hz' },
+      odia:    { voice: 'en-IN-NeerjaNeural',   rate: 0.72, pitch: '+0Hz' },
     };
     const profile = VOICES[language] ?? VOICES.english;
 
