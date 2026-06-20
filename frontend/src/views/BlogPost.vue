@@ -44,6 +44,21 @@ let chunkBlobs     = []     // populated once each fetch resolves; index presenc
 let chunkItems     = []     // { text, element: DOMElement | null }[]
 
 // Build chunks from rendered DOM elements so we can highlight them while reading.
+function splitAtSentences(text, el, items, maxLen = 1000) {
+  if (text.length <= maxLen) { items.push({ text, element: el }); return }
+  const ends = []
+  for (const m of text.matchAll(/[.!?]+\s+/g)) ends.push(m.index + m[0].length)
+  let start = 0
+  while (start < text.length) {
+    const remaining = text.slice(start)
+    if (remaining.length <= maxLen) { items.push({ text: remaining.trim(), element: el }); break }
+    const cutPos = ends.filter(e => e > start && e <= start + maxLen).at(-1)
+    const cut = cutPos ?? (start + maxLen)
+    items.push({ text: text.slice(start, cut).trim(), element: el })
+    start = cut
+  }
+}
+
 function buildDOMChunks() {
   const items = []
 
@@ -57,20 +72,7 @@ function buildDOMChunks() {
     blocks.forEach(el => {
       const text = (el.textContent || '').trim()
       if (text.length < 5) return
-      if (text.length <= 250) {
-        items.push({ text, element: el })
-      } else {
-        // Split long blocks; all parts map to the same element for highlighting
-        let rem = text
-        while (rem.length > 0) {
-          if (rem.length <= 250) { items.push({ text: rem, element: el }); break }
-          let cut = rem.lastIndexOf('. ', 200)
-          if (cut < 80) cut = rem.lastIndexOf(' ', 200)
-          if (cut < 0) cut = 200; else cut += 1
-          items.push({ text: rem.slice(0, cut).trim(), element: el })
-          rem = rem.slice(cut).trim()
-        }
-      }
+      splitAtSentences(text, el, items)
     })
   }
 

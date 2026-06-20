@@ -26,17 +26,22 @@ let chunkFetches   = []
 let chunkBlobs     = []     // populated once each fetch resolves; index presence = resolved
 let chunkData      = []     // { text, storyIdx }[]
 
-function _splitText(text, maxLen = 280) {
+function _splitText(text, maxLen = 1000) {
   const parts = []
-  let rem = text.trim()
-  while (rem.length > 0) {
-    if (rem.length <= maxLen) { parts.push(rem); break }
-    let cut = rem.lastIndexOf('. ', maxLen)
-    if (cut < maxLen * 0.4) cut = rem.lastIndexOf(' ', maxLen)
-    if (cut < 0) cut = maxLen
-    else cut += 1
-    parts.push(rem.slice(0, cut).trim())
-    rem = rem.slice(cut).trim()
+  const t = text.trim()
+  if (!t) return parts
+  if (t.length <= maxLen) { parts.push(t); return parts }
+  // Split only at sentence boundaries
+  const ends = []
+  for (const m of t.matchAll(/[.!?]+\s+/g)) ends.push(m.index + m[0].length)
+  let start = 0
+  while (start < t.length) {
+    const remaining = t.slice(start)
+    if (remaining.length <= maxLen) { parts.push(remaining.trim()); break }
+    const cutPos = ends.filter(e => e > start && e <= start + maxLen).at(-1)
+    const cut = cutPos ?? (start + maxLen)
+    parts.push(t.slice(start, cut).trim())
+    start = cut
   }
   return parts.filter(Boolean)
 }
@@ -48,8 +53,9 @@ function _buildChunks(newsList, regionLabel) {
     storyIdx: -1,
   })
   newsList.forEach((item, i) => {
-    chunks.push({ text: `Story ${i + 1}. ${item.title}.`, storyIdx: i })
-    _splitText(item.summary || '', 280).forEach(part =>
+    // Title + summary in one chunk — avoids jarring mid-summary break
+    const fullText = `Story ${i + 1}. ${item.title}. ${item.summary || ''}`.trim()
+    _splitText(fullText).forEach(part =>
       chunks.push({ text: part, storyIdx: i })
     )
   })
