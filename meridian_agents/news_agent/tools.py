@@ -47,6 +47,14 @@ _REGION_FEEDS: dict[str, list[tuple[str, str]]] = {
         ("Pragativadi","https://pragativadi.com/feed"),
         ("The Hindu Odisha", "https://www.thehindu.com/news/national/other-states/feeder/default.rss"),
     ],
+    "ai_quantum": [
+        ("MIT Tech Review",          "https://www.technologyreview.com/feed/"),
+        ("VentureBeat AI",           "https://venturebeat.com/category/ai/feed/"),
+        ("Wired AI",                 "https://www.wired.com/feed/tag/ai/latest/rss"),
+        ("Quantum Computing Report", "https://quantumcomputingreport.com/feed/"),
+        ("IEEE Spectrum AI",         "https://spectrum.ieee.org/feeds/topic/artificial-intelligence.rss"),
+        ("The Verge AI",             "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml"),
+    ],
 }
 
 
@@ -364,11 +372,11 @@ def save_news(items_json: str) -> str:
     article's source page before saving.
 
     Args:
-        items_json: JSON array of exactly 10 news items. Each item must have:
+        items_json: JSON array of exactly 12 news items. Each item must have:
             - title (str): Headline
             - summary (str): ~100-word neutral journalistic summary
             - sourceUrl (str): Direct article URL (from the search results)
-            - region (str): 'world' | 'usa' | 'india' | 'odisha'
+            - region (str): 'world' | 'usa' | 'india' | 'odisha' | 'ai_quantum'
             - imageUrl (str | null): Image URL from the search result, or null
             - sourceName (str): Publication name
             - publishedAt (str | null): date field from the search result
