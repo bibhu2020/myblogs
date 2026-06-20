@@ -28,7 +28,7 @@ jobs:
         run: npm ci --prefix media-service
 
       - name: npm ci — api-gateway
-        run: npm ci --prefix api-gateway
+        run: npm ci --prefix api-gateway --ignore-scripts
 
       - name: npm ci + build — frontend
         run: |
