@@ -79,19 +79,19 @@ function isActive(to, exact = false) {
       <span class="text-[10px] font-medium leading-none truncate w-full text-center px-0.5">Story</span>
     </RouterLink>
 
-    <!-- About -->
-    <RouterLink to="/about"
+    <!-- Music -->
+    <RouterLink to="/music"
       class="flex flex-col items-center justify-center flex-1 gap-0.5 min-w-0 transition-colors"
-      :class="isActive('/about')
+      :class="isActive('/music')
         ? (layout.variant === 'b' ? 'text-violet-400' : 'text-primary-600')
         : (layout.variant === 'b' ? 'text-slate-500' : 'text-gray-400')"
-      aria-label="About"
+      aria-label="Music"
     >
       <svg class="w-[22px] h-[22px] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
       </svg>
-      <span class="text-[10px] font-medium leading-none truncate w-full text-center px-0.5">About</span>
+      <span class="text-[10px] font-medium leading-none truncate w-full text-center px-0.5">Music</span>
     </RouterLink>
   </nav>
 </template>
