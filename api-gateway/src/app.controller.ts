@@ -330,18 +330,27 @@ export class AppController {
     return this.proxy.forward('blog', `/agent-runs/${runId}`, 'GET', null, { Authorization: this.getAuthHeader(req) });
   }
 
-  // TEXT-TO-SPEECH — Microsoft Edge TTS, female professional voice, paced for clarity.
+  // TEXT-TO-SPEECH — Microsoft Edge TTS, voice and pace vary by content type.
   @Post('tts')
-  async textToSpeech(@Body() body: { text: string }, @Res() res: Response) {
+  async textToSpeech(@Body() body: { text: string; type?: string }, @Res() res: Response) {
     const text = (body.text || '').trim();
     if (!text) { res.status(400).json({ message: 'text is required' }); return; }
+
+    // story  → en-GB-SoniaNeural, slow warm pace, slightly lower pitch (classic storyteller)
+    // blog   → en-US-AriaNeural, clear professional pace (lecturer)
+    // news   → en-US-AriaNeural, brisk news-reader pace
+    const PROFILES: Record<string, { voice: string; rate: number; pitch: string }> = {
+      story: { voice: 'en-GB-SoniaNeural', rate: 0.78, pitch: '-1st' },
+      blog:  { voice: 'en-US-AriaNeural',  rate: 0.87, pitch: '+0Hz' },
+      news:  { voice: 'en-US-AriaNeural',  rate: 0.95, pitch: '+0Hz' },
+    };
+    const profile = PROFILES[body.type || ''] ?? PROFILES.blog;
 
     try {
       const { MsEdgeTTS, OUTPUT_FORMAT } = await import('msedge-tts');
       const tts = new MsEdgeTTS();
-      await tts.setMetadata('en-US-AriaNeural', OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
-      // rate 0.85 = -15% speed — clear, professional pace for non-native listeners
-      const { audioStream } = tts.toStream(text, { rate: 0.85 });
+      await tts.setMetadata(profile.voice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+      const { audioStream } = tts.toStream(text, { rate: profile.rate, pitch: profile.pitch });
       const buf = await new Promise<Buffer>((resolve, reject) => {
         const chunks: Buffer[] = [];
         let settled = false;
