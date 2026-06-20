@@ -11,7 +11,23 @@ const layout = useLayoutStore()
   <!-- pb-16 sm:pb-0: clears the mobile bottom nav bar (h-16) -->
   <footer class="pb-16 sm:pb-0" :class="layout.variant === 'b' ? 'bg-[#090f1d] text-slate-400 mt-24' : 'bg-primary-900 text-primary-200 mt-24'">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-12">
+
+      <!-- Mobile-only quick nav row -->
+      <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 mb-10 md:hidden">
+        <RouterLink v-for="link in [
+          { to: '/',       label: 'Home'    },
+          { to: '/blog',   label: 'Posts'   },
+          { to: '/news',   label: 'News'    },
+          { to: '/story',  label: 'Stories' },
+          { to: '/music',  label: 'Music'   },
+          { to: '/about',  label: 'About'   },
+        ]" :key="link.to" :to="link.to"
+          class="text-sm font-medium transition-colors"
+          :class="layout.variant === 'b' ? 'text-slate-300 hover:text-violet-400' : 'text-primary-100 hover:text-white'"
+        >{{ link.label }}</RouterLink>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12">
         <div class="col-span-2 md:col-span-2">
           <div class="flex items-center gap-2.5 mb-4">
             <LogoMark :size="36" />
