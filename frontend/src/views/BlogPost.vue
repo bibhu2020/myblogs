@@ -84,7 +84,7 @@ function buildDOMChunks() {
 function fetchChunkCached(idx) {
   if (!chunkFetches[idx]) {
     const doFetch = () =>
-      api.post('/tts', { text: chunkItems[idx].text }, { responseType: 'blob', timeout: 90_000 })
+      api.post('/tts', { text: chunkItems[idx].text, type: 'blog' }, { responseType: 'blob', timeout: 90_000 })
          .then(r => { chunkBlobs[idx] = r.data; return r.data })
     chunkFetches[idx] = doFetch()
       .catch(() => new Promise(res => setTimeout(res, 500)).then(doFetch))
