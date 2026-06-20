@@ -16,11 +16,12 @@ const GENRE_ICONS = {
 }
 
 // ── TTS player ────────────────────────────────────────────────────────────────
-const ttsState       = ref('idle')   // idle | loading | playing | paused
+const ttsState       = ref('idle')   // idle | loading | playing | paused | error
 const ttsProgress    = ref(0)        // 0–1 across all chunks
 const ttsChunkIdx    = ref(0)
 const ttsTotalChunks = ref(0)
 const playerOpen     = ref(false)
+const ttsError       = ref('')
 
 let sessionId      = 0
 let audioEl        = null
@@ -141,10 +142,10 @@ function playChunk(blob, chunkIdx) {
 }
 
 async function runFrom(startIdx, session) {
+  let failures = 0
   for (let i = startIdx; i < ttsTotalChunks.value; i++) {
     if (session !== sessionId) return
     ttsChunkIdx.value = i
-    highlightChunk(i)
 
     // Fetch this chunk + 5 ahead so audio is always buffered well in advance
     fetchChunkCached(i)
@@ -160,8 +161,22 @@ async function runFrom(startIdx, session) {
     if (session !== sessionId) return
 
     const blob = chunkBlobs[i]
-    if (!blob) { console.warn(`[TTS] chunk ${i} failed — skipping`); continue }
+    if (!blob) {
+      failures++
+      console.warn(`[TTS] chunk ${i} failed (${failures} consecutive)`)
+      if (failures >= 3) {
+        clearHighlight()
+        ttsState.value = 'idle'
+        ttsProgress.value = 0
+        ttsError.value = 'Audio unavailable — please try again later.'
+        return
+      }
+      continue
+    }
+    failures = 0
 
+    // Only highlight and scroll once we know audio is ready to play
+    highlightChunk(i)
     ttsState.value = 'playing'
     await playChunk(blob, i)
     if (session !== sessionId) return
@@ -180,6 +195,7 @@ function cancelCurrentChunk() {
 
 async function openPlayer() {
   playerOpen.value = true
+  ttsError.value = ''
   if (ttsState.value !== 'idle') return
 
   chunkItems = buildDOMChunks()
@@ -463,7 +479,8 @@ onMounted(async () => {
               </button>
             </div>
 
-            <p class="text-xs text-center text-gray-400">Powered by local AI</p>
+            <p v-if="ttsError" class="text-xs text-center text-red-500">{{ ttsError }}</p>
+            <p v-else class="text-xs text-center text-gray-400">Powered by local AI</p>
           </div>
         </div>
       </div>

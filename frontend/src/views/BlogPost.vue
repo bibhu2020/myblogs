@@ -29,11 +29,12 @@ const galleryOpen = ref(false)
 const galleryIndex = ref(0)
 
 // ── TTS player ────────────────────────────────────────────────────────────────
-const ttsState       = ref('idle')   // idle | loading | playing | paused
+const ttsState       = ref('idle')   // idle | loading | playing | paused | error
 const ttsProgress    = ref(0)        // 0–1 across all chunks
 const ttsChunkIdx    = ref(0)        // current chunk index (0-based)
 const ttsTotalChunks = ref(0)
 const playerOpen     = ref(false)
+const ttsError       = ref('')
 
 let sessionId      = 0
 let audioEl        = null
@@ -149,10 +150,10 @@ function playChunk(blob, chunkIdx) {
 }
 
 async function runFrom(startIdx, session) {
+  let failures = 0
   for (let i = startIdx; i < ttsTotalChunks.value; i++) {
     if (session !== sessionId) return
     ttsChunkIdx.value = i
-    highlightChunk(i)
 
     // Fetch this chunk + 5 ahead so audio is always buffered well in advance
     fetchChunkCached(i)
@@ -169,10 +170,21 @@ async function runFrom(startIdx, session) {
 
     const blob = chunkBlobs[i]
     if (!blob) {
-      console.warn(`[TTS] chunk ${i} synthesis failed — skipping`)
+      failures++
+      console.warn(`[TTS] chunk ${i} failed (${failures} consecutive)`)
+      if (failures >= 3) {
+        clearHighlight()
+        ttsState.value = 'idle'
+        ttsProgress.value = 0
+        ttsError.value = 'Audio unavailable — please try again later.'
+        return
+      }
       continue
     }
+    failures = 0
 
+    // Only highlight and scroll once we know audio is ready to play
+    highlightChunk(i)
     ttsState.value = 'playing'
     await playChunk(blob, i)
     if (session !== sessionId) return
@@ -191,6 +203,7 @@ function cancelCurrentChunk() {
 
 async function openPlayer() {
   playerOpen.value = true
+  ttsError.value = ''
   if (ttsState.value !== 'idle') return
 
   chunkItems = buildDOMChunks()
@@ -534,7 +547,8 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
               </button>
             </div>
 
-            <p class="text-xs text-center" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">Powered by local AI</p>
+            <p v-if="ttsError" class="text-xs text-center text-red-500">{{ ttsError }}</p>
+            <p v-else class="text-xs text-center" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">Powered by local AI</p>
           </div>
         </div>
       </div>

@@ -338,25 +338,27 @@ export class AppController {
 
     try {
       const { MsEdgeTTS, OUTPUT_FORMAT } = await import('msedge-tts');
-      const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US">
-        <voice name="en-US-AriaNeural">
-          <mstts:express-as style="narration-professional">
-            <prosody rate="-15%">${escaped}</prosody>
-          </mstts:express-as>
-        </voice>
-      </speak>`;
       const tts = new MsEdgeTTS();
       await tts.setMetadata('en-US-AriaNeural', OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
-      const { audioStream } = tts.rawToStream(ssml);
+      // rate 0.85 = -15% speed — clear, professional pace for non-native listeners
+      const { audioStream } = tts.toStream(text, { rate: 0.85 });
       const buf = await new Promise<Buffer>((resolve, reject) => {
         const chunks: Buffer[] = [];
-        const timer = setTimeout(() => reject(new Error('stream timeout')), 30_000);
-        const done = (err?: Error) => { clearTimeout(timer); err ? reject(err) : resolve(Buffer.concat(chunks)); };
+        let settled = false;
+        const finish = (err?: Error) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          err ? reject(err) : resolve(Buffer.concat(chunks));
+        };
+        const timer = setTimeout(() => finish(new Error('stream timeout')), 30_000);
         audioStream.on('data', (chunk: Buffer) => chunks.push(chunk));
-        audioStream.on('end', () => done());
-        audioStream.on('close', () => done());
-        audioStream.on('error', (e) => done(e));
+        audioStream.on('end', () => finish());
+        audioStream.on('error', (e) => finish(e));
+        // 'close' fires on socket teardown — use as fallback only if 'end' never fires
+        audioStream.on('close', () => setTimeout(() => {
+          finish(chunks.length ? undefined : new Error('stream closed with no data'));
+        }, 100));
       });
       if (!buf.length) throw new Error('empty audio response');
       const mime = detectAudioMime(buf);
