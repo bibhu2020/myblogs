@@ -319,7 +319,7 @@ export class AppController {
   }
 
   // TEXT-TO-SPEECH — one small chunk per request; chunking handled client-side.
-  // Priority: HF mms-tts-eng (free, no key needed) → local MMS-TTS → Gemini → OpenAI.
+  // Priority: msedge-tts (free, no key) → local MMS-TTS → Gemini → OpenAI.
   // Each provider is tried in order; on failure the next one is attempted automatically.
   @Post('tts')
   async textToSpeech(@Body() body: { text: string }, @Res() res: Response) {
@@ -328,26 +328,27 @@ export class AppController {
 
     const localTts  = process.env.TTS_SERVICE_URL;
     const geminiKey = process.env.GEMINI_API_KEY;
-    const hfToken   = process.env.HF_TOKEN;   // optional — improves HF rate limits
     const openaiKey = process.env.OPENAI_API_KEY;
 
     const errors: string[] = [];
 
-    // ── 1. HuggingFace mms-tts-eng — free, no key required (token improves limits) ──
+    // ── 1. Microsoft Edge TTS — free, no key, neural voices, ~200ms latency ──────────
     try {
-      const hfHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (hfToken) hfHeaders['Authorization'] = `Bearer ${hfToken}`;
-      const r = await fetch(
-        'https://api-inference.huggingface.co/models/facebook/mms-tts-eng',
-        { method: 'POST', headers: hfHeaders, body: JSON.stringify({ inputs: text }),
-          signal: AbortSignal.timeout(90_000) },
-      );
-      if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
-      const buf = Buffer.from(await r.arrayBuffer());
-      const contentType = r.headers.get('content-type') || 'audio/flac';
-      res.set({ 'Content-Type': contentType, 'Content-Length': String(buf.length) });
+      const { MsEdgeTTS, OUTPUT_FORMAT } = await import('msedge-tts');
+      const tts = new MsEdgeTTS();
+      await tts.setMetadata('en-US-AriaNeural', OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+      const { audioStream } = tts.toStream(text);
+      const buf = await new Promise<Buffer>((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        audioStream.on('data', (chunk: Buffer) => chunks.push(chunk));
+        audioStream.on('end', () => resolve(Buffer.concat(chunks)));
+        audioStream.on('close', () => resolve(Buffer.concat(chunks)));
+        audioStream.on('error', reject);
+      });
+      if (!buf.length) throw new Error('empty audio response');
+      res.set({ 'Content-Type': 'audio/mpeg', 'Content-Length': String(buf.length) });
       res.send(buf); return;
-    } catch (e) { errors.push(`HF: ${(e as Error).message}`); }
+    } catch (e) { errors.push(`EdgeTTS: ${(e as Error).message}`); }
 
     // ── 2. Local Python TTS service ───────────────────────────────────────────────────
     if (localTts) {
