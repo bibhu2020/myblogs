@@ -336,12 +336,13 @@ export class AppController {
     const text = (body.text || '').trim();
     if (!text) { res.status(400).json({ message: 'text is required' }); return; }
 
-    // story  → en-GB-SoniaNeural, slow warm pace, slightly lower pitch (classic storyteller)
-    // blog   → en-US-AriaNeural, clear professional pace (lecturer)
-    // news   → en-US-AriaNeural, brisk news-reader pace
+    // story → Irish accent (Emily) is naturally musical and warm — classic captivating storyteller
+    //         very slow rate + slightly lower pitch for dramatic, immersive feel
+    // blog  → Jenny has a clear teacher-like delivery with natural enunciation — good for explaining
+    // news  → Aria at brisk news-presenter pace (unchanged)
     const PROFILES: Record<string, { voice: string; rate: number; pitch: string }> = {
-      story: { voice: 'en-GB-SoniaNeural', rate: 0.78, pitch: '-1st' },
-      blog:  { voice: 'en-US-AriaNeural',  rate: 0.87, pitch: '+0Hz' },
+      story: { voice: 'en-IE-EmilyNeural', rate: 0.72, pitch: '-1st' },
+      blog:  { voice: 'en-US-JennyNeural', rate: 0.82, pitch: '+0Hz' },
       news:  { voice: 'en-US-AriaNeural',  rate: 0.95, pitch: '+0Hz' },
     };
     const profile = PROFILES[body.type || ''] ?? PROFILES.blog;
