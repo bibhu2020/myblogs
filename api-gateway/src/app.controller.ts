@@ -379,98 +379,11 @@ export class AppController {
     }
   }
 
-  // MUSIC — Lyrics generation + voice via Hugging Face free models
-  @Post('music/lyrics')
-  async generateLyrics(@Body() body: { language: string; genre: string; era: string; theme?: string }, @Res() res: Response) {
-    const language = (body.language || 'english').toLowerCase();
-    const genre    = (body.genre    || 'melody').toLowerCase();
-    const era      = (body.era      || 'contemporary').toLowerCase();
-    const theme    = (body.theme    || '').trim();
-
-    const langInstr: Record<string, string> = {
-      english: 'Write entirely in English.',
-      hindi:   'Write entirely in Hindi using Devanagari script.',
-      odia:    'Write entirely in Odia using Odia script.',
-    };
-    const genreStyle: Record<string, string> = {
-      bollywood: 'Bollywood film song — emotional, melodious, poetic imagery, romantic or dramatic',
-      melody:    'melodic pop — catchy, heartfelt, memorable hook and chorus',
-      country:   'country music — storytelling, heartfelt, themes of love, home, and nature',
-      jazz:      'jazz — sophisticated, bluesy, smooth phrasing, atmospheric',
-    };
-    const eraStyle: Record<string, string> = {
-      '1970s':        '1970s — orchestral, classic, innocent romance, idealistic',
-      '1980s':        '1980s — synth-pop energy, passionate, upbeat',
-      '1990s':        '1990s — introspective, emotional depth, raw feeling',
-      contemporary: 'contemporary — modern production sensibility, relatable everyday themes',
-    };
-
-    const prompt = `You are a talented songwriter. Write original song lyrics with these specifications:
-Language: ${langInstr[language] ?? langInstr.english}
-Style: ${genreStyle[genre] ?? genreStyle.melody}
-Era: ${eraStyle[era] ?? eraStyle.contemporary}
-${theme ? `Theme: ${theme}` : ''}
-
-Format:
-Title: [Song Title]
-
-[Verse 1]
-...
-
-[Chorus]
-...
-
-[Verse 2]
-...
-
-[Chorus]
-...
-
-[Bridge]
-...
-
-Output only the song lyrics with section labels. No explanations.`;
-
-    try {
-      const resp = await (await import('axios')).default.post(
-        'https://api-inference.huggingface.co/v1/chat/completions',
-        { model: 'mistralai/Mistral-7B-Instruct-v0.3', messages: [{ role: 'user', content: prompt }], max_tokens: 700, temperature: 0.85 },
-        { headers: { Authorization: `Bearer ${process.env.HF_TOKEN}`, 'Content-Type': 'application/json' }, timeout: 90_000 }
-      );
-      const lyrics = resp.data?.choices?.[0]?.message?.content?.trim() || '';
-      if (!lyrics) throw new Error('empty response from model');
-      res.json({ lyrics });
-    } catch (e: any) {
-      res.status(500).json({ message: `Lyrics generation failed: ${e?.response?.data?.error || e.message}` });
-    }
-  }
-
-  @Post('music/tts')
-  async musicTts(@Body() body: { text: string; language: string }, @Res() res: Response) {
-    const text     = (body.text     || '').trim();
-    const language = (body.language || 'english').toLowerCase();
-    if (!text) { res.status(400).json({ message: 'text is required' }); return; }
-
-    const modelMap: Record<string, string> = {
-      english: 'facebook/mms-tts-eng',
-      hindi:   'facebook/mms-tts-hin',
-      odia:    'facebook/mms-tts-ory',
-    };
-    const model = modelMap[language] ?? modelMap.english;
-
-    try {
-      const resp = await (await import('axios')).default.post(
-        `https://api-inference.huggingface.co/models/${model}`,
-        { inputs: text },
-        { headers: { Authorization: `Bearer ${process.env.HF_TOKEN}`, 'Content-Type': 'application/json' }, responseType: 'arraybuffer', timeout: 90_000 }
-      );
-      const buf = Buffer.from(resp.data as ArrayBuffer);
-      if (!buf.length) throw new Error('empty audio from model');
-      const mime = detectAudioMime(buf);
-      res.set({ 'Content-Type': mime, 'Content-Length': String(buf.length) });
-      res.send(buf);
-    } catch (e: any) {
-      res.status(500).json({ message: `Music TTS failed: ${e?.response?.data?.error || e.message}` });
-    }
+  // MUSIC — exposes HF token so the browser can call Hugging Face directly.
+  // The server cannot reach api-inference.huggingface.co (DNS blocked), but the
+  // user's browser can, so all HF calls are made client-side in Music.vue.
+  @Get('music/token')
+  getMusicToken() {
+    return { token: process.env.HF_TOKEN || '' };
   }
 }
