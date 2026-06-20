@@ -8,6 +8,32 @@ import { memoryStorage } from 'multer';
 import { ProxyService } from './proxy.service';
 import { Request as ExpressRequest, Response } from 'express';
 
+// Singleton Edge TTS instance — reused across requests to avoid per-request WebSocket setup.
+let _edgeTts: any = null;
+let _edgeTtsInitialized = false;
+
+async function getEdgeTts() {
+  if (!_edgeTtsInitialized) {
+    const { MsEdgeTTS, OUTPUT_FORMAT } = await import('msedge-tts');
+    _edgeTts = new MsEdgeTTS();
+    await _edgeTts.setMetadata('en-US-AriaNeural', OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+    _edgeTtsInitialized = true;
+  }
+  return _edgeTts;
+}
+
+// Detect actual audio format from magic bytes and return the correct MIME type.
+function detectAudioMime(buf: Buffer): string {
+  if (buf.length >= 4 && buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46)
+    return 'audio/wav';  // RIFF header
+  if (buf.length >= 3 && buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33)
+    return 'audio/mpeg'; // ID3 tag (MP3)
+  if (buf.length >= 2 && buf[0] === 0xFF && (buf[1] & 0xE0) === 0xE0)
+    return 'audio/mpeg'; // MP3 sync word
+  if (buf.length >= 4 && buf[0] === 0x4F && buf[1] === 0x67 && buf[2] === 0x67 && buf[3] === 0x53)
+    return 'audio/ogg';  // OGG
+  return 'audio/mpeg';
+}
 
 @Controller('api')
 export class AppController {
@@ -332,23 +358,20 @@ export class AppController {
 
     const errors: string[] = [];
 
-    // ── 1. Microsoft Edge TTS — free, no key, neural voices, ~200ms latency ──────────
+    // ── 1. Microsoft Edge TTS — free, no key, singleton WebSocket, neural voice ────────
     try {
-      const { MsEdgeTTS, OUTPUT_FORMAT } = await import('msedge-tts');
       // Voice: en-US-AriaNeural (female, professional)
-      // Style: narration-professional — measured, clear delivery
+      // Style: narration-professional — measured, broadcast delivery
       // Rate: -15% — slightly slower for non-native listeners
-      const voice = 'en-US-AriaNeural';
       const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US">
-        <voice name="${voice}">
+        <voice name="en-US-AriaNeural">
           <mstts:express-as style="narration-professional">
             <prosody rate="-15%">${escaped}</prosody>
           </mstts:express-as>
         </voice>
       </speak>`;
-      const tts = new MsEdgeTTS();
-      await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+      const tts = await getEdgeTts();
       const { audioStream } = tts.rawToStream(ssml);
       const buf = await new Promise<Buffer>((resolve, reject) => {
         const chunks: Buffer[] = [];
@@ -358,9 +381,14 @@ export class AppController {
         audioStream.on('error', reject);
       });
       if (!buf.length) throw new Error('empty audio response');
-      res.set({ 'Content-Type': 'audio/mpeg', 'Content-Length': String(buf.length) });
+      const mime = detectAudioMime(buf);
+      res.set({ 'Content-Type': mime, 'Content-Length': String(buf.length) });
       res.send(buf); return;
-    } catch (e) { errors.push(`EdgeTTS: ${(e as Error).message}`); }
+    } catch (e) {
+      // Reset singleton on failure so next request gets a fresh connection
+      _edgeTtsInitialized = false; _edgeTts = null;
+      errors.push(`EdgeTTS: ${(e as Error).message}`);
+    }
 
     // ── 2. Local Python TTS service ───────────────────────────────────────────────────
     if (localTts) {
