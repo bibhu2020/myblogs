@@ -25,10 +25,10 @@ RUN npm ci
 COPY media-service/ ./
 RUN npm run build && npm prune --production
 
-# api-gateway
+# api-gateway — msedge-tts has a pnpm-only preinstall script; skip all scripts
 WORKDIR /app/api-gateway
 COPY api-gateway/package*.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 COPY api-gateway/ ./
 RUN npm run build && npm prune --production
 
