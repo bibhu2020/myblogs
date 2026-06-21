@@ -8,17 +8,12 @@ import Footer from '../components/Footer.vue'
 import PostCard from '../components/PostCard.vue'
 import api from '../api'
 import { format } from 'date-fns'
+// highlight.js is loaded lazily only when code blocks are present in the post
 
 const blog = useBlogStore()
 const layout = useLayoutStore()
 const ttsTrackColor = computed(() => layout.variant === 'b' ? '#7c3aed' : '#3b82f6')
 const ttsThumbColor = computed(() => layout.variant === 'b' ? '#7c3aed' : '#2563eb')
-const ttsHighlightBg = computed(() =>
-  layout.variant === 'b' ? 'rgba(124,58,237,0.1)' : 'rgba(59,130,246,0.1)'
-)
-const ttsHighlightRing = computed(() =>
-  layout.variant === 'b' ? 'rgba(124,58,237,0.15)' : 'rgba(59,130,246,0.15)'
-)
 const route = useRoute()
 const post = ref(null)
 const relatedPosts = ref([])
@@ -29,91 +24,52 @@ const galleryOpen = ref(false)
 const galleryIndex = ref(0)
 
 // ── TTS player ────────────────────────────────────────────────────────────────
-const ttsState       = ref('idle')   // idle | loading | playing | paused | error
+const ttsState       = ref('idle')   // idle | loading | playing | paused
 const ttsProgress    = ref(0)        // 0–1 across all chunks
 const ttsChunkIdx    = ref(0)        // current chunk index (0-based)
 const ttsTotalChunks = ref(0)
 const playerOpen     = ref(false)
-const ttsError       = ref('')
 
-let sessionId      = 0
-let audioEl        = null
-let currentBlobUrl = null
-let resolveChunk   = null
-let chunkFetches   = []
-let chunkBlobs     = []     // populated once each fetch resolves; index presence = resolved
-let chunkItems     = []     // { text, element: DOMElement | null }[]
+// Non-reactive internal state
+let sessionId      = 0        // incremented on each new playback/seek to invalidate old loops
+let audioEl        = null     // single reused <audio> element (avoids Safari per-element activation)
+let currentBlobUrl = null     // blob URL to revoke on cleanup
+let resolveChunk   = null     // exposes the current playChunk resolver for instant cancellation
+let chunkFetches   = []       // per-chunk fetch promises, filled lazily (3-ahead pipeline)
+let chunkTexts     = []       // text for each chunk, required for lazy fetching
 
-// Build chunks from rendered DOM elements so we can highlight them while reading.
-function splitAtSentences(text, el, items, maxLen = 1000) {
-  if (text.length <= maxLen) { items.push({ text, element: el }); return }
-  const ends = []
-  for (const m of text.matchAll(/[.!?]+\s+/g)) ends.push(m.index + m[0].length)
-  let start = 0
-  while (start < text.length) {
-    const remaining = text.slice(start)
-    if (remaining.length <= maxLen) { items.push({ text: remaining.trim(), element: el }); break }
-    const cutPos = ends.filter(e => e > start && e <= start + maxLen).at(-1)
-    const cut = cutPos ?? (start + maxLen)
-    items.push({ text: text.slice(start, cut).trim(), element: el })
-    start = cut
+function splitChunks(html, maxLen = 500) {
+  const div = document.createElement('div')
+  div.innerHTML = html
+  const full = (div.textContent || div.innerText || '').trim()
+  const chunks = []
+  let remaining = full
+  while (remaining.length > 0) {
+    if (remaining.length <= maxLen) { chunks.push(remaining); break }
+    let cut = remaining.lastIndexOf('. ', maxLen)
+    if (cut < maxLen * 0.4) cut = remaining.lastIndexOf(' ', maxLen)
+    if (cut < 0) cut = maxLen
+    else cut += 1
+    chunks.push(remaining.slice(0, cut).trim())
+    remaining = remaining.slice(cut).trim()
   }
+  return chunks.filter(Boolean)
 }
 
-function buildDOMChunks() {
-  const items = []
-
-  if (post.value?.title) {
-    items.push({ text: post.value.title, element: null })
-  }
-
-  const contentEl = document.querySelector('.post-content')
-  if (contentEl) {
-    const blocks = Array.from(contentEl.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li'))
-    blocks.forEach(el => {
-      const text = (el.textContent || '').trim()
-      if (text.length < 5) return
-      splitAtSentences(text, el, items)
-    })
-  }
-
-  return items
-}
-
-// Fetch one chunk with one automatic retry (3 s delay) to survive transient rate limits.
-function fetchChunkCached(idx) {
-  if (!chunkFetches[idx]) {
-    const doFetch = () =>
-      api.post('/tts', { text: chunkItems[idx].text, type: 'blog' }, { responseType: 'blob', timeout: 90_000 })
-         .then(r => { chunkBlobs[idx] = r.data; return r.data })
-    chunkFetches[idx] = doFetch()
-      .catch(() => new Promise(res => setTimeout(res, 500)).then(doFetch))
-      .catch(() => { chunkBlobs[idx] = null; return null })
-  }
-}
-
-// Add highlight class to the paragraph being read; auto-scroll if off-screen.
-function highlightChunk(idx) {
-  document.querySelectorAll('.tts-reading').forEach(el => el.classList.remove('tts-reading'))
-  const item = chunkItems[idx]
-  if (!item?.element) return
-  item.element.classList.add('tts-reading')
-  const rect = item.element.getBoundingClientRect()
-  const navH = 80  // sticky navbar (~64px) + margin
-  if (rect.top < navH || rect.bottom > window.innerHeight - 80) {
-    item.element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }
-}
-
-function clearHighlight() {
-  document.querySelectorAll('.tts-reading').forEach(el => el.classList.remove('tts-reading'))
+function fetchOneChunk(text) {
+  return api.post('/tts', { text }, { responseType: 'blob', timeout: 90_000 })
+    .then(r => r.data)
+    .catch(() => null)
 }
 
 // Returns (or creates) the single shared <audio> element.
-// MUST be called synchronously inside the click handler — Safari autoplay policy.
+// MUST be called synchronously inside the click event handler so Safari's
+// autoplay policy is satisfied — a silent play/pause activates the element
+// once; all subsequent .play() calls on the same element are then allowed.
 function ensureAudioEl() {
   if (!audioEl) {
     audioEl = new Audio()
+    // 44-byte silent WAV data URI — activates the element under Safari's gesture policy.
     audioEl.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='
     const p = audioEl.play(); if (p) p.catch(() => {})
     audioEl.pause()
@@ -122,6 +78,7 @@ function ensureAudioEl() {
   return audioEl
 }
 
+// Plays one blob; resolves when the chunk ends, errors, or is externally cancelled.
 function playChunk(blob, chunkIdx) {
   return new Promise(resolve => {
     resolveChunk = resolve
@@ -149,52 +106,42 @@ function playChunk(blob, chunkIdx) {
   })
 }
 
+// Core loop — runs from startIdx to end of chunks for the given session.
 async function runFrom(startIdx, session) {
-  let failures = 0
   for (let i = startIdx; i < ttsTotalChunks.value; i++) {
-    if (session !== sessionId) return
+    if (session !== sessionId) return   // a newer session (seek/stop) took over
     ttsChunkIdx.value = i
+    ttsState.value = 'loading'          // show spinner while awaiting synthesis
 
-    // Fetch this chunk + 5 ahead so audio is always buffered well in advance
-    fetchChunkCached(i)
-    for (let p = 1; p <= 5; p++) {
-      if (i + p < ttsTotalChunks.value) fetchChunkCached(i + p)
+    // Start this chunk's fetch lazily if not already in flight
+    if (!chunkFetches[i]) chunkFetches[i] = fetchOneChunk(chunkTexts[i])
+
+    // 3-ahead: keep a pipeline of up to 3 chunks in-flight so playback never stalls
+    for (let p = 1; p <= 3; p++) {
+      const ahead = i + p
+      if (ahead < ttsTotalChunks.value && !chunkFetches[ahead])
+        chunkFetches[ahead] = fetchOneChunk(chunkTexts[ahead])
     }
 
-    // Only show the loading spinner if the blob isn't already cached
-    if (!(i in chunkBlobs)) {
-      ttsState.value = 'loading'
-      await chunkFetches[i]
-    }
+    const blob = await chunkFetches[i]
     if (session !== sessionId) return
 
-    const blob = chunkBlobs[i]
     if (!blob) {
-      failures++
-      console.warn(`[TTS] chunk ${i} failed (${failures} consecutive)`)
-      if (failures >= 3) {
-        clearHighlight()
-        ttsState.value = 'idle'
-        ttsProgress.value = 0
-        ttsError.value = 'Audio unavailable — please try again later.'
-        return
-      }
-      continue
+      console.warn(`[TTS] chunk ${i} synthesis failed — skipping`)
+      continue  // skip bad chunks instead of aborting the whole article
     }
-    failures = 0
 
-    // Only highlight and scroll once we know audio is ready to play
-    highlightChunk(i)
     ttsState.value = 'playing'
     await playChunk(blob, i)
     if (session !== sessionId) return
   }
-  clearHighlight()
+  // Natural end
   ttsState.value = 'idle'
   ttsProgress.value = 0
   ttsChunkIdx.value = 0
 }
 
+// Cancels the current chunk immediately (unblocks the loop so it can check sessionId)
 function cancelCurrentChunk() {
   if (audioEl) { audioEl.pause(); audioEl.src = '' }
   if (currentBlobUrl) { URL.revokeObjectURL(currentBlobUrl); currentBlobUrl = null }
@@ -203,23 +150,26 @@ function cancelCurrentChunk() {
 
 async function openPlayer() {
   playerOpen.value = true
-  ttsError.value = ''
   if (ttsState.value !== 'idle') return
 
-  chunkItems = buildDOMChunks()
-  if (!chunkItems.length) return
+  // 200-char chunks: ~3× faster per-chunk than 500 chars — reduces the gap between segments
+  const bodyChunks = splitChunks(post.value.content, 200)
+  const chunks = post.value.title ? [post.value.title, ...bodyChunks] : bodyChunks
+  if (!chunks.length) return
 
-  ttsTotalChunks.value = chunkItems.length
+  chunkTexts = chunks
+  ttsTotalChunks.value = chunks.length
   ttsProgress.value = 0
   ttsChunkIdx.value = 0
-  chunkFetches = []
-  chunkBlobs = []
+  chunkFetches = new Array(chunks.length).fill(null)
 
-  // Activate audio NOW, synchronously in the gesture handler — Safari autoplay policy.
+  // Activate audio element NOW, synchronously in the gesture handler,
+  // before any async work begins — required by Safari's autoplay policy.
   ensureAudioEl()
 
-  // Pre-warm first 5 chunks immediately so playback never has to wait
-  for (let k = 0; k < Math.min(5, chunkItems.length); k++) fetchChunkCached(k)
+  // Warm up the first 4 chunks immediately so the pipeline is full before playback starts.
+  for (let k = 0; k < Math.min(4, chunks.length); k++)
+    chunkFetches[k] = fetchOneChunk(chunkTexts[k])
 
   ttsState.value = 'loading'
   const session = ++sessionId
@@ -232,29 +182,30 @@ function togglePlayPause() {
   else if (ttsState.value === 'paused') { audioEl.play(); ttsState.value = 'playing' }
 }
 
+// Stop: halt playback and reset to beginning — player stays open
 function stopPlayback() {
-  sessionId++
+  sessionId++             // invalidate running loop
   cancelCurrentChunk()
-  clearHighlight()
   ttsState.value = 'idle'
   ttsProgress.value = 0
   ttsChunkIdx.value = 0
 }
 
+// Seek: jump to any position (0–1) using already-fetched or lazily-fetched blobs
 async function seekTo(fraction) {
-  if (!ttsTotalChunks.value || !chunkItems.length) return
+  if (!ttsTotalChunks.value || !chunkTexts.length) return
   const target = Math.max(0, Math.min(Math.floor(fraction * ttsTotalChunks.value), ttsTotalChunks.value - 1))
 
-  const session = ++sessionId
+  const session = ++sessionId   // invalidate current loop
   cancelCurrentChunk()
-  clearHighlight()
 
   ttsProgress.value = target / ttsTotalChunks.value
   ttsChunkIdx.value = target
   ttsState.value = 'loading'
 
+  // Small yield so the old loop sees the new sessionId before we start the new one
   await new Promise(r => setTimeout(r, 0))
-  if (session !== sessionId) return
+  if (session !== sessionId) return  // another seek happened in the meantime
 
   await runFrom(target, session)
 }
@@ -262,11 +213,9 @@ async function seekTo(fraction) {
 function closePlayer() {
   sessionId++
   cancelCurrentChunk()
-  clearHighlight()
-  if (audioEl) { audioEl.src = ''; audioEl = null }
+  if (audioEl) { audioEl.src = ''; audioEl = null }  // release element on close
   chunkFetches = []
-  chunkBlobs = []
-  chunkItems = []
+  chunkTexts = []
   ttsTotalChunks.value = 0
   ttsState.value = 'idle'
   ttsProgress.value = 0
@@ -293,7 +242,6 @@ async function applyHighlighting() {
 onUnmounted(() => {
   sessionId++
   cancelCurrentChunk()
-  clearHighlight()
   if (audioEl) { audioEl.src = ''; audioEl = null }
 })
 
@@ -325,8 +273,7 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
 </script>
 
 <template>
-  <!-- pb-32 sm:pb-0 when TTS open: clears bottom-nav (64px) + TTS bar (~64px) stacked on mobile -->
-  <div :class="[layout.variant === 'b' ? 'min-h-screen bg-[#0f172a]' : 'min-h-screen bg-white', playerOpen ? 'pb-32 sm:pb-0' : '']">
+  <div :class="layout.variant === 'b' ? 'min-h-screen bg-[#0f172a]' : 'min-h-screen bg-white'">
     <Navbar />
     <main id="main-content" tabindex="-1" class="outline-none">
 
@@ -359,14 +306,60 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
         </div>
       </div>
 
-      <!-- Mobile: Listen button (only when player is closed; fixed bottom bar takes over when open) -->
-      <div v-if="!playerOpen" class="sm:hidden mb-6">
-        <button @click="openPlayer"
-          class="flex items-center gap-2 px-4 py-2.5 text-white rounded-xl text-sm font-semibold transition-colors w-full justify-center"
-          :class="layout.variant === 'b' ? 'bg-violet-600 hover:bg-violet-700' : 'bg-primary-600 hover:bg-primary-700'">
-          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
-          Listen to this article
-        </button>
+      <!-- Mobile TTS player — above hero image -->
+      <div class="sm:hidden mb-6">
+        <div v-if="!playerOpen">
+          <button @click="openPlayer"
+            class="flex items-center gap-2 px-4 py-2.5 text-white rounded-xl text-sm font-semibold transition-colors w-full justify-center"
+            :class="layout.variant === 'b' ? 'bg-violet-600 hover:bg-violet-700' : 'bg-primary-600 hover:bg-primary-700'">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+            Listen to this article
+          </button>
+        </div>
+        <div v-else class="rounded-2xl shadow-lg p-4" :class="layout.variant === 'b' ? 'bg-[#162236] border border-[#2d3f5f]' : 'bg-white border border-gray-100'">
+          <!-- Header row -->
+          <div class="flex items-center gap-2 mb-3">
+            <div class="flex items-end gap-0.5 h-5 flex-shrink-0" aria-hidden="true">
+              <span v-for="i in 4" :key="i" class="w-1 rounded-full"
+                :class="[ttsState === 'playing' ? 'tts-bar' : 'h-1 opacity-40', layout.variant === 'b' ? 'bg-violet-500' : 'bg-primary-500']"
+                :style="ttsState === 'playing' ? `animation-delay:${i * 80}ms` : ''"></span>
+            </div>
+            <p class="text-sm font-semibold truncate flex-1" :class="layout.variant === 'b' ? 'text-slate-200' : 'text-gray-800'">{{ post.title }}</p>
+            <span v-if="ttsTotalChunks" class="text-xs flex-shrink-0" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">{{ ttsChunkIdx + 1 }}/{{ ttsTotalChunks }}</span>
+            <button @click="closePlayer" class="flex-shrink-0 ml-1" :class="layout.variant === 'b' ? 'text-slate-500 hover:text-slate-300' : 'text-gray-400 hover:text-gray-600'">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <!-- Seek slider -->
+          <input type="range" min="0" max="100"
+            :value="Math.round(ttsProgress * 100)"
+            :disabled="ttsState === 'loading'"
+            class="tts-slider w-full mb-3"
+            @change="seekTo($event.target.value / 100)" />
+          <!-- Controls -->
+          <div class="flex items-center gap-2">
+            <!-- Stop -->
+            <button @click="stopPlayback" :disabled="ttsState === 'idle' || ttsState === 'loading'"
+              class="flex items-center justify-center w-8 h-8 rounded-lg transition-colors"
+              :class="ttsState === 'idle' || ttsState === 'loading'
+                ? (layout.variant === 'b' ? 'text-slate-700 cursor-not-allowed' : 'text-gray-300 cursor-not-allowed')
+                : (layout.variant === 'b' ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100')"
+              title="Stop">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+            </button>
+            <!-- Play / Pause -->
+            <button @click="ttsState === 'loading' ? null : togglePlayPause()"
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex-1 justify-center"
+              :class="ttsState === 'loading'
+                ? (layout.variant === 'b' ? 'bg-slate-800 text-slate-500 cursor-wait' : 'bg-gray-100 text-gray-400 cursor-wait')
+                : (layout.variant === 'b' ? 'bg-violet-600 text-white hover:bg-violet-700' : 'bg-primary-600 text-white hover:bg-primary-700')">
+              <svg v-if="ttsState === 'loading'" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+              <svg v-else-if="ttsState === 'playing'" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
+              <svg v-else class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              {{ ttsState === 'loading' ? 'Loading…' : ttsState === 'playing' ? 'Pause' : 'Resume' }}
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Featured Image -->
@@ -518,6 +511,7 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
 
             <!-- Controls: Stop + Play/Pause -->
             <div class="flex items-center justify-center gap-3">
+              <!-- Stop button -->
               <button @click="stopPlayback"
                 :disabled="ttsState === 'idle' || ttsState === 'loading'"
                 class="flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all"
@@ -530,6 +524,7 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
                 </svg>
               </button>
 
+              <!-- Play / Pause button -->
               <button @click="ttsState === 'loading' ? null : togglePlayPause()"
                 class="flex items-center justify-center w-14 h-14 rounded-full transition-all"
                 :class="ttsState === 'loading'
@@ -548,59 +543,8 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
               </button>
             </div>
 
-            <p v-if="ttsError" class="text-xs text-center text-red-500">{{ ttsError }}</p>
-            <p v-else class="text-xs text-center" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">Powered by local AI</p>
+            <p class="text-xs text-center" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">Powered by local AI</p>
           </div>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- Mobile: fixed bottom player bar (replaces the inline player card) -->
-    <Teleport to="body">
-      <!-- bottom-16: sits above the mobile bottom nav bar (h-16 = 64px) -->
-      <div v-if="playerOpen && post" class="sm:hidden fixed bottom-16 inset-x-0 z-50 backdrop-blur-sm border-t shadow-2xl"
-        :class="layout.variant === 'b' ? 'bg-[#162236]/95 border-[#2d3f5f]' : 'bg-white/95 border-gray-200'">
-        <div class="px-4 py-3 flex items-center gap-3">
-          <!-- Waveform -->
-          <div class="flex items-end gap-0.5 h-5 flex-shrink-0" aria-hidden="true">
-            <span v-for="i in 4" :key="i" class="w-1 rounded-full"
-              :class="[ttsState === 'playing' ? 'tts-bar' : 'h-1 opacity-40', layout.variant === 'b' ? 'bg-violet-400' : 'bg-primary-500']"
-              :style="ttsState === 'playing' ? `animation-delay:${i * 80}ms` : ''"></span>
-          </div>
-          <!-- Progress bar (tappable) -->
-          <div class="flex-1 relative h-2 rounded-full cursor-pointer"
-            :class="layout.variant === 'b' ? 'bg-slate-700' : 'bg-gray-200'"
-            @click="e => { const r = e.currentTarget.getBoundingClientRect(); seekTo((e.clientX - r.left) / r.width) }">
-            <div class="h-full rounded-full transition-all duration-200"
-              :class="layout.variant === 'b' ? 'bg-violet-500' : 'bg-primary-500'"
-              :style="`width:${Math.round(ttsProgress * 100)}%`"></div>
-          </div>
-          <!-- Counter -->
-          <span class="text-xs flex-shrink-0 tabular-nums" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">{{ ttsChunkIdx + 1 }}/{{ ttsTotalChunks }}</span>
-          <!-- Play/Pause -->
-          <button @click="ttsState === 'loading' ? null : togglePlayPause()"
-            class="w-9 h-9 rounded-full flex items-center justify-center text-white transition-colors flex-shrink-0"
-            :class="ttsState === 'loading'
-              ? 'bg-gray-300 cursor-wait'
-              : (layout.variant === 'b' ? 'bg-violet-600 hover:bg-violet-700' : 'bg-primary-600 hover:bg-primary-700')">
-            <svg v-if="ttsState === 'loading'" class="w-4 h-4 animate-spin text-gray-500" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-            </svg>
-            <svg v-else-if="ttsState === 'playing'" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
-            </svg>
-            <svg v-else class="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z"/>
-            </svg>
-          </button>
-          <!-- Close -->
-          <button @click="closePlayer" class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
-            :class="layout.variant === 'b' ? 'text-slate-500 hover:text-slate-300 hover:bg-slate-800' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-            </svg>
-          </button>
         </div>
       </div>
     </Teleport>
@@ -617,14 +561,6 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
 }
 .tts-bar {
   animation: tts-wave 0.8s ease-in-out infinite;
-}
-
-/* Highlight paragraphs inside v-html while they're being read */
-:deep(.tts-reading) {
-  background-color: v-bind(ttsHighlightBg);
-  border-radius: 6px;
-  box-shadow: 0 0 0 4px v-bind(ttsHighlightRing);
-  transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 /* Range slider — cross-browser consistent styling */

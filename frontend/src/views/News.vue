@@ -23,25 +23,19 @@ let audioEl        = null
 let currentBlobUrl = null
 let resolveChunk   = null
 let chunkFetches   = []
-let chunkBlobs     = []     // populated once each fetch resolves; index presence = resolved
-let chunkData      = []     // { text, storyIdx }[]
+let chunkData      = []   // { text, storyIdx }[]
 
-function _splitText(text, maxLen = 1000) {
+function _splitText(text, maxLen = 280) {
   const parts = []
-  const t = text.trim()
-  if (!t) return parts
-  if (t.length <= maxLen) { parts.push(t); return parts }
-  // Split only at sentence boundaries
-  const ends = []
-  for (const m of t.matchAll(/[.!?]+\s+/g)) ends.push(m.index + m[0].length)
-  let start = 0
-  while (start < t.length) {
-    const remaining = t.slice(start)
-    if (remaining.length <= maxLen) { parts.push(remaining.trim()); break }
-    const cutPos = ends.filter(e => e > start && e <= start + maxLen).at(-1)
-    const cut = cutPos ?? (start + maxLen)
-    parts.push(t.slice(start, cut).trim())
-    start = cut
+  let rem = text.trim()
+  while (rem.length > 0) {
+    if (rem.length <= maxLen) { parts.push(rem); break }
+    let cut = rem.lastIndexOf('. ', maxLen)
+    if (cut < maxLen * 0.4) cut = rem.lastIndexOf(' ', maxLen)
+    if (cut < 0) cut = maxLen
+    else cut += 1
+    parts.push(rem.slice(0, cut).trim())
+    rem = rem.slice(cut).trim()
   }
   return parts.filter(Boolean)
 }
@@ -53,9 +47,8 @@ function _buildChunks(newsList, regionLabel) {
     storyIdx: -1,
   })
   newsList.forEach((item, i) => {
-    // Title + summary in one chunk — avoids jarring mid-summary break
-    const fullText = `Story ${i + 1}. ${item.title}. ${item.summary || ''}`.trim()
-    _splitText(fullText).forEach(part =>
+    chunks.push({ text: `Story ${i + 1}. ${item.title}.`, storyIdx: i })
+    _splitText(item.summary || '', 280).forEach(part =>
       chunks.push({ text: part, storyIdx: i })
     )
   })
@@ -63,16 +56,9 @@ function _buildChunks(newsList, regionLabel) {
   return chunks
 }
 
-// Fetch one chunk with one automatic retry (3 s delay) to survive transient rate limits.
-function _fetchChunk(idx) {
-  if (!chunkFetches[idx]) {
-    const doFetch = () =>
-      api.post('/tts', { text: chunkData[idx].text, type: 'news' }, { responseType: 'blob', timeout: 90_000 })
-         .then(r => { chunkBlobs[idx] = r.data; return r.data })
-    chunkFetches[idx] = doFetch()
-      .catch(() => new Promise(res => setTimeout(res, 500)).then(doFetch))
-      .catch(() => { chunkBlobs[idx] = null; return null })
-  }
+function _fetchChunk(text) {
+  return api.post('/tts', { text }, { responseType: 'blob', timeout: 90_000 })
+    .then(r => r.data).catch(() => null)
 }
 
 function _ensureAudio() {
@@ -118,54 +104,26 @@ function _cancelCurrent() {
 }
 
 async function _runFrom(start, session) {
-  let failures = 0
   for (let i = start; i < ttsTotalChunks.value; i++) {
     if (session !== sessionId) return
     ttsChunkIdx.value = i
-
-    // Fetch this chunk + 5 ahead so audio is always buffered well in advance
-    _fetchChunk(i)
-    for (let p = 1; p <= 5; p++) {
-      if (i + p < ttsTotalChunks.value) _fetchChunk(i + p)
-    }
-
-    // Only show the loading spinner if the blob isn't already cached
-    if (!(i in chunkBlobs)) {
-      ttsState.value = 'loading'
-      await chunkFetches[i]
-    }
-    if (session !== sessionId) return
-
-    const blob = chunkBlobs[i]
-    if (!blob) {
-      failures++
-      console.warn(`[TTS] chunk ${i} failed (${failures} consecutive)`)
-      if (failures >= 3) {
-        ttsState.value = 'idle'
-        ttsProgress.value = 0
-        activeIdx.value = -1
-        playerOpen.value = false
-        return
-      }
-      continue
-    }
-    failures = 0
-
-    // Only highlight/scroll once we know audio is ready to play
     const si = chunkData[i]?.storyIdx ?? -1
     if (si >= 0) {
       activeIdx.value = si
-      const el = document.getElementById(`news-item-${si}`)
-      if (el) {
-        const rect = el.getBoundingClientRect()
-        if (rect.top < 80 || rect.bottom > window.innerHeight - 80) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }
-      }
+      document.getElementById(`news-item-${si}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     } else {
       activeIdx.value = -1
     }
-
+    ttsState.value = 'loading'
+    if (!chunkFetches[i]) chunkFetches[i] = _fetchChunk(chunkData[i].text)
+    for (let p = 1; p <= 3; p++) {
+      const ahead = i + p
+      if (ahead < ttsTotalChunks.value && !chunkFetches[ahead])
+        chunkFetches[ahead] = _fetchChunk(chunkData[ahead].text)
+    }
+    const blob = await chunkFetches[i]
+    if (session !== sessionId) return
+    if (!blob) continue
     ttsState.value = 'playing'
     await _playBlob(blob, i)
     if (session !== sessionId) return
@@ -186,11 +144,10 @@ async function openPlayer() {
   ttsTotalChunks.value = chunkData.length
   ttsProgress.value = 0
   ttsChunkIdx.value = 0
-  chunkFetches = []
-  chunkBlobs = []
+  chunkFetches = new Array(chunkData.length).fill(null)
   _ensureAudio()
-  // Pre-warm first 5 chunks immediately so playback never has to wait
-  for (let k = 0; k < Math.min(5, chunkData.length); k++) _fetchChunk(k)
+  for (let k = 0; k < Math.min(4, chunkData.length); k++)
+    chunkFetches[k] = _fetchChunk(chunkData[k].text)
   ttsState.value = 'loading'
   const session = ++sessionId
   await _runFrom(0, session)
@@ -225,21 +182,18 @@ const REGIONS = [
 ]
 
 const REGION_COLORS = {
-  world:      'bg-blue-100 text-blue-700',
-  usa:        'bg-red-100 text-red-700',
-  india:      'bg-orange-100 text-orange-700',
-  odisha:     'bg-purple-100 text-purple-700',
-  ai_quantum: 'bg-cyan-100 text-cyan-700',
+  world:  'bg-blue-100 text-blue-700',
+  usa:    'bg-red-100 text-red-700',
+  india:  'bg-orange-100 text-orange-700',
+  odisha: 'bg-purple-100 text-purple-700',
 }
-const REGION_FLAGS  = { world: '🌍', usa: '🇺🇸', india: '🇮🇳', odisha: '🏛️', ai_quantum: '🤖' }
-const REGION_LABELS = { world: 'World', usa: 'USA', india: 'India', odisha: 'Odisha', ai_quantum: 'AI & Quantum' }
+const REGION_FLAGS = { world: '🌍', usa: '🇺🇸', india: '🇮🇳', odisha: '🏛️' }
 
 const FALLBACK_IMAGES = {
-  world:      'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400&q=80',
-  usa:        'https://images.unsplash.com/photo-1485738422979-f5c462d49f74?w=400&q=80',
-  india:      'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=400&q=80',
-  odisha:     'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&q=80',
-  ai_quantum: 'https://images.unsplash.com/photo-1677442135703-1787eea5ce01?w=400&q=80',
+  world:  'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400&q=80',
+  usa:    'https://images.unsplash.com/photo-1485738422979-f5c462d49f74?w=400&q=80',
+  india:  'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=400&q=80',
+  odisha: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&q=80',
 }
 
 const filtered = computed(() =>
@@ -274,14 +228,13 @@ onMounted(load)
 </script>
 
 <template>
-  <!-- pb-32: clears bottom-nav (64px) + TTS bar (~64px) on mobile; sm:pb-0 desktop has no bottom nav -->
-  <div class="min-h-screen bg-gray-50" :class="playerOpen ? 'pb-32 sm:pb-20' : ''">
+  <div class="min-h-screen bg-gray-50">
     <Navbar />
 
     <!-- Hero -->
     <div class="bg-gradient-to-r from-slate-800 to-slate-900 text-white py-10">
       <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <!-- Title block -->
+        <!-- Title block — full width on all screens -->
         <div class="flex items-center gap-3 mb-1">
           <span class="text-3xl">🗞️</span>
           <h1 class="text-3xl font-bold tracking-tight">Today's Top News</h1>
@@ -309,7 +262,7 @@ onMounted(load)
             {{ r.flag }} {{ r.label }}
           </button>
 
-          <!-- Listen button — shown when player is closed -->
+          <!-- Listen button — only shown when player is closed -->
           <button v-if="!playerOpen && filtered.length"
             @click="openPlayer"
             class="ml-auto flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all"
@@ -319,16 +272,50 @@ onMounted(load)
             </svg>
             Listen to all
           </button>
+        </div>
 
-          <!-- "Now playing" badge when player is active (tapping stops) -->
-          <button v-else-if="playerOpen"
-            @click="stopPlayback"
-            class="ml-auto flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold bg-rose-500/80 hover:bg-rose-600 text-white border border-rose-400/30 transition-all"
-          >
+        <!-- Player bar — shown while TTS is active -->
+        <div v-if="playerOpen" class="mt-3 flex items-center gap-3 bg-white/10 rounded-xl px-4 py-2.5 border border-white/10">
+          <!-- Animated waveform bars -->
+          <div class="flex items-end gap-0.5 h-4 flex-shrink-0" aria-hidden="true">
+            <span v-for="(h, i) in [60,100,70,40]" :key="i"
+              class="w-0.5 rounded-full transition-all"
+              :class="ttsState === 'playing' ? 'bg-white animate-[bounce_0.6s_ease-in-out_infinite]' : 'bg-white/40'"
+              :style="ttsState === 'playing' ? `height:${h}%; animation-delay:${i * 0.15}s` : 'height:4px'">
+            </span>
+          </div>
+          <!-- Progress bar -->
+          <div class="flex-1 h-1 bg-white/20 rounded-full overflow-hidden">
+            <div class="h-full bg-white rounded-full transition-all duration-200"
+              :style="`width:${Math.round(ttsProgress * 100)}%`"></div>
+          </div>
+          <!-- Chunk counter -->
+          <span class="text-xs text-white/60 flex-shrink-0 tabular-nums">
+            {{ ttsChunkIdx + 1 }}/{{ ttsTotalChunks }}
+          </span>
+          <!-- Pause / Resume -->
+          <button @click="ttsState === 'loading' ? null : togglePlayPause()"
+            class="flex items-center justify-center w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex-shrink-0"
+            :class="ttsState === 'loading' ? 'cursor-wait opacity-50' : ''"
+            :title="ttsState === 'playing' ? 'Pause' : 'Resume'">
+            <svg v-if="ttsState === 'loading'" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+            </svg>
+            <svg v-else-if="ttsState === 'playing'" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+            </svg>
+            <svg v-else class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z"/>
+            </svg>
+          </button>
+          <!-- Stop -->
+          <button @click="stopPlayback"
+            class="flex items-center justify-center w-7 h-7 rounded-lg bg-white/10 hover:bg-rose-500/80 text-white transition-colors flex-shrink-0"
+            title="Stop">
             <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
               <rect x="4" y="4" width="16" height="16" rx="2"/>
             </svg>
-            Stop reading
           </button>
         </div>
       </div>
@@ -394,19 +381,18 @@ onMounted(load)
               <div class="flex flex-wrap items-center gap-2 mb-2">
                 <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold"
                   :class="REGION_COLORS[item.region] || 'bg-gray-100 text-gray-600'">
-                  {{ REGION_FLAGS[item.region] || '📰' }} {{ REGION_LABELS[item.region] || item.region }}
+                  {{ REGION_FLAGS[item.region] || '📰' }} {{ item.region?.charAt(0).toUpperCase() + item.region?.slice(1) }}
                 </span>
                 <span v-if="item.sourceName" class="text-xs text-gray-500 font-medium">{{ item.sourceName }}</span>
                 <span v-if="item.publishedAt" class="text-xs text-gray-400">· {{ formatDate(item.publishedAt) }}</span>
               </div>
 
-              <!-- Title — highlighted when this story is active -->
-              <h2 class="text-base sm:text-lg font-bold leading-snug mb-3 transition-colors"
-                :class="activeIdx === idx ? 'text-rose-700' : 'text-gray-900'">
+              <!-- Title -->
+              <h2 class="text-base sm:text-lg font-bold text-gray-900 leading-snug mb-3">
                 {{ item.title }}
               </h2>
 
-              <!-- Summary -->
+              <!-- Full summary — no clamp -->
               <p class="text-sm text-gray-600 leading-relaxed">
                 {{ item.summary }}
               </p>
@@ -430,60 +416,6 @@ onMounted(load)
         </article>
       </div>
     </main>
-
-    <!-- Fixed bottom player bar — visible anywhere on the page while TTS is active -->
-    <Teleport to="body">
-      <!-- bottom-16 sm:bottom-0: sits above the mobile bottom nav (h-16); no bottom nav on desktop -->
-      <div v-if="playerOpen" class="fixed bottom-16 sm:bottom-0 inset-x-0 z-50 bg-slate-900/95 backdrop-blur-sm border-t border-slate-700 shadow-2xl">
-        <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-          <!-- Animated waveform bars -->
-          <div class="flex items-end gap-0.5 h-5 flex-shrink-0" aria-hidden="true">
-            <span v-for="(h, i) in [60,100,70,40]" :key="i"
-              class="w-0.5 rounded-full transition-all bg-white"
-              :class="ttsState === 'playing' ? 'animate-[bounce_0.6s_ease-in-out_infinite]' : 'opacity-40'"
-              :style="ttsState === 'playing' ? `height:${h}%; animation-delay:${i * 0.15}s` : 'height:4px'">
-            </span>
-          </div>
-          <!-- Story counter -->
-          <span class="text-xs text-white/60 flex-shrink-0 tabular-nums hidden sm:inline">
-            Story {{ activeIdx >= 0 ? activeIdx + 1 : '—' }} / {{ filtered.length }}
-          </span>
-          <!-- Progress bar -->
-          <div class="flex-1 h-1.5 bg-white/20 rounded-full overflow-hidden">
-            <div class="h-full bg-white rounded-full transition-all duration-200"
-              :style="`width:${Math.round(ttsProgress * 100)}%`"></div>
-          </div>
-          <!-- Chunk counter -->
-          <span class="text-xs text-white/60 flex-shrink-0 tabular-nums">
-            {{ ttsChunkIdx + 1 }}/{{ ttsTotalChunks }}
-          </span>
-          <!-- Pause / Resume -->
-          <button @click="ttsState === 'loading' ? null : togglePlayPause()"
-            class="flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors flex-shrink-0"
-            :class="ttsState === 'loading' ? 'cursor-wait opacity-50' : ''"
-            :title="ttsState === 'playing' ? 'Pause' : 'Resume'">
-            <svg v-if="ttsState === 'loading'" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-            </svg>
-            <svg v-else-if="ttsState === 'playing'" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
-            </svg>
-            <svg v-else class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z"/>
-            </svg>
-          </button>
-          <!-- Stop -->
-          <button @click="stopPlayback"
-            class="flex items-center justify-center w-8 h-8 rounded-lg bg-white/10 hover:bg-rose-500/80 text-white transition-colors flex-shrink-0"
-            title="Stop">
-            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-              <rect x="4" y="4" width="16" height="16" rx="2"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-    </Teleport>
 
     <Footer />
   </div>

@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.20",
-    "@tailwindcss/vite": "^4.3.1",
+    "@tailwindcss/vite": "^4.3.0",
     "@tiptap/extension-code-block-lowlight": "^3.26.1",
     "@tiptap/extension-image": "^3.26.1",
     "@tiptap/extension-link": "^3.26.1",
@@ -20,7 +20,7 @@
     "@tiptap/starter-kit": "^3.26.1",
     "@tiptap/vue-3": "^3.26.1",
     "@vueuse/core": "^14.3.0",
-    "axios": "^1.18.0",
+    "axios": "^1.16.1",
     "date-fns": "^4.4.0",
     "highlight.js": "^11.11.1",
     "lowlight": "^3.3.0",

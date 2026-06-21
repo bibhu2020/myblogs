@@ -8,18 +8,6 @@ import { memoryStorage } from 'multer';
 import { ProxyService } from './proxy.service';
 import { Request as ExpressRequest, Response } from 'express';
 
-// Detect actual audio format from magic bytes and return the correct MIME type.
-function detectAudioMime(buf: Buffer): string {
-  if (buf.length >= 4 && buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46)
-    return 'audio/wav';  // RIFF header
-  if (buf.length >= 3 && buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33)
-    return 'audio/mpeg'; // ID3 tag (MP3)
-  if (buf.length >= 2 && buf[0] === 0xFF && (buf[1] & 0xE0) === 0xE0)
-    return 'audio/mpeg'; // MP3 sync word
-  if (buf.length >= 4 && buf[0] === 0x4F && buf[1] === 0x67 && buf[2] === 0x67 && buf[3] === 0x53)
-    return 'audio/ogg';  // OGG
-  return 'audio/mpeg';
-}
 
 @Controller('api')
 export class AppController {
@@ -330,79 +318,114 @@ export class AppController {
     return this.proxy.forward('blog', `/agent-runs/${runId}`, 'GET', null, { Authorization: this.getAuthHeader(req) });
   }
 
-  // TEXT-TO-SPEECH
-  // Story → Kokoro-82M (HF) with af_heart voice for warm, emotional narration.
-  //         Falls back to msedge-tts Emily if Kokoro is unreachable.
-  // Blog  → msedge-tts Jenny (clear, teacher-like delivery)
-  // News  → msedge-tts Aria  (brisk news-presenter pace)
+  // TEXT-TO-SPEECH — one small chunk per request; chunking handled client-side.
+  // Priority: Gemini TTS (free tier) → OpenAI TTS → local Python service → HF Inference API.
   @Post('tts')
-  async textToSpeech(@Body() body: { text: string; type?: string }, @Res() res: Response) {
+  async textToSpeech(@Body() body: { text: string }, @Res() res: Response) {
     const text = (body.text || '').trim();
     if (!text) { res.status(400).json({ message: 'text is required' }); return; }
 
-    // Story narration: Kokoro-82M delivers rich emotional prosody far beyond a standard TTS voice.
-    // af_heart is warm and expressive; speed 0.88 gives room for dramatic pauses.
-    if ((body.type || '') === 'story') {
-      try {
-        const axios = (await import('axios')).default;
-        const hfToken = process.env.HF_TOKEN || '';
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (hfToken) headers['Authorization'] = `Bearer ${hfToken}`;
+    const geminiKey = process.env.GEMINI_API_KEY;
+    const openaiKey = process.env.OPENAI_API_KEY;
+    const localTts  = process.env.TTS_SERVICE_URL;
+    const hfToken   = process.env.HF_TOKEN;
 
-        const kokoro = await axios.post(
-          'https://api-inference.huggingface.co/models/hexgrad/Kokoro-82M',
-          { inputs: text, parameters: { voice: 'af_heart', speed: 0.82 } },
-          { headers, responseType: 'arraybuffer', timeout: 60_000 },
-        );
-        const buf = Buffer.from(kokoro.data as ArrayBuffer);
-        if (buf.length > 0) {
-          const mime = detectAudioMime(buf);
-          res.set({ 'Content-Type': mime, 'Content-Length': String(buf.length), 'X-TTS-Model': 'Kokoro-82M' });
-          res.send(buf);
-          return;
-        }
-      } catch {
-        // Kokoro unreachable (e.g. local dev network) — fall through to msedge-tts Emily
-      }
+    if (!geminiKey && !openaiKey && !localTts && !hfToken) {
+      res.status(503).json({ message: 'TTS not configured: set GEMINI_API_KEY, OPENAI_API_KEY, TTS_SERVICE_URL, or HF_TOKEN' });
+      return;
     }
 
-    const PROFILES: Record<string, { voice: string; rate: number; pitch: string }> = {
-      story: { voice: 'en-IE-EmilyNeural', rate: 0.65, pitch: '-2st' },
-      blog:  { voice: 'en-US-JennyNeural', rate: 0.82, pitch: '+0Hz' },
-      news:  { voice: 'en-US-AriaNeural',  rate: 0.95, pitch: '+0Hz' },
-    };
-    const profile = PROFILES[body.type || ''] ?? PROFILES.blog;
-
     try {
-      const { MsEdgeTTS, OUTPUT_FORMAT } = await import('msedge-tts');
-      const tts = new MsEdgeTTS();
-      await tts.setMetadata(profile.voice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
-      const { audioStream } = tts.toStream(text, { rate: profile.rate, pitch: profile.pitch });
-      const buf = await new Promise<Buffer>((resolve, reject) => {
-        const chunks: Buffer[] = [];
-        let settled = false;
-        const finish = (err?: Error) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          err ? reject(err) : resolve(Buffer.concat(chunks));
-        };
-        const timer = setTimeout(() => finish(new Error('stream timeout')), 30_000);
-        audioStream.on('data', (chunk: Buffer) => chunks.push(chunk));
-        audioStream.on('end', () => finish());
-        audioStream.on('error', (e) => finish(e));
-        audioStream.on('close', () => setTimeout(() => {
-          finish(chunks.length ? undefined : new Error('stream closed with no data'));
-        }, 100));
-      });
-      if (!buf.length) throw new Error('empty audio response');
-      const mime = detectAudioMime(buf);
-      const voiceName = profile.voice.replace(/Neural$/, '').split('-').pop() || profile.voice;
-      res.set({ 'Content-Type': mime, 'Content-Length': String(buf.length), 'X-TTS-Model': `${voiceName} · Edge TTS` });
+      let buf: Buffer;
+      let contentType: string;
+
+      if (geminiKey) {
+        // Gemini TTS — free tier, high-quality neural voice (Kore).
+        // Returns raw PCM (audio/L16;rate=24000) wrapped here into a WAV container.
+        const r = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: text.slice(0, 4096) }] }],
+              generationConfig: {
+                responseModalities: ['AUDIO'],
+                speechConfig: {
+                  voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
+                },
+              },
+            }),
+            signal: AbortSignal.timeout(30_000),
+          },
+        );
+        if (!r.ok) throw new Error(`Gemini TTS: ${await r.text()}`);
+        const data: any = await r.json();
+        const inlineData = data?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+        if (!inlineData?.data) throw new Error('Gemini TTS: no audio in response');
+        const pcm = Buffer.from(inlineData.data, 'base64');
+        buf = pcmToWav(pcm);
+        contentType = 'audio/wav';
+      } else if (openaiKey) {
+        // OpenAI TTS — fallback (~0.5s/chunk, paid)
+        const r = await fetch('https://api.openai.com/v1/audio/speech', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: 'tts-1', input: text.slice(0, 4096), voice: 'alloy' }),
+        });
+        if (!r.ok) throw new Error(`OpenAI TTS: ${await r.text()}`);
+        contentType = 'audio/mpeg';
+        buf = Buffer.from(await r.arrayBuffer());
+      } else if (localTts) {
+        // Local Python TTS service (facebook/mms-tts-eng)
+        const r = await fetch(`${localTts}/tts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+          signal: AbortSignal.timeout(120_000),
+        });
+        if (!r.ok) throw new Error(`Local TTS: ${await r.text()}`);
+        contentType = 'audio/wav';
+        buf = Buffer.from(await r.arrayBuffer());
+      } else {
+        // HF Inference API — last resort (cold-start can take 60s+)
+        const r = await fetch(
+          'https://api-inference.huggingface.co/models/facebook/mms-tts-eng',
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${hfToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ inputs: text }),
+            signal: AbortSignal.timeout(90_000),
+          },
+        );
+        if (!r.ok) throw new Error(`HF TTS: ${await r.text()}`);
+        contentType = r.headers.get('content-type') || 'audio/flac';
+        buf = Buffer.from(await r.arrayBuffer());
+      }
+
+      res.set({ 'Content-Type': contentType, 'Content-Length': String(buf.length) });
       res.send(buf);
     } catch (e) {
       res.status(500).json({ message: `TTS failed: ${(e as Error).message}` });
     }
   }
+}
 
+// Wrap raw 16-bit PCM (mono, 24 kHz) in a RIFF/WAV container so browsers can play it.
+function pcmToWav(pcm: Buffer): Buffer {
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);      // PCM chunk size
+  header.writeUInt16LE(1, 20);       // AudioFormat = PCM
+  header.writeUInt16LE(1, 22);       // mono
+  header.writeUInt32LE(24000, 24);   // sample rate
+  header.writeUInt32LE(48000, 28);   // byte rate (24000 * 1 * 2)
+  header.writeUInt16LE(2, 32);       // block align
+  header.writeUInt16LE(16, 34);      // bits per sample
+  header.write('data', 36);
+  header.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([header, pcm]);
 }

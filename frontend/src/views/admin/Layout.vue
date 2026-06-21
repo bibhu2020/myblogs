@@ -56,9 +56,6 @@ const navItems = [
             <div class="text-gray-500 text-xs capitalize">{{ auth.user?.role }}</div>
           </div>
         </div>
-        <RouterLink to="/admin/profile" class="flex items-center gap-3 px-4 py-2.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-xl text-sm font-medium transition-colors">
-          <span>👤</span> My Profile
-        </RouterLink>
         <button @click="logout" class="w-full flex items-center gap-3 px-4 py-2.5 text-gray-400 hover:text-red-400 hover:bg-gray-800 rounded-xl text-sm font-medium transition-colors">
           <span>🚪</span> Sign Out
         </button>
@@ -81,14 +78,6 @@ const navItems = [
             <span>{{ item.icon }}</span> {{ item.label }}
           </RouterLink>
         </nav>
-        <div class="p-4 border-t border-gray-800">
-          <RouterLink to="/admin/profile" @click="sidebarOpen=false" class="flex items-center gap-3 px-4 py-2.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-xl text-sm font-medium transition-colors">
-            <span>👤</span> My Profile
-          </RouterLink>
-          <button @click="logout(); sidebarOpen=false" class="w-full flex items-center gap-3 px-4 py-2.5 text-gray-400 hover:text-red-400 hover:bg-gray-800 rounded-xl text-sm font-medium transition-colors">
-            <span>🚪</span> Sign Out
-          </button>
-        </div>
       </aside>
     </div>
 

@@ -8,25 +8,9 @@ const layout = useLayoutStore()
 </script>
 
 <template>
-  <!-- pb-16 sm:pb-0: clears the mobile bottom nav bar (h-16) -->
-  <footer class="pb-16 sm:pb-0" :class="layout.variant === 'b' ? 'bg-[#090f1d] text-slate-400 mt-24' : 'bg-primary-900 text-primary-200 mt-24'">
+  <footer :class="layout.variant === 'b' ? 'bg-[#090f1d] text-slate-400 mt-24' : 'bg-primary-900 text-primary-200 mt-24'">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-
-      <!-- Mobile-only quick nav row -->
-      <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 mb-10 md:hidden">
-        <RouterLink v-for="link in [
-          { to: '/about',  label: 'About'   },
-          { to: '/blog',   label: 'Posts'   },
-          { to: '/news',   label: 'News'    },
-          { to: '/story',  label: 'Stories' },
-          { to: '/search', label: 'Search'  },
-        ]" :key="link.to" :to="link.to"
-          class="text-sm font-medium transition-colors"
-          :class="layout.variant === 'b' ? 'text-slate-300 hover:text-violet-400' : 'text-primary-100 hover:text-white'"
-        >{{ link.label }}</RouterLink>
-      </div>
-
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-12">
         <div class="col-span-2 md:col-span-2">
           <div class="flex items-center gap-2.5 mb-4">
             <LogoMark :size="36" />
@@ -56,8 +40,6 @@ const layout = useLayoutStore()
           <h3 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Quick Links</h3>
           <ul class="space-y-2">
             <li><RouterLink to="/" class="text-sm transition-colors" :class="layout.variant === 'b' ? 'text-slate-400 hover:text-violet-400' : 'text-primary-200 hover:text-white'">Home</RouterLink></li>
-            <li><RouterLink to="/news" class="text-sm transition-colors" :class="layout.variant === 'b' ? 'text-slate-400 hover:text-violet-400' : 'text-primary-200 hover:text-white'">News</RouterLink></li>
-            <li><RouterLink to="/story" class="text-sm transition-colors" :class="layout.variant === 'b' ? 'text-slate-400 hover:text-violet-400' : 'text-primary-200 hover:text-white'">Stories</RouterLink></li>
             <li><RouterLink to="/search" class="text-sm transition-colors" :class="layout.variant === 'b' ? 'text-slate-400 hover:text-violet-400' : 'text-primary-200 hover:text-white'">Search</RouterLink></li>
             <li><RouterLink to="/about" class="text-sm transition-colors" :class="layout.variant === 'b' ? 'text-slate-400 hover:text-violet-400' : 'text-primary-200 hover:text-white'">About</RouterLink></li>
             <li><RouterLink to="/admin" class="text-sm transition-colors" :class="layout.variant === 'b' ? 'text-slate-400 hover:text-violet-400' : 'text-primary-200 hover:text-white'">Admin Panel</RouterLink></li>
