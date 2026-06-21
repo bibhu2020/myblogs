@@ -25,10 +25,10 @@ RUN npm ci
 COPY media-service/ ./
 RUN npm run build && npm prune --production
 
-# api-gateway — msedge-tts has a pnpm-only preinstall script; skip all scripts
+# api-gateway
 WORKDIR /app/api-gateway
 COPY api-gateway/package*.json ./
-RUN npm ci --ignore-scripts
+RUN npm ci
 COPY api-gateway/ ./
 RUN npm run build && npm prune --production
 
@@ -42,11 +42,37 @@ RUN npm run build
 # ── Production ────────────────────────────────────────────────────────────────
 FROM node:20-slim
 
-# System packages: nginx, supervisor
+# System packages: nginx, supervisor, Python for local TTS service
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nginx supervisor \
+    nginx supervisor python3 python3-venv \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /var/log/supervisor /run/nginx
+
+# Python virtual environment — isolates TTS deps from system Python
+RUN python3 -m venv /opt/tts-venv
+
+# PyTorch CPU-only (much smaller than CUDA build; sufficient for TTS inference)
+RUN /opt/tts-venv/bin/pip install --no-cache-dir \
+    torch --index-url https://download.pytorch.org/whl/cpu
+
+# TTS service dependencies
+COPY tts-service/requirements.txt /app/tts-service/requirements.txt
+RUN /opt/tts-venv/bin/pip install --no-cache-dir -r /app/tts-service/requirements.txt
+
+# Download facebook/mms-tts-eng into the image at build time.
+# HF_HOME points the cache into /app/models so the layer is predictable.
+ENV HF_HOME=/app/models
+RUN /opt/tts-venv/bin/python -c "\
+from transformers import AutoTokenizer, VitsModel; \
+print('Downloading mms-tts-eng tokenizer...', flush=True); \
+AutoTokenizer.from_pretrained('facebook/mms-tts-eng'); \
+print('Downloading mms-tts-eng model weights...', flush=True); \
+VitsModel.from_pretrained('facebook/mms-tts-eng'); \
+print('Model download complete.', flush=True)"
+
+COPY tts-service/app.py   /app/tts-service/app.py
+COPY tts-service/start.sh /app/tts-service/start.sh
+RUN chmod +x /app/tts-service/start.sh
 
 # auth-service
 COPY --from=builder /app/auth-service/dist         /app/auth-service/dist
@@ -77,6 +103,9 @@ RUN rm -f /etc/nginx/sites-enabled/default /etc/nginx/conf.d/default.conf
 COPY nginx.conf /etc/nginx/conf.d/meridian.conf
 
 COPY supervisord.conf /etc/supervisord.conf
+
+# Tell the api-gateway TTS endpoint to call the local Python service
+ENV TTS_SERVICE_URL=http://localhost:5050
 
 EXPOSE 7860
 

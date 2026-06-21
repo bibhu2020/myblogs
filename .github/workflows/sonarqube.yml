@@ -1,114 +1,83 @@
-name: PR Checks
+name: SonarQube Scan
 
 on:
   pull_request:
     branches: [main]
 
 jobs:
-  build-check:
-    name: Build all services
+  sonarqube:
+    name: SonarQube Scan
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # Full history required for SonarQube blame data and accurate new-code detection
+          fetch-depth: 0
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 20
+          cache: npm
 
-      - name: npm ci + build — auth-service
-        run: npm ci --prefix auth-service && npm --prefix auth-service run build
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
 
-      - name: npm ci + build — blog-service
-        run: npm ci --prefix blog-service && npm --prefix blog-service run build
+      - name: Run tests with coverage
+        run: |
+          npm run test:cov --prefix auth-service
+          npm run test:cov --prefix blog-service
+          npm run test:cov --prefix media-service
+          npm run test:cov --prefix api-gateway
+          npm run test:cov --prefix frontend
 
-      - name: npm ci + build — media-service
-        run: npm ci --prefix media-service && npm --prefix media-service run build
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v6
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            -Dsonar.scanner.socketTimeout=300
+            -Dsonar.scanner.responseTimeout=300
 
-      - name: npm ci + build — api-gateway
-        run: npm ci --prefix api-gateway --ignore-scripts && npm --prefix api-gateway run build
+      - name: SonarQube Quality Gate check
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+        run: |
+          TASK_ID=$(grep "^ceTaskId=" .scannerwork/report-task.txt | cut -d= -f2)
+          echo "Polling background task: $TASK_ID"
 
-      - name: npm ci + build — frontend
-        run: npm ci --prefix frontend && npm --prefix frontend run build
+          for i in $(seq 1 30); do
+            RESPONSE=$(curl -sf -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/ce/task?id=$TASK_ID")
+            STATUS=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['task']['status'])")
+            echo "Attempt $i: $STATUS"
+            if [ "$STATUS" = "SUCCESS" ]; then break; fi
+            if [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "CANCELED" ]; then
+              echo "::error::SonarQube background task $STATUS — check Administration → Background Tasks"
+              exit 1
+            fi
+            sleep 10
+          done
 
-  # sonarqube:
-  #   name: SonarQube Scan
-  #   runs-on: ubuntu-latest
-  #   permissions:
-  #     pull-requests: read
-  #
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-  #       with:
-  #         fetch-depth: 0
-  #
-  #     - name: Set up Node.js
-  #       uses: actions/setup-node@v4
-  #       with:
-  #         node-version: 20
-  #
-  #     - name: Install dependencies — all services
-  #       run: |
-  #         npm ci --prefix auth-service
-  #         npm ci --prefix blog-service
-  #         npm ci --prefix media-service
-  #         npm ci --prefix api-gateway --ignore-scripts
-  #         npm ci --prefix frontend
-  #
-  #     - name: Run tests with coverage
-  #       continue-on-error: true
-  #       run: |
-  #         npm run test:cov --prefix auth-service
-  #         npm run test:cov --prefix blog-service
-  #         npm run test:cov --prefix media-service
-  #         npm run test:cov --prefix api-gateway
-  #         npm run test:cov --prefix frontend
-  #
-  #     - name: SonarQube Scan
-  #       uses: SonarSource/sonarqube-scan-action@v6
-  #       env:
-  #         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-  #         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-  #       with:
-  #         args: >
-  #           -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
-  #           -Dsonar.scanner.socketTimeout=300
-  #           -Dsonar.scanner.responseTimeout=300
-  #
-  #     - name: SonarQube Quality Gate check
-  #       env:
-  #         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-  #         SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-  #         SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
-  #       run: |
-  #         TASK_ID=$(grep "^ceTaskId=" .scannerwork/report-task.txt | cut -d= -f2)
-  #         echo "Polling background task: $TASK_ID"
-  #
-  #         for i in $(seq 1 30); do
-  #           RESPONSE=$(curl -sf -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/ce/task?id=$TASK_ID")
-  #           STATUS=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['task']['status'])")
-  #           echo "Attempt $i: $STATUS"
-  #           if [ "$STATUS" = "SUCCESS" ]; then break; fi
-  #           if [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "CANCELED" ]; then
-  #             echo "::error::SonarQube background task $STATUS — check Administration → Background Tasks"
-  #             exit 1
-  #           fi
-  #           sleep 10
-  #         done
-  #
-  #         if [ "$STATUS" != "SUCCESS" ]; then
-  #           echo "::error::Timed out waiting for SonarQube analysis to complete"
-  #           exit 1
-  #         fi
-  #
-  #         QG=$(curl -sf -u "$SONAR_TOKEN:" \
-  #           "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=$SONAR_PROJECT_KEY" \
-  #           | python3 -c "import sys,json; print(json.load(sys.stdin)['projectStatus']['status'])")
-  #         echo "Quality Gate status: $QG"
-  #
-  #         if [ "$QG" != "OK" ]; then
-  #           echo "::error::Quality Gate FAILED — merge blocked. Fix Critical/High vulnerabilities in SonarQube before merging."
-  #           exit 1
-  #         fi
+          if [ "$STATUS" != "SUCCESS" ]; then
+            echo "::error::Timed out waiting for SonarQube analysis to complete"
+            exit 1
+          fi
+
+          QG=$(curl -sf -u "$SONAR_TOKEN:" \
+            "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=$SONAR_PROJECT_KEY" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['projectStatus']['status'])")
+          echo "Quality Gate status: $QG"
+
+          if [ "$QG" != "OK" ]; then
+            echo "::error::Quality Gate FAILED — merge blocked. Fix Critical/High vulnerabilities in SonarQube before merging."
+            exit 1
+          fi

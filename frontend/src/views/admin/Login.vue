@@ -6,8 +6,8 @@ import LogoMark from '../../components/LogoMark.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
-const email = ref('')
-const password = ref('')
+const email = ref('admin@myblogs.com')
+const password = ref('admin123')
 const error = ref('')
 const loading = ref(false)
 
@@ -55,6 +55,7 @@ async function handleLogin() {
             {{ loading ? 'Signing in…' : 'Sign In' }}
           </button>
         </form>
+        <p class="text-center text-xs text-gray-400 mt-5">Default: admin@myblogs.com / admin123</p>
       </div>
     </div>
   </div>
