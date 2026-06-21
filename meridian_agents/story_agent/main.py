@@ -25,6 +25,7 @@ from .nodes.writer import pick_theme_node, write_story_node, expand_story_node, 
 from .nodes.images import generate_story_images_node                              # noqa: E402
 from .nodes.publisher import save_pending_node                                    # noqa: E402
 from .tracer import start_run, complete_run                                       # noqa: E402
+from ..cleanup import cleanup_old_stories  # noqa: E402
 
 SERVER_BASE   = os.getenv("SERVER_BASE", "https://mishrabp-meridian.hf.space")
 AUTHOR_NAME   = os.getenv("STORY_AUTHOR_NAME", "Meridian Storyteller")
@@ -71,6 +72,8 @@ def run_agent() -> dict:
 
     if not os.getenv("OPENAI_API_KEY"):
         raise RuntimeError("OPENAI_API_KEY is required.")
+
+    cleanup_old_stories(SERVER_BASE)
 
     run_id = start_run({"authorName": AUTHOR_NAME})
     t0 = time.time()
