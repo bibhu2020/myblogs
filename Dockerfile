@@ -80,9 +80,4 @@ COPY supervisord.conf /etc/supervisord.conf
 
 EXPOSE 7860
 
-# Tell Docker (and HF Spaces) the container is healthy once nginx serves a 200 on port 7860.
-# start-period=60s gives NestJS services time to finish TypeORM sync + seeding before checks begin.
-HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:7860/',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
-
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
