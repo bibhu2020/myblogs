@@ -357,7 +357,7 @@ export class AppController {
         const buf = Buffer.from(kokoro.data as ArrayBuffer);
         if (buf.length > 0) {
           const mime = detectAudioMime(buf);
-          res.set({ 'Content-Type': mime, 'Content-Length': String(buf.length) });
+          res.set({ 'Content-Type': mime, 'Content-Length': String(buf.length), 'X-TTS-Model': 'Kokoro-82M' });
           res.send(buf);
           return;
         }
@@ -397,7 +397,8 @@ export class AppController {
       });
       if (!buf.length) throw new Error('empty audio response');
       const mime = detectAudioMime(buf);
-      res.set({ 'Content-Type': mime, 'Content-Length': String(buf.length) });
+      const voiceName = profile.voice.replace(/Neural$/, '').split('-').pop() || profile.voice;
+      res.set({ 'Content-Type': mime, 'Content-Length': String(buf.length), 'X-TTS-Model': `${voiceName} · Edge TTS` });
       res.send(buf);
     } catch (e) {
       res.status(500).json({ message: `TTS failed: ${(e as Error).message}` });

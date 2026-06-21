@@ -22,6 +22,7 @@ const ttsChunkIdx    = ref(0)
 const ttsTotalChunks = ref(0)
 const playerOpen     = ref(false)
 const ttsError       = ref('')
+const ttsModel       = ref('')
 
 let sessionId      = 0
 let audioEl        = null
@@ -82,7 +83,10 @@ function fetchChunkCached(idx) {
   if (!chunkFetches[idx]) {
     const doFetch = () =>
       api.post('/tts', { text: chunkItems[idx].text, type: 'story' }, { responseType: 'blob', timeout: 90_000 })
-         .then(r => { chunkBlobs[idx] = r.data; return r.data })
+         .then(r => {
+           if (idx === 0) ttsModel.value = r.headers['x-tts-model'] || ''
+           chunkBlobs[idx] = r.data; return r.data
+         })
     chunkFetches[idx] = doFetch()
       .catch(() => new Promise(res => setTimeout(res, 500)).then(doFetch))
       .catch(() => { chunkBlobs[idx] = null; return null })
@@ -204,6 +208,7 @@ async function openPlayer() {
   ttsTotalChunks.value = chunkItems.length
   ttsProgress.value = 0
   ttsChunkIdx.value = 0
+  ttsModel.value = ''
   chunkFetches = []
   chunkBlobs = []
 
@@ -481,7 +486,13 @@ onMounted(async () => {
             </div>
 
             <p v-if="ttsError" class="text-xs text-center text-red-500">{{ ttsError }}</p>
-            <p v-else class="text-xs text-center text-gray-400">Powered by local AI</p>
+            <p v-else class="text-xs text-center text-gray-400">
+              <span v-if="ttsModel" class="inline-flex items-center gap-1">
+                <span class="text-indigo-400">🎙</span>
+                {{ ttsModel }}
+              </span>
+              <span v-else>Voice AI</span>
+            </p>
           </div>
         </div>
       </div>
@@ -492,11 +503,14 @@ onMounted(async () => {
       <!-- bottom-16: sits above the mobile bottom nav bar (h-16 = 64px) -->
       <div v-if="playerOpen && story" class="sm:hidden fixed bottom-16 inset-x-0 z-50 bg-white/95 backdrop-blur-sm border-t border-gray-200 shadow-2xl">
         <div class="px-4 py-3 flex items-center gap-3">
-          <!-- Waveform -->
-          <div class="flex items-end gap-0.5 h-5 flex-shrink-0" aria-hidden="true">
-            <span v-for="i in 4" :key="i" class="w-1 rounded-full bg-indigo-500"
-              :class="ttsState === 'playing' ? 'tts-bar' : 'h-1 opacity-40'"
-              :style="ttsState === 'playing' ? `animation-delay:${i * 80}ms` : ''"></span>
+          <!-- Waveform + model label -->
+          <div class="flex flex-col items-center gap-0.5 flex-shrink-0">
+            <div class="flex items-end gap-0.5 h-5" aria-hidden="true">
+              <span v-for="i in 4" :key="i" class="w-1 rounded-full bg-indigo-500"
+                :class="ttsState === 'playing' ? 'tts-bar' : 'h-1 opacity-40'"
+                :style="ttsState === 'playing' ? `animation-delay:${i * 80}ms` : ''"></span>
+            </div>
+            <span v-if="ttsModel" class="text-[9px] leading-none text-indigo-400 font-medium whitespace-nowrap">{{ ttsModel }}</span>
           </div>
           <!-- Progress bar (tappable) -->
           <div class="flex-1 relative h-2 bg-gray-200 rounded-full cursor-pointer"
