@@ -60,12 +60,16 @@ COPY tts-service/requirements.txt /app/tts-service/requirements.txt
 RUN /opt/tts-venv/bin/pip install --no-cache-dir -r /app/tts-service/requirements.txt
 
 # Download Kokoro-82M into the image at build time.
+# Pre-warm both lang_code='a' (American) and 'b' (British) pipelines so
+# story/blog/news voices are all ready at first request with no cold-start.
 ENV HF_HOME=/app/models
 RUN /opt/tts-venv/bin/python -c "\
 from kokoro import KPipeline; \
-print('Downloading Kokoro-82M model...', flush=True); \
+print('Downloading Kokoro-82M (American English)...', flush=True); \
 KPipeline(lang_code='a'); \
-print('Kokoro model ready.', flush=True)"
+print('Downloading Kokoro-82M (British English)...', flush=True); \
+KPipeline(lang_code='b'); \
+print('Kokoro models ready.', flush=True)"
 
 COPY tts-service/app.py   /app/tts-service/app.py
 COPY tts-service/start.sh /app/tts-service/start.sh

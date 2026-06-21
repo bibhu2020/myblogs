@@ -318,91 +318,35 @@ export class AppController {
     return this.proxy.forward('blog', `/agent-runs/${runId}`, 'GET', null, { Authorization: this.getAuthHeader(req) });
   }
 
-  // TEXT-TO-SPEECH — one small chunk per request; chunking handled client-side.
-  // Priority: Gemini TTS (free tier) → OpenAI TTS → local Python service → HF Inference API.
+  // TEXT-TO-SPEECH — one chunk per request; style selects the voice/pace.
+  // Primary: Kokoro-82M local Python service (story/blog/news voices).
+  // Fallback: HuggingFace Inference API (facebook/mms-tts-eng, no style support).
   @Post('tts')
-  async textToSpeech(@Body() body: { text: string }, @Res() res: Response) {
-    const text = (body.text || '').trim();
+  async textToSpeech(@Body() body: { text: string; style?: string }, @Res() res: Response) {
+    const text  = (body.text  || '').trim();
+    const style = (body.style || '').trim();
     if (!text) { res.status(400).json({ message: 'text is required' }); return; }
 
-    const geminiKey = process.env.GEMINI_API_KEY;
-    const openaiKey = process.env.OPENAI_API_KEY;
-    const localTts  = process.env.TTS_SERVICE_URL;
-    const hfToken   = process.env.HF_TOKEN;
+    const localTts = process.env.TTS_SERVICE_URL;
+    const hfToken  = process.env.HF_TOKEN;
 
-    if (!geminiKey && !openaiKey && !localTts && !hfToken) {
-      res.status(503).json({ message: 'TTS not configured: set GEMINI_API_KEY, OPENAI_API_KEY, TTS_SERVICE_URL, or HF_TOKEN' });
+    if (!localTts && !hfToken) {
+      res.status(503).json({ message: 'TTS not configured: set TTS_SERVICE_URL or HF_TOKEN' });
       return;
     }
 
     const errors: string[] = [];
 
-    // ── Gemini TTS (free tier, high-quality) ────────────────────────────────
-    if (geminiKey) {
-      try {
-        const r = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${geminiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: text.slice(0, 4096) }] }],
-              generationConfig: {
-                responseModalities: ['AUDIO'],
-                speechConfig: {
-                  voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
-                },
-              },
-            }),
-            signal: AbortSignal.timeout(30_000),
-          },
-        );
-        if (!r.ok) throw new Error(`Gemini TTS: ${r.status} ${(await r.text()).slice(0, 200)}`);
-        const data: any = await r.json();
-        const inlineData = data?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
-        if (!inlineData?.data) throw new Error('Gemini TTS: no audio in response');
-        const raw = Buffer.from(inlineData.data, 'base64');
-        // Gemini returns raw PCM (audio/L16;rate=24000). Wrap it in a WAV container.
-        // If the mime says it's already a container format, send as-is.
-        const mime: string = inlineData.mimeType || 'audio/L16';
-        const buf = mime.includes('wav') || mime.includes('mpeg') || mime.includes('mp3')
-          ? raw
-          : pcmToWav(raw);
-        const ct = mime.includes('mpeg') || mime.includes('mp3') ? 'audio/mpeg' : 'audio/wav';
-        res.set({ 'Content-Type': ct, 'Content-Length': String(buf.length) });
-        return res.send(buf);
-      } catch (e) {
-        errors.push((e as Error).message);
-      }
-    }
-
-    // ── OpenAI TTS (paid, ~0.5s/chunk) ─────────────────────────────────────
-    if (openaiKey) {
-      try {
-        const r = await fetch('https://api.openai.com/v1/audio/speech', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: 'tts-1', input: text.slice(0, 4096), voice: 'alloy' }),
-        });
-        if (!r.ok) throw new Error(`OpenAI TTS: ${r.status} ${(await r.text()).slice(0, 200)}`);
-        const buf = Buffer.from(await r.arrayBuffer());
-        res.set({ 'Content-Type': 'audio/mpeg', 'Content-Length': String(buf.length) });
-        return res.send(buf);
-      } catch (e) {
-        errors.push((e as Error).message);
-      }
-    }
-
-    // ── Local Python TTS service ─────────────────────────────────────────────
+    // ── Primary: Kokoro-82M local service ───────────────────────────────────
     if (localTts) {
       try {
         const r = await fetch(`${localTts}/tts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ text, style }),
           signal: AbortSignal.timeout(120_000),
         });
-        if (!r.ok) throw new Error(`Local TTS: ${r.status}`);
+        if (!r.ok) throw new Error(`Kokoro: ${r.status}`);
         const buf = Buffer.from(await r.arrayBuffer());
         res.set({ 'Content-Type': 'audio/wav', 'Content-Length': String(buf.length) });
         return res.send(buf);
@@ -411,7 +355,7 @@ export class AppController {
       }
     }
 
-    // ── HF Inference API (last resort, cold-start can take 60s+) ────────────
+    // ── Fallback: HF Inference API (facebook/mms-tts-eng) ───────────────────
     if (hfToken) {
       try {
         const r = await fetch(
@@ -437,21 +381,3 @@ export class AppController {
   }
 }
 
-// Wrap raw 16-bit PCM (mono, 24 kHz) in a RIFF/WAV container so browsers can play it.
-function pcmToWav(pcm: Buffer): Buffer {
-  const header = Buffer.alloc(44);
-  header.write('RIFF', 0);
-  header.writeUInt32LE(36 + pcm.length, 4);
-  header.write('WAVE', 8);
-  header.write('fmt ', 12);
-  header.writeUInt32LE(16, 16);      // PCM chunk size
-  header.writeUInt16LE(1, 20);       // AudioFormat = PCM
-  header.writeUInt16LE(1, 22);       // mono
-  header.writeUInt32LE(24000, 24);   // sample rate
-  header.writeUInt32LE(48000, 28);   // byte rate (24000 * 1 * 2)
-  header.writeUInt16LE(2, 32);       // block align
-  header.writeUInt16LE(16, 34);      // bits per sample
-  header.write('data', 36);
-  header.writeUInt32LE(pcm.length, 40);
-  return Buffer.concat([header, pcm]);
-}

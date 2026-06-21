@@ -38,6 +38,15 @@ SUMMARY RULES:
 - Do NOT start with "The"
 - Use only facts present in the article's title/body — do not fabricate
 
+TTS WRITING STYLE (summaries will be read aloud by a news-anchor AI voice):
+- Short, declarative sentences — maximum 20 words each
+- Active voice always: "The court ruled..." not "It was ruled by the court..."
+- One idea per sentence — no compound clauses joined by semicolons
+- Strong opening verb: "Scientists confirmed...", "Authorities arrested...", "Voters approved..."
+- Specific nouns: "The US Senate" not "lawmakers"; "Mount Fuji" not "the volcano"
+- No em dashes or ellipses — clean periods only for crisp delivery
+- Each sentence should be a complete broadcast-ready thought
+
 OUTPUT:
 Call save_news() once with a JSON array of exactly 10 items, each with:
   {

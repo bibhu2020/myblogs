@@ -108,7 +108,7 @@ function highlightChunk(i) {
 }
 
 function fetchOneChunk(text) {
-  return api.post('/tts', { text }, { responseType: 'blob', timeout: 90_000 })
+  return api.post('/tts', { text, style: 'blog' }, { responseType: 'blob', timeout: 90_000 })
     .then(r => r.data)
     .catch(e => ({ _ttsError: e?.response?.data?.message || e?.message || 'TTS unavailable' }))
 }
