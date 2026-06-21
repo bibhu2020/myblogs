@@ -1,12 +1,17 @@
 <script setup>
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import { useLayoutStore } from './stores/layout'
 import PwaUpdatePrompt from './components/PwaUpdatePrompt.vue'
+import BottomNav from './components/BottomNav.vue'
 
 const auth = useAuthStore()
 const layout = useLayoutStore()
+const route = useRoute()
 onMounted(() => auth.init())
+
+const showBottomNav = computed(() => !route.path.startsWith('/admin'))
 </script>
 
 <template>
@@ -14,5 +19,6 @@ onMounted(() => auth.init())
   <div :data-layout="layout.variant" class="contents">
     <RouterView />
   </div>
+  <BottomNav v-if="showBottomNav" />
   <PwaUpdatePrompt />
 </template>
