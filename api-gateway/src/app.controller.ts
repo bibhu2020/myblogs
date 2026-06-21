@@ -330,16 +330,42 @@ export class AppController {
     return this.proxy.forward('blog', `/agent-runs/${runId}`, 'GET', null, { Authorization: this.getAuthHeader(req) });
   }
 
-  // TEXT-TO-SPEECH — Microsoft Edge TTS, voice and pace vary by content type.
+  // TEXT-TO-SPEECH
+  // Story → Kokoro-82M (HF) with af_heart voice for warm, emotional narration.
+  //         Falls back to msedge-tts Emily if Kokoro is unreachable.
+  // Blog  → msedge-tts Jenny (clear, teacher-like delivery)
+  // News  → msedge-tts Aria  (brisk news-presenter pace)
   @Post('tts')
   async textToSpeech(@Body() body: { text: string; type?: string }, @Res() res: Response) {
     const text = (body.text || '').trim();
     if (!text) { res.status(400).json({ message: 'text is required' }); return; }
 
-    // story → Irish accent (Emily) is naturally musical and warm — classic captivating storyteller
-    //         very slow rate + slightly lower pitch for dramatic, immersive feel
-    // blog  → Jenny has a clear teacher-like delivery with natural enunciation — good for explaining
-    // news  → Aria at brisk news-presenter pace (unchanged)
+    // Story narration: Kokoro-82M delivers rich emotional prosody far beyond a standard TTS voice.
+    // af_heart is warm and expressive; speed 0.88 gives room for dramatic pauses.
+    if ((body.type || '') === 'story') {
+      try {
+        const axios = (await import('axios')).default;
+        const hfToken = process.env.HF_TOKEN || '';
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (hfToken) headers['Authorization'] = `Bearer ${hfToken}`;
+
+        const kokoro = await axios.post(
+          'https://api-inference.huggingface.co/models/hexgrad/Kokoro-82M',
+          { inputs: text, parameters: { voice: 'af_heart', speed: 0.88 } },
+          { headers, responseType: 'arraybuffer', timeout: 60_000 },
+        );
+        const buf = Buffer.from(kokoro.data as ArrayBuffer);
+        if (buf.length > 0) {
+          const mime = detectAudioMime(buf);
+          res.set({ 'Content-Type': mime, 'Content-Length': String(buf.length) });
+          res.send(buf);
+          return;
+        }
+      } catch {
+        // Kokoro unreachable (e.g. local dev network) — fall through to msedge-tts Emily
+      }
+    }
+
     const PROFILES: Record<string, { voice: string; rate: number; pitch: string }> = {
       story: { voice: 'en-IE-EmilyNeural', rate: 0.72, pitch: '-1st' },
       blog:  { voice: 'en-US-JennyNeural', rate: 0.82, pitch: '+0Hz' },
@@ -365,7 +391,6 @@ export class AppController {
         audioStream.on('data', (chunk: Buffer) => chunks.push(chunk));
         audioStream.on('end', () => finish());
         audioStream.on('error', (e) => finish(e));
-        // 'close' fires on socket teardown — use as fallback only if 'end' never fires
         audioStream.on('close', () => setTimeout(() => {
           finish(chunks.length ? undefined : new Error('stream closed with no data'));
         }, 100));
