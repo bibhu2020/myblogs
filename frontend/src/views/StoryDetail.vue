@@ -11,6 +11,11 @@ const story = ref(null)
 const error = ref(null)
 
 const GENRE_ICONS = {
+  'AI & Machine Learning': '🤖',
+  'Quantum Adventure': '⚛️',
+  'Relativity & Spacetime': '🌌',
+  'Indian Mythology': '🪔',
+  // Legacy genres for existing stories
   Adventure: '🏕️', Fantasy: '🧙', Mystery: '🔍', Fable: '🦁',
   'Science Fiction': '🚀', 'Historical Fiction': '🏛️', Mythology: '⚡',
 }
