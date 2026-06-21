@@ -335,13 +335,11 @@ export class AppController {
       return;
     }
 
-    try {
-      let buf: Buffer;
-      let contentType: string;
+    const errors: string[] = [];
 
-      if (geminiKey) {
-        // Gemini TTS — free tier, high-quality neural voice (Kore).
-        // Returns raw PCM (audio/L16;rate=24000) wrapped here into a WAV container.
+    // ── Gemini TTS (free tier, high-quality) ────────────────────────────────
+    if (geminiKey) {
+      try {
         const r = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${geminiKey}`,
           {
@@ -359,36 +357,63 @@ export class AppController {
             signal: AbortSignal.timeout(30_000),
           },
         );
-        if (!r.ok) throw new Error(`Gemini TTS: ${await r.text()}`);
+        if (!r.ok) throw new Error(`Gemini TTS: ${r.status} ${(await r.text()).slice(0, 200)}`);
         const data: any = await r.json();
         const inlineData = data?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
         if (!inlineData?.data) throw new Error('Gemini TTS: no audio in response');
-        const pcm = Buffer.from(inlineData.data, 'base64');
-        buf = pcmToWav(pcm);
-        contentType = 'audio/wav';
-      } else if (openaiKey) {
-        // OpenAI TTS — fallback (~0.5s/chunk, paid)
+        const raw = Buffer.from(inlineData.data, 'base64');
+        // Gemini returns raw PCM (audio/L16;rate=24000). Wrap it in a WAV container.
+        // If the mime says it's already a container format, send as-is.
+        const mime: string = inlineData.mimeType || 'audio/L16';
+        const buf = mime.includes('wav') || mime.includes('mpeg') || mime.includes('mp3')
+          ? raw
+          : pcmToWav(raw);
+        const ct = mime.includes('mpeg') || mime.includes('mp3') ? 'audio/mpeg' : 'audio/wav';
+        res.set({ 'Content-Type': ct, 'Content-Length': String(buf.length) });
+        return res.send(buf);
+      } catch (e) {
+        errors.push((e as Error).message);
+      }
+    }
+
+    // ── OpenAI TTS (paid, ~0.5s/chunk) ─────────────────────────────────────
+    if (openaiKey) {
+      try {
         const r = await fetch('https://api.openai.com/v1/audio/speech', {
           method: 'POST',
           headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: 'tts-1', input: text.slice(0, 4096), voice: 'alloy' }),
         });
-        if (!r.ok) throw new Error(`OpenAI TTS: ${await r.text()}`);
-        contentType = 'audio/mpeg';
-        buf = Buffer.from(await r.arrayBuffer());
-      } else if (localTts) {
-        // Local Python TTS service (facebook/mms-tts-eng)
+        if (!r.ok) throw new Error(`OpenAI TTS: ${r.status} ${(await r.text()).slice(0, 200)}`);
+        const buf = Buffer.from(await r.arrayBuffer());
+        res.set({ 'Content-Type': 'audio/mpeg', 'Content-Length': String(buf.length) });
+        return res.send(buf);
+      } catch (e) {
+        errors.push((e as Error).message);
+      }
+    }
+
+    // ── Local Python TTS service ─────────────────────────────────────────────
+    if (localTts) {
+      try {
         const r = await fetch(`${localTts}/tts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text }),
           signal: AbortSignal.timeout(120_000),
         });
-        if (!r.ok) throw new Error(`Local TTS: ${await r.text()}`);
-        contentType = 'audio/wav';
-        buf = Buffer.from(await r.arrayBuffer());
-      } else {
-        // HF Inference API — last resort (cold-start can take 60s+)
+        if (!r.ok) throw new Error(`Local TTS: ${r.status}`);
+        const buf = Buffer.from(await r.arrayBuffer());
+        res.set({ 'Content-Type': 'audio/wav', 'Content-Length': String(buf.length) });
+        return res.send(buf);
+      } catch (e) {
+        errors.push((e as Error).message);
+      }
+    }
+
+    // ── HF Inference API (last resort, cold-start can take 60s+) ────────────
+    if (hfToken) {
+      try {
         const r = await fetch(
           'https://api-inference.huggingface.co/models/facebook/mms-tts-eng',
           {
@@ -398,16 +423,17 @@ export class AppController {
             signal: AbortSignal.timeout(90_000),
           },
         );
-        if (!r.ok) throw new Error(`HF TTS: ${await r.text()}`);
-        contentType = r.headers.get('content-type') || 'audio/flac';
-        buf = Buffer.from(await r.arrayBuffer());
+        if (!r.ok) throw new Error(`HF TTS: ${r.status}`);
+        const buf = Buffer.from(await r.arrayBuffer());
+        const ct = r.headers.get('content-type') || 'audio/flac';
+        res.set({ 'Content-Type': ct, 'Content-Length': String(buf.length) });
+        return res.send(buf);
+      } catch (e) {
+        errors.push((e as Error).message);
       }
-
-      res.set({ 'Content-Type': contentType, 'Content-Length': String(buf.length) });
-      res.send(buf);
-    } catch (e) {
-      res.status(500).json({ message: `TTS failed: ${(e as Error).message}` });
     }
+
+    res.status(503).json({ message: `TTS unavailable: ${errors.join(' | ')}` });
   }
 }
 

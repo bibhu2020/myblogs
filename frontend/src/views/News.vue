@@ -11,10 +11,11 @@ const loading     = ref(true)
 const activeRegion = ref('all')
 
 // ── TTS player — same server-side synthesis engine as the blog reader ─────────
-const ttsState       = ref('idle')   // idle | loading | playing | paused
+const ttsState       = ref('idle')   // idle | loading | playing | paused | error
 const ttsProgress    = ref(0)
 const ttsChunkIdx    = ref(0)
 const ttsTotalChunks = ref(0)
+const ttsError       = ref('')
 const playerOpen     = ref(false)
 const activeIdx      = ref(-1)
 
@@ -58,7 +59,8 @@ function _buildChunks(newsList, regionLabel) {
 
 function _fetchChunk(text) {
   return api.post('/tts', { text }, { responseType: 'blob', timeout: 90_000 })
-    .then(r => r.data).catch(() => null)
+    .then(r => r.data)
+    .catch(e => ({ _ttsError: e?.response?.data?.message || e?.message || 'TTS unavailable' }))
 }
 
 function _ensureAudio() {
@@ -121,11 +123,15 @@ async function _runFrom(start, session) {
       if (ahead < ttsTotalChunks.value && !chunkFetches[ahead])
         chunkFetches[ahead] = _fetchChunk(chunkData[ahead].text)
     }
-    const blob = await chunkFetches[i]
+    const result = await chunkFetches[i]
     if (session !== sessionId) return
-    if (!blob) continue
+    if (!result || result._ttsError) {
+      ttsState.value = 'error'
+      ttsError.value = result?._ttsError || 'TTS unavailable'
+      return
+    }
     ttsState.value = 'playing'
-    await _playBlob(blob, i)
+    await _playBlob(result, i)
     if (session !== sessionId) return
   }
   ttsState.value = 'idle'
@@ -137,7 +143,9 @@ async function _runFrom(start, session) {
 
 async function openPlayer() {
   playerOpen.value = true
-  if (ttsState.value !== 'idle') return
+  ttsError.value = ''
+  if (ttsState.value !== 'idle' && ttsState.value !== 'error') return
+  ttsState.value = 'idle'
   const list = filtered.value
   const regionLabel = activeRegion.value === 'all' ? '' : ` ${activeRegion.value}`
   chunkData = _buildChunks(list, regionLabel)
@@ -276,6 +284,15 @@ onMounted(load)
 
         <!-- Player bar — shown while TTS is active -->
         <div v-if="playerOpen" class="mt-3 flex items-center gap-3 bg-white/10 rounded-xl px-4 py-2.5 border border-white/10">
+          <!-- Error state -->
+          <template v-if="ttsState === 'error'">
+            <span class="flex-1 text-xs text-red-300">{{ ttsError }}</span>
+            <button @click="openPlayer" class="text-xs text-white/80 underline flex-shrink-0">Retry</button>
+            <button @click="stopPlayback" class="flex items-center justify-center w-7 h-7 rounded-lg bg-white/10 hover:bg-rose-500/80 text-white transition-colors flex-shrink-0" title="Close">
+              <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+            </button>
+          </template>
+          <template v-else>
           <!-- Animated waveform bars -->
           <div class="flex items-end gap-0.5 h-4 flex-shrink-0" aria-hidden="true">
             <span v-for="(h, i) in [60,100,70,40]" :key="i"
@@ -317,6 +334,7 @@ onMounted(load)
               <rect x="4" y="4" width="16" height="16" rx="2"/>
             </svg>
           </button>
+          </template>
         </div>
       </div>
     </div>

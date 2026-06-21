@@ -19,10 +19,11 @@ const GENRE_ICONS = {
 }
 
 // ── TTS player ────────────────────────────────────────────────────────────────
-const ttsState       = ref('idle')   // idle | loading | playing | paused
+const ttsState       = ref('idle')   // idle | loading | playing | paused | error
 const ttsProgress    = ref(0)        // 0–1 across all chunks
 const ttsChunkIdx    = ref(0)
 const ttsTotalChunks = ref(0)
+const ttsError       = ref('')
 const playerOpen     = ref(false)
 
 let sessionId         = 0
@@ -103,7 +104,7 @@ function highlightChunk(i) {
 function fetchOneChunk(text) {
   return api.post('/tts', { text }, { responseType: 'blob', timeout: 90_000 })
     .then(r => r.data)
-    .catch(() => null)
+    .catch(e => ({ _ttsError: e?.response?.data?.message || e?.message || 'TTS unavailable' }))
 }
 
 function ensureAudioEl() {
@@ -155,11 +156,16 @@ async function runFrom(startIdx, session) {
       if (ahead < ttsTotalChunks.value && !chunkFetches[ahead])
         chunkFetches[ahead] = fetchOneChunk(chunkTexts[ahead])
     }
-    const blob = await chunkFetches[i]
+    const result = await chunkFetches[i]
     if (session !== sessionId) return
-    if (!blob) { console.warn(`[TTS] chunk ${i} failed — skipping`); continue }
+    if (!result || result._ttsError) {
+      clearHighlight()
+      ttsState.value = 'error'
+      ttsError.value = result?._ttsError || 'TTS unavailable'
+      return
+    }
     ttsState.value = 'playing'
-    await playChunk(blob, i)
+    await playChunk(result, i)
     if (session !== sessionId) return
   }
   clearHighlight()
@@ -176,7 +182,9 @@ function cancelCurrentChunk() {
 
 async function openPlayer() {
   playerOpen.value = true
-  if (ttsState.value !== 'idle') return
+  ttsError.value = ''
+  if (ttsState.value !== 'idle' && ttsState.value !== 'error') return
+  ttsState.value = 'idle'
 
   await nextTick()
   const { chunks, elements } = buildChunksWithDOM('.story-content', story.value.title, 300)
@@ -352,6 +360,12 @@ onMounted(async () => {
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
           </div>
+          <!-- Error state -->
+          <div v-if="ttsState === 'error'" class="mb-3 flex items-center gap-2">
+            <span class="text-xs text-red-600 flex-1">Audio unavailable — {{ ttsError }}</span>
+            <button @click="openPlayer" class="text-xs text-indigo-600 underline flex-shrink-0">Retry</button>
+          </div>
+          <template v-else>
           <!-- Seek -->
           <input type="range" min="0" max="100"
             :value="Math.round(ttsProgress * 100)"
@@ -376,6 +390,7 @@ onMounted(async () => {
               {{ ttsState === 'loading' ? 'Loading…' : ttsState === 'playing' ? 'Pause' : 'Resume' }}
             </button>
           </div>
+          </template>
         </div>
       </div>
 
@@ -458,6 +473,12 @@ onMounted(async () => {
                 :style="ttsState === 'playing' ? `animation-delay:${i * 60}ms` : ''"></span>
             </div>
 
+            <!-- Error state -->
+            <div v-if="ttsState === 'error'" class="text-center">
+              <p class="text-xs text-red-500 mb-2">{{ ttsError }}</p>
+              <button @click="openPlayer" class="text-xs text-indigo-600 underline">Retry</button>
+            </div>
+            <template v-else>
             <!-- Seek slider -->
             <div>
               <input type="range" min="0" max="100"
@@ -503,6 +524,7 @@ onMounted(async () => {
             </div>
 
             <p class="text-xs text-center text-gray-400">Powered by local AI</p>
+            </template>
           </div>
         </div>
       </div>
