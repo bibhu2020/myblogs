@@ -7,53 +7,45 @@ from ..state import AgentState
 # Per-category writer persona: (role description, publication description,
 #   example category keywords, example tag keywords, structure hint)
 _PERSONAS: dict[str, tuple] = {
-    "AI/ML": (
-        "senior AI and machine learning journalist",
-        "a premium AI research and technology publication",
-        '["artificial-intelligence", "machine-learning", "neural-network"]',
-        '["llm", "transformer", "openai", "deepmind", "reinforcement-learning", "generative-ai"]',
+    "Technology": (
+        "senior technology journalist",
+        "a premium AI and technology publication",
+        '["ai", "machine-learning", "software"]',
+        '["openai", "llm", "neural-network", "gpu", "api"]',
         "Hook → Background → The Breakthrough → Under the Hood (technical deep-dive) → "
         "Expert Voices → Implications → The Bigger Picture → Key Takeaways → Conclusion",
     ),
-    "Quantum": (
-        "senior quantum physics science journalist",
-        "a rigorous popular-science magazine covering quantum mechanics and quantum computing",
-        '["quantum", "quantum-computing", "quantum-mechanics"]',
-        '["entanglement", "superposition", "qubit", "decoherence", "photoelectric-effect", "wave-function"]',
-        "Hook → Background → The Physics → Experiment / Breakthrough → Expert Reactions → "
-        "Real-World Implications → The Bigger Picture → Key Takeaways → Conclusion",
+    "History": (
+        "senior history writer and cultural journalist",
+        "a longform editorial magazine covering world history and human civilization",
+        '["history", "civilization", "world-history"]',
+        '["ancient-history", "empire", "revolution", "discovery", "archaeology"]',
+        "Hook → Historical Context → The Event / Era → Key Figures → Causes & Consequences → "
+        "Global Impact → Legacy & Lessons → Key Takeaways → Conclusion",
     ),
-    "Relativity": (
-        "senior physics and cosmology science journalist",
-        "a popular-science magazine covering Einstein's theories, spacetime, and the cosmos",
-        '["relativity", "spacetime", "einstein"]',
-        '["time-dilation", "black-hole", "gravitational-waves", "special-relativity", "general-relativity", "speed-of-light"]',
-        "Hook → Background → The Physics / Discovery → Thought Experiment → Expert Reactions → "
+    "Science": (
+        "senior science journalist",
+        "a popular-science magazine covering physics, biology, space, and climate",
+        '["science", "research", "discovery"]',
+        '["physics", "biology", "astronomy", "genetics", "climate"]',
+        "Hook → Background → The Discovery / Experiment → Methodology → Expert Reactions → "
         "Implications → The Bigger Picture → Key Takeaways → Conclusion",
     ),
     "Travel": (
-        "senior science travel writer",
-        "a premium travel publication covering the world's most scientifically fascinating destinations",
-        '["travel", "destinations", "science-tourism"]',
-        '["cern", "observatory", "physics-lab", "nature", "photography", "adventure"]',
-        "Hook → Destination Overview → Getting There → What to See & Experience → The Science Behind It → "
+        "senior travel writer",
+        "a premium travel publication covering global destinations and experiences",
+        '["travel", "destinations", "adventure"]',
+        '["adventure", "culture", "food", "photography", "budget-travel"]',
+        "Hook → Destination Overview → Getting There → What to See & Do → Food & Culture → "
         "Practical Tips → When to Go → Key Takeaways → Conclusion",
     ),
-    "Educational": (
-        "senior science educator and explainer journalist",
-        "a visual, accessible popular-science magazine that makes complex physics beautiful and clear",
-        '["physics", "science-education", "explainer"]',
-        '["blackbody-radiation", "ultraviolet-catastrophe", "photoelectric-effect", "double-slit", "quantum-tunneling"]',
-        "Hook → The Puzzle (what puzzled scientists) → The Concept Explained Simply → "
-        "Analogy & Visualization → The Maths (gentle) → Real-World Applications → Key Takeaways → Conclusion",
-    ),
-    "History": (
-        "senior history of science writer",
-        "a longform magazine covering the history of physics, mathematics, and the scientists who changed everything",
-        '["history-of-science", "physics-history", "scientific-revolution"]',
-        '["planck", "einstein", "bohr", "heisenberg", "curie", "feynman", "manhattan-project"]',
-        "Hook → Historical Context → The Discovery / Event → Key Figures → Scientific Impact → "
-        "Legacy & Modern Relevance → Key Takeaways → Conclusion",
+    "Knowledge": (
+        "senior editorial journalist and essayist",
+        "a curious multi-topic magazine exploring ideas, culture, and society",
+        '["knowledge", "culture", "society"]',
+        '["ideas", "trends", "analysis", "human-behavior", "education"]',
+        "Hook → Context → Deep Dive → Expert Perspectives → Real-World Examples → "
+        "Implications → The Bigger Picture → Key Takeaways → Conclusion",
     ),
 }
 _DEFAULT_PERSONA = (

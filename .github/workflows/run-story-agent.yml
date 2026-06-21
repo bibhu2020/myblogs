@@ -12,10 +12,15 @@ on:
         type: choice
         options:
           - ''
-          - AI & Machine Learning
-          - Quantum Adventure
-          - Relativity & Spacetime
-          - Indian Mythology
+          - Adventure
+          - Fantasy
+          - Mystery
+          - Fable
+          - Science Fiction
+          - Historical Fiction
+          - Mythology
+          - Thriller
+          - Horror
       age_group:
         description: 'Target age group (leave blank for random)'
         required: false
@@ -23,6 +28,7 @@ on:
         type: choice
         options:
           - ''
+          - '3-7'
           - '8-15'
           - '16-20'
 
