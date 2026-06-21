@@ -57,7 +57,7 @@ jobs:
           UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
           GH_REPO: ${{ github.repository }}
         run: |
-          SPACE="mishrabp/myblogs"
+          SPACE="mishrabp/meridian"
           HF_API="https://huggingface.co/api/spaces/${SPACE}/secrets"
 
           push_secret() {
@@ -104,5 +104,5 @@ jobs:
 
           git commit -m "Deploy to HuggingFace Spaces"
 
-          git remote add hf https://mishrabp:${HF_TOKEN}@huggingface.co/spaces/mishrabp/myblogs
+          git remote add hf https://mishrabp:${HF_TOKEN}@huggingface.co/spaces/mishrabp/meridian
           git push hf hf-deploy:main --force

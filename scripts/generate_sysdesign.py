@@ -678,7 +678,7 @@ FLOWS.append(('CI/CD — GitHub to HF Space Deploy', seq_image(render_sequence(
         (5, 5, 'auth, blog, media, gateway, nginx, tts,\nagent-saturday, agent-sunday', 'note'),
         (3, 2, 'Build complete ✅', 'return'),
         (2, 1, 'Workflow completed (success)', 'return'),
-        (1, 0, 'Live at mishrabp-myblogs.hf.space', 'return'),
+        (1, 0, 'Live at mishrabp-meridian.hf.space', 'return'),
     ]
 ), 'Figure 14: The deploy workflow runs in ~20s (git push only). HF Space then rebuilds the Docker image autonomously — total cold-start ~5min.')))
 
@@ -913,7 +913,7 @@ tech_data = [
     ['Containerisation', 'Docker + Supervisord', 'Single container; multi-process managed by supervisord'],
     ['Reverse Proxy', 'Nginx', 'Inside container; routes /api and /uploads'],
     ['CI/CD', 'GitHub Actions', 'Push to main → sync secrets → git push to HF Space'],
-    ['Hosting', 'HuggingFace Spaces', 'Docker runtime; public URL: mishrabp-myblogs.hf.space'],
+    ['Hosting', 'HuggingFace Spaces', 'Docker runtime; public URL: mishrabp-meridian.hf.space'],
     ['A/B Testing', 'localStorage + Pinia', 'Random variant on first visit; session-sticky'],
 ]
 
@@ -939,7 +939,7 @@ story.append(HR())
 story.append(SP(6))
 story.append(Paragraph(
     'Meridian System Design Document · Bibhu Mishra · June 2026 · '
-    'mishrabp-myblogs.hf.space',
+    'mishrabp-meridian.hf.space',
     ParagraphStyle('footer', fontSize=8, textColor=colors.HexColor('#94a3b8'),
                    alignment=TA_CENTER, fontName='Helvetica-Oblique')
 ))

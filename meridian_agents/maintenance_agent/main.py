@@ -11,7 +11,7 @@ from .agents import run_team  # noqa: E402
 from .tracer import complete_run, start_run  # noqa: E402
 
 REPO_ROOT = str(Path(__file__).parent.parent.parent)
-SERVER_BASE = os.getenv("SERVER_BASE", "https://mishrabP-myblogs.hf.space")
+SERVER_BASE = os.getenv("SERVER_BASE", "https://mishrabp-meridian.hf.space")
 
 
 def run_maintenance() -> None:

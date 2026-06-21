@@ -13,7 +13,7 @@ _STYLE_PREFIX = (
 
 
 def generate_story_images_node(state: dict) -> dict:
-    server_base = os.getenv("SERVER_BASE", "https://mishrabP-myblogs.hf.space")
+    server_base = os.getenv("SERVER_BASE", "https://mishrabp-meridian.hf.space")
     content = state["story_content"]
 
     # Featured cover image

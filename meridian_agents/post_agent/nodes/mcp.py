@@ -6,7 +6,7 @@ import httpx
 
 from ..state import AgentState
 
-MCP_URL = os.getenv("MCP_URL", "https://mishrabp-myblogs.hf.space/api/mcp")
+MCP_URL = os.getenv("MCP_URL", "https://mishrabp-meridian.hf.space/api/mcp")
 MCP_KEY = os.getenv("MCP_API_KEY", "")
 
 _req_id = 0

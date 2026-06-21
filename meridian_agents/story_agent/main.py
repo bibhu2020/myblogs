@@ -26,7 +26,7 @@ from .nodes.images import generate_story_images_node                            
 from .nodes.publisher import save_pending_node                                    # noqa: E402
 from .tracer import start_run, complete_run                                       # noqa: E402
 
-SERVER_BASE   = os.getenv("SERVER_BASE", "https://mishrabP-myblogs.hf.space")
+SERVER_BASE   = os.getenv("SERVER_BASE", "https://mishrabp-meridian.hf.space")
 AUTHOR_NAME   = os.getenv("STORY_AUTHOR_NAME", "Meridian Storyteller")
 
 _PENDING_FILE = Path(__file__).parent / "pending_stories.jsonl"

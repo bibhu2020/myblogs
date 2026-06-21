@@ -30,7 +30,7 @@ load_dotenv(Path(__file__).parent.parent.parent / ".env")
 from .graph import build_graph  # noqa: E402
 from .tracer import complete_run, start_run  # noqa: E402
 
-SERVER_BASE     = os.getenv("SERVER_BASE", "https://mishrabP-myblogs.hf.space")
+SERVER_BASE     = os.getenv("SERVER_BASE", "https://mishrabp-meridian.hf.space")
 AUTHOR_NAME     = os.getenv("AGENT_AUTHOR_NAME", "Meridian AI Researcher")
 AUTHOR_EMAIL    = os.getenv("AGENT_AUTHOR_EMAIL", "ai.researcher@meridian.blog")
 AUTHOR_PASSWORD = os.getenv("AGENT_AUTHOR_PASSWORD", f"MeridianAI{time.strftime('%Y')}!rsch")
