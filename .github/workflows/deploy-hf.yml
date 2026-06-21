@@ -46,6 +46,7 @@ jobs:
           push_secret GEMINI_API_KEY       "$GEMINI_API_KEY"
           push_secret UNSPLASH_ACCESS_KEY  "$UNSPLASH_ACCESS_KEY"
           push_secret GITHUB_REPO          "$GH_REPO"
+          push_secret HF_TOKEN             "$HF_TOKEN"
           echo "Done."
 
       # ── Push code to HF Spaces ────────────────────────────────────────────
