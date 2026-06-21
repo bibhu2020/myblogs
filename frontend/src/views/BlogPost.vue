@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted, ref, nextTick } from 'vue'
+import { onMounted, onUnmounted, ref, nextTick, computed } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { useBlogStore } from '../stores/blog'
 import { useLayoutStore } from '../stores/layout'
@@ -11,6 +11,14 @@ import { format } from 'date-fns'
 
 const blog = useBlogStore()
 const layout = useLayoutStore()
+const ttsTrackColor = computed(() => layout.variant === 'b' ? '#7c3aed' : '#3b82f6')
+const ttsThumbColor = computed(() => layout.variant === 'b' ? '#7c3aed' : '#2563eb')
+const ttsHighlightBg = computed(() =>
+  layout.variant === 'b' ? 'rgba(124,58,237,0.1)' : 'rgba(59,130,246,0.1)'
+)
+const ttsHighlightRing = computed(() =>
+  layout.variant === 'b' ? 'rgba(124,58,237,0.15)' : 'rgba(59,130,246,0.15)'
+)
 const route = useRoute()
 const post = ref(null)
 const relatedPosts = ref([])
@@ -27,19 +35,17 @@ const ttsChunkIdx    = ref(0)        // current chunk index (0-based)
 const ttsTotalChunks = ref(0)
 const playerOpen     = ref(false)
 const ttsError       = ref('')
-const ttsModel       = ref('')
 
-let sessionId          = 0
-let audioEl            = null
-let currentBlobUrl     = null
-let resolveChunk       = null
-let chunkFetches       = []
-let chunkBlobs         = []     // populated once each fetch resolves; index presence = resolved
-let chunkItems         = []     // { text, element: DOMElement | null }[]
-let lastHighlightedEl  = null   // tracks highlighted element for inline-style removal
+let sessionId      = 0
+let audioEl        = null
+let currentBlobUrl = null
+let resolveChunk   = null
+let chunkFetches   = []
+let chunkBlobs     = []     // populated once each fetch resolves; index presence = resolved
+let chunkItems     = []     // { text, element: DOMElement | null }[]
 
 // Build chunks from rendered DOM elements so we can highlight them while reading.
-function splitAtSentences(text, el, items, maxLen = 400) {
+function splitAtSentences(text, el, items, maxLen = 1000) {
   if (text.length <= maxLen) { items.push({ text, element: el }); return }
   const ends = []
   for (const m of text.matchAll(/[.!?]+\s+/g)) ends.push(m.index + m[0].length)
@@ -74,60 +80,33 @@ function buildDOMChunks() {
   return items
 }
 
-// Fetch one chunk with one automatic retry to survive transient rate limits.
+// Fetch one chunk with one automatic retry (3 s delay) to survive transient rate limits.
 function fetchChunkCached(idx) {
   if (!chunkFetches[idx]) {
     const doFetch = () =>
       api.post('/tts', { text: chunkItems[idx].text, type: 'blog' }, { responseType: 'blob', timeout: 90_000 })
-         .then(r => {
-           if (idx === 0) ttsModel.value = r.headers['x-tts-model'] || ''
-           chunkBlobs[idx] = r.data; return r.data
-         })
+         .then(r => { chunkBlobs[idx] = r.data; return r.data })
     chunkFetches[idx] = doFetch()
       .catch(() => new Promise(res => setTimeout(res, 500)).then(doFetch))
       .catch(() => { chunkBlobs[idx] = null; return null })
   }
 }
 
-// Highlight the current paragraph via inline styles (beats Tailwind prose and any CSS specificity).
+// Add highlight class to the paragraph being read; auto-scroll if off-screen.
 function highlightChunk(idx) {
-  if (lastHighlightedEl) {
-    lastHighlightedEl.style.removeProperty('background-color')
-    lastHighlightedEl.style.removeProperty('border-radius')
-    lastHighlightedEl.style.removeProperty('box-shadow')
-    lastHighlightedEl.style.removeProperty('outline')
-    lastHighlightedEl.style.removeProperty('outline-offset')
-    lastHighlightedEl.style.removeProperty('transition')
-    lastHighlightedEl = null
-  }
+  document.querySelectorAll('.tts-reading').forEach(el => el.classList.remove('tts-reading'))
   const item = chunkItems[idx]
   if (!item?.element) return
-  const color = layout.variant === 'b' ? '124,58,237' : '59,130,246'
-  item.element.style.backgroundColor = `rgba(${color}, 0.15)`
-  item.element.style.borderRadius = '6px'
-  item.element.style.boxShadow = `0 0 0 5px rgba(${color}, 0.18)`
-  item.element.style.outline = `2px solid rgba(${color}, 0.28)`
-  item.element.style.outlineOffset = '3px'
-  item.element.style.transition = 'background-color 0.2s ease, box-shadow 0.2s ease'
-  lastHighlightedEl = item.element
+  item.element.classList.add('tts-reading')
   const rect = item.element.getBoundingClientRect()
-  const navH = 80
-  const footerH = 72
-  if (rect.top < navH || rect.bottom > window.innerHeight - footerH) {
+  const navH = 80  // sticky navbar (~64px) + margin
+  if (rect.top < navH || rect.bottom > window.innerHeight - 80) {
     item.element.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 }
 
 function clearHighlight() {
-  if (lastHighlightedEl) {
-    lastHighlightedEl.style.removeProperty('background-color')
-    lastHighlightedEl.style.removeProperty('border-radius')
-    lastHighlightedEl.style.removeProperty('box-shadow')
-    lastHighlightedEl.style.removeProperty('outline')
-    lastHighlightedEl.style.removeProperty('outline-offset')
-    lastHighlightedEl.style.removeProperty('transition')
-    lastHighlightedEl = null
-  }
+  document.querySelectorAll('.tts-reading').forEach(el => el.classList.remove('tts-reading'))
 }
 
 // Returns (or creates) the single shared <audio> element.
@@ -176,9 +155,9 @@ async function runFrom(startIdx, session) {
     if (session !== sessionId) return
     ttsChunkIdx.value = i
 
-    // Fetch this chunk + 10 ahead so audio is always buffered well in advance
+    // Fetch this chunk + 5 ahead so audio is always buffered well in advance
     fetchChunkCached(i)
-    for (let p = 1; p <= 10; p++) {
+    for (let p = 1; p <= 5; p++) {
       if (i + p < ttsTotalChunks.value) fetchChunkCached(i + p)
     }
 
@@ -239,8 +218,8 @@ async function openPlayer() {
   // Activate audio NOW, synchronously in the gesture handler — Safari autoplay policy.
   ensureAudioEl()
 
-  // Pre-warm first 10 chunks immediately so playback never has to wait
-  for (let k = 0; k < Math.min(10, chunkItems.length); k++) fetchChunkCached(k)
+  // Pre-warm first 5 chunks immediately so playback never has to wait
+  for (let k = 0; k < Math.min(5, chunkItems.length); k++) fetchChunkCached(k)
 
   ttsState.value = 'loading'
   const session = ++sessionId
@@ -346,8 +325,8 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
 </script>
 
 <template>
-  <!-- pb-32 on mobile: clears bottom-nav (64px) + TTS bar; pb-20 on desktop: clears TTS footer bar -->
-  <div :class="[layout.variant === 'b' ? 'min-h-screen bg-[#0f172a]' : 'min-h-screen bg-white', playerOpen ? 'pb-32 sm:pb-20' : '']">
+  <!-- pb-32 sm:pb-0 when TTS open: clears bottom-nav (64px) + TTS bar (~64px) stacked on mobile -->
+  <div :class="[layout.variant === 'b' ? 'min-h-screen bg-[#0f172a]' : 'min-h-screen bg-white', playerOpen ? 'pb-32 sm:pb-0' : '']">
     <Navbar />
     <main id="main-content" tabindex="-1" class="outline-none">
 
@@ -380,10 +359,10 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
         </div>
       </div>
 
-      <!-- Listen button — visible on all devices when player is closed -->
-      <div v-if="!playerOpen" class="mb-6">
+      <!-- Mobile: Listen button (only when player is closed; fixed bottom bar takes over when open) -->
+      <div v-if="!playerOpen" class="sm:hidden mb-6">
         <button @click="openPlayer"
-          class="flex items-center gap-2 px-4 py-2.5 text-white rounded-xl text-sm font-semibold transition-colors w-full sm:w-auto justify-center"
+          class="flex items-center gap-2 px-4 py-2.5 text-white rounded-xl text-sm font-semibold transition-colors w-full justify-center"
           :class="layout.variant === 'b' ? 'bg-violet-600 hover:bg-violet-700' : 'bg-primary-600 hover:bg-primary-700'">
           <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
           Listen to this article
@@ -482,24 +461,112 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
       <button @click="galleryIndex = (galleryIndex + 1) % getGallery().length" aria-label="Next image" class="absolute right-4 text-white text-3xl p-2 rounded-full hover:bg-white/20 transition-colors">&#8250;</button>
     </div>
 
-    <!-- Unified TTS footer bar — visible on ALL devices when player is open -->
-    <!-- Mobile: bottom-16 (above BottomNav); Desktop: bottom-0 -->
+    <!-- Desktop TTS sliding panel — fixed right side, hidden on mobile -->
     <Teleport to="body">
-      <div v-if="playerOpen && post"
-        class="fixed inset-x-0 z-50 backdrop-blur-md border-t shadow-2xl bottom-16 sm:bottom-0"
-        :class="layout.variant === 'b' ? 'bg-[#162236]/97 border-[#2d3f5f]' : 'bg-white/97 border-gray-200'">
-        <div class="max-w-4xl mx-auto px-4 py-2.5 flex items-center gap-3">
-          <!-- Waveform + model -->
-          <div class="flex flex-col items-center gap-0.5 flex-shrink-0 w-10">
-            <div class="flex items-end gap-0.5 h-5" aria-hidden="true">
-              <span v-for="i in 4" :key="i" class="w-1 rounded-full"
-                :class="[ttsState === 'playing' ? 'tts-bar' : 'h-1 opacity-40', layout.variant === 'b' ? 'bg-violet-400' : 'bg-primary-500']"
-                :style="ttsState === 'playing' ? `animation-delay:${i * 80}ms` : ''"></span>
+      <div v-if="post" class="hidden sm:flex fixed right-0 top-1/2 -translate-y-1/2 z-50 items-stretch drop-shadow-2xl">
+        <!-- Always-visible tab -->
+        <button @click="playerOpen ? closePlayer() : openPlayer()"
+          class="flex flex-col items-center justify-center gap-2 w-10 rounded-l-2xl py-5 transition-colors text-white"
+          :class="layout.variant === 'b'
+            ? (playerOpen ? 'bg-violet-700' : 'bg-violet-600 hover:bg-violet-700')
+            : (playerOpen ? 'bg-primary-700' : 'bg-primary-600 hover:bg-primary-700')">
+          <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+          </svg>
+          <span class="text-[10px] font-bold tracking-wider" style="writing-mode:vertical-lr;transform:rotate(180deg)">
+            {{ playerOpen ? 'CLOSE' : 'LISTEN' }}
+          </span>
+        </button>
+
+        <!-- Sliding player panel -->
+        <div class="overflow-hidden transition-all duration-300 ease-in-out"
+          :style="playerOpen ? 'width:288px' : 'width:0'">
+          <div class="w-[288px] h-full flex flex-col p-5 gap-4"
+            :class="layout.variant === 'b' ? 'bg-[#162236] border-l border-[#2d3f5f]' : 'bg-white border-l border-gray-100'">
+
+            <!-- Header -->
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wider mb-0.5" :class="layout.variant === 'b' ? 'text-violet-400' : 'text-primary-600'">Now reading</p>
+                <p class="text-sm font-bold leading-snug line-clamp-2" :class="layout.variant === 'b' ? 'text-slate-100' : 'text-gray-900'">{{ post.title }}</p>
+              </div>
+              <button @click="closePlayer" class="flex-shrink-0 mt-0.5" :class="layout.variant === 'b' ? 'text-slate-600 hover:text-slate-300' : 'text-gray-300 hover:text-gray-600'" title="Close">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
             </div>
-            <span v-if="ttsModel" class="text-[8px] leading-none font-medium whitespace-nowrap overflow-hidden max-w-[40px] truncate" :class="layout.variant === 'b' ? 'text-violet-400' : 'text-primary-500'" :title="ttsModel">{{ ttsModel }}</span>
+
+            <!-- Waveform animation -->
+            <div class="flex items-end justify-center gap-1 h-10" aria-hidden="true">
+              <span v-for="i in 12" :key="i" class="w-1.5 rounded-full"
+                :class="[ttsState === 'playing' ? 'tts-bar' : 'h-1.5 opacity-30', layout.variant === 'b' ? 'bg-violet-400' : 'bg-primary-400']"
+                :style="ttsState === 'playing' ? `animation-delay:${i * 60}ms` : ''"></span>
+            </div>
+
+            <!-- Seek slider -->
+            <div>
+              <input type="range" min="0" max="100"
+                :value="Math.round(ttsProgress * 100)"
+                :disabled="ttsState === 'loading' || ttsState === 'idle'"
+                class="tts-slider w-full"
+                @change="seekTo($event.target.value / 100)" />
+              <div class="flex justify-between mt-1.5 text-xs" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">
+                <span v-if="ttsTotalChunks">Segment {{ ttsChunkIdx + 1 }} / {{ ttsTotalChunks }}</span>
+                <span v-else>—</span>
+                <span>{{ Math.round(ttsProgress * 100) }}%</span>
+              </div>
+            </div>
+
+            <!-- Controls: Stop + Play/Pause -->
+            <div class="flex items-center justify-center gap-3">
+              <button @click="stopPlayback"
+                :disabled="ttsState === 'idle' || ttsState === 'loading'"
+                class="flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all"
+                :class="ttsState === 'idle' || ttsState === 'loading'
+                  ? (layout.variant === 'b' ? 'border-slate-800 text-slate-700 cursor-not-allowed' : 'border-gray-200 text-gray-300 cursor-not-allowed')
+                  : (layout.variant === 'b' ? 'border-slate-600 text-slate-400 hover:border-slate-400 hover:text-slate-200' : 'border-gray-300 text-gray-600 hover:border-gray-500 hover:text-gray-800')"
+                title="Stop (return to beginning)">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <rect x="4" y="4" width="16" height="16" rx="2"/>
+                </svg>
+              </button>
+
+              <button @click="ttsState === 'loading' ? null : togglePlayPause()"
+                class="flex items-center justify-center w-14 h-14 rounded-full transition-all"
+                :class="ttsState === 'loading'
+                  ? (layout.variant === 'b' ? 'bg-slate-800 text-slate-500 cursor-wait' : 'bg-gray-100 text-gray-400 cursor-wait')
+                  : (layout.variant === 'b' ? 'bg-violet-600 text-white hover:bg-violet-700 hover:scale-105 active:scale-95' : 'bg-primary-600 text-white hover:bg-primary-700 hover:scale-105 active:scale-95')">
+                <svg v-if="ttsState === 'loading'" class="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+                <svg v-else-if="ttsState === 'playing'" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+                </svg>
+                <svg v-else class="w-6 h-6 ml-1" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+              </button>
+            </div>
+
+            <p v-if="ttsError" class="text-xs text-center text-red-500">{{ ttsError }}</p>
+            <p v-else class="text-xs text-center" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">Powered by local AI</p>
           </div>
-          <!-- Post title (desktop) -->
-          <span class="hidden sm:block text-xs font-semibold flex-shrink-0 max-w-[160px] truncate" :class="layout.variant === 'b' ? 'text-slate-300' : 'text-gray-700'" :title="post.title">{{ post.title }}</span>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Mobile: fixed bottom player bar (replaces the inline player card) -->
+    <Teleport to="body">
+      <!-- bottom-16: sits above the mobile bottom nav bar (h-16 = 64px) -->
+      <div v-if="playerOpen && post" class="sm:hidden fixed bottom-16 inset-x-0 z-50 backdrop-blur-sm border-t shadow-2xl"
+        :class="layout.variant === 'b' ? 'bg-[#162236]/95 border-[#2d3f5f]' : 'bg-white/95 border-gray-200'">
+        <div class="px-4 py-3 flex items-center gap-3">
+          <!-- Waveform -->
+          <div class="flex items-end gap-0.5 h-5 flex-shrink-0" aria-hidden="true">
+            <span v-for="i in 4" :key="i" class="w-1 rounded-full"
+              :class="[ttsState === 'playing' ? 'tts-bar' : 'h-1 opacity-40', layout.variant === 'b' ? 'bg-violet-400' : 'bg-primary-500']"
+              :style="ttsState === 'playing' ? `animation-delay:${i * 80}ms` : ''"></span>
+          </div>
           <!-- Progress bar (tappable) -->
           <div class="flex-1 relative h-2 rounded-full cursor-pointer"
             :class="layout.variant === 'b' ? 'bg-slate-700' : 'bg-gray-200'"
@@ -508,21 +575,11 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
               :class="layout.variant === 'b' ? 'bg-violet-500' : 'bg-primary-500'"
               :style="`width:${Math.round(ttsProgress * 100)}%`"></div>
           </div>
-          <!-- Counter (desktop only) -->
-          <span class="hidden sm:block text-xs flex-shrink-0 tabular-nums" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-400'">{{ ttsChunkIdx + 1 }}/{{ ttsTotalChunks }}</span>
-          <!-- Stop -->
-          <button @click="stopPlayback"
-            :disabled="ttsState === 'idle' || ttsState === 'loading'"
-            class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border transition-all"
-            :class="ttsState === 'idle' || ttsState === 'loading'
-              ? (layout.variant === 'b' ? 'border-slate-700 text-slate-700 cursor-not-allowed' : 'border-gray-200 text-gray-300 cursor-not-allowed')
-              : (layout.variant === 'b' ? 'border-slate-600 text-slate-400 hover:border-violet-400 hover:text-violet-300' : 'border-gray-300 text-gray-600 hover:border-gray-500 hover:text-gray-800')"
-            title="Stop">
-            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
-          </button>
+          <!-- Counter -->
+          <span class="text-xs flex-shrink-0 tabular-nums" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">{{ ttsChunkIdx + 1 }}/{{ ttsTotalChunks }}</span>
           <!-- Play/Pause -->
           <button @click="ttsState === 'loading' ? null : togglePlayPause()"
-            class="w-9 h-9 rounded-full flex items-center justify-center text-white transition-colors flex-shrink-0 active:scale-95"
+            class="w-9 h-9 rounded-full flex items-center justify-center text-white transition-colors flex-shrink-0"
             :class="ttsState === 'loading'
               ? 'bg-gray-300 cursor-wait'
               : (layout.variant === 'b' ? 'bg-violet-600 hover:bg-violet-700' : 'bg-primary-600 hover:bg-primary-700')">
@@ -538,14 +595,12 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
             </svg>
           </button>
           <!-- Close -->
-          <button @click="closePlayer" class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-colors"
-            :class="layout.variant === 'b' ? 'text-slate-500 hover:text-slate-300 hover:bg-slate-800' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'"
-            title="Close player">
+          <button @click="closePlayer" class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
+            :class="layout.variant === 'b' ? 'text-slate-500 hover:text-slate-300 hover:bg-slate-800' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
             </svg>
           </button>
-          <p v-if="ttsError" class="hidden sm:block text-xs text-red-500 flex-shrink-0">{{ ttsError }}</p>
         </div>
       </div>
     </Teleport>
@@ -564,6 +619,58 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
   animation: tts-wave 0.8s ease-in-out infinite;
 }
 
-/* TTS highlight is applied via inline styles in highlightChunk() to beat Tailwind prose specificity */
+/* Highlight paragraphs inside v-html while they're being read */
+:deep(.tts-reading) {
+  background-color: v-bind(ttsHighlightBg);
+  border-radius: 6px;
+  box-shadow: 0 0 0 4px v-bind(ttsHighlightRing);
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
 
+/* Range slider — cross-browser consistent styling */
+.tts-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 9999px;
+  background: #e5e7eb;
+  outline: none;
+  cursor: pointer;
+  background-image: v-bind("'linear-gradient(' + ttsTrackColor + ', ' + ttsTrackColor + ')'");
+  background-size: v-bind("Math.round(ttsProgress * 100) + '% 100%'");
+  background-repeat: no-repeat;
+}
+.tts-slider:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.tts-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: v-bind(ttsThumbColor);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+  transition: transform 0.1s;
+}
+.tts-slider:not(:disabled)::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+.tts-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: v-bind(ttsThumbColor);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+}
+.tts-slider::-moz-range-progress {
+  background: v-bind(ttsTrackColor);
+  height: 6px;
+  border-radius: 9999px;
+}
 </style>

@@ -14,11 +14,11 @@ const route = useRoute()
 const router = useRouter()
 const isEdit = computed(() => !!route.params.id)
 
-const GENRES = ['AI & Machine Learning', 'Quantum Adventure', 'Relativity & Spacetime', 'Indian Mythology']
+const GENRES = ['Adventure', 'Fantasy', 'Mystery', 'Fable', 'Science Fiction', 'Historical Fiction', 'Mythology', 'Contemporary']
 
 const form = ref({
   title: '', excerpt: '', content: '', featuredImage: '', status: 'draft',
-  genre: 'AI & Machine Learning', ageGroup: '8-15', moralLesson: '',
+  genre: 'Adventure', ageGroup: '8-15', moralLesson: '',
 })
 
 const saving = ref(false)
@@ -49,7 +49,7 @@ onMounted(async () => {
         content: story.content || '',
         featuredImage: story.featuredImage || '',
         status: story.status || 'draft',
-        genre: story.genre || 'AI & Machine Learning',
+        genre: story.genre || 'Adventure',
         ageGroup: story.ageGroup || '8-15',
         moralLesson: story.moralLesson || '',
       }
