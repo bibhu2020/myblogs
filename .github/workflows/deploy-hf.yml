@@ -17,6 +17,7 @@ jobs:
       - name: Sync secrets to HF Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           MCP_API_KEY: ${{ secrets.MCP_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GITHUB_TOKEN_SECRET: ${{ secrets.GITHUB_TOKEN_SECRET }}
@@ -37,16 +38,8 @@ jobs:
             echo "  pushed ${key}"
           }
 
-          delete_secret() {
-            local key="$1"
-            curl -s -X DELETE "${HF_API}/${key}" \
-              -H "Authorization: Bearer ${HF_TOKEN}" | grep -v '"error"' || true
-            echo "  deleted ${key}"
-          }
-
           echo "Syncing secrets to HF Space ${SPACE}..."
-          # DATABASE_URL must NOT be set on HF — services must use SQLite, not PostgreSQL
-          delete_secret DATABASE_URL
+          push_secret DATABASE_URL         "$DATABASE_URL"
           push_secret MCP_API_KEY          "$MCP_API_KEY"
           push_secret OPENAI_API_KEY       "$OPENAI_API_KEY"
           push_secret SECRET_TOKEN_GITHUB  "$GITHUB_TOKEN_SECRET"
