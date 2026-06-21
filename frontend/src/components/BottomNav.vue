@@ -44,7 +44,7 @@ function isActive(item) {
 </script>
 
 <template>
-  <nav class="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 shadow-lg">
+  <nav class="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 shadow-lg sm:hidden">
     <div class="flex items-stretch h-16 max-w-lg mx-auto">
       <RouterLink
         v-for="item in nav"
