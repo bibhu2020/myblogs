@@ -1,0 +1,42 @@
+name: Docker Diagnostics
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    name: Build and run container — capture startup logs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t meridian-test .
+
+      - name: Run container and capture 90s of logs
+        run: |
+          docker run -d --name meridian \
+            -p 7860:7860 \
+            -e NODE_ENV=production \
+            meridian-test
+
+          echo "=== Waiting 90s for startup ==="
+          sleep 90
+
+          echo ""
+          echo "=== Container status ==="
+          docker ps -a --filter name=meridian
+
+          echo ""
+          echo "=== Supervisord / service logs (last 200 lines) ==="
+          docker logs --tail 200 meridian 2>&1
+
+          echo ""
+          echo "=== HTTP probe: GET http://localhost:7860/ ==="
+          curl -v http://localhost:7860/ 2>&1 | head -40 || true
+
+          echo ""
+          echo "=== HTTP probe: GET http://localhost:7860/api/posts ==="
+          curl -s -o /dev/null -w "%{http_code}" http://localhost:7860/api/posts || true
+          echo ""
