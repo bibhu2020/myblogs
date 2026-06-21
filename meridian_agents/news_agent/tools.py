@@ -284,17 +284,22 @@ def _enhance_item_image(idx_item: tuple[int, dict]) -> tuple[int, str | None]:
     """Download, enhance via Gemini, upload, and return (idx, new_url or None)."""
     idx, item = idx_item
     url = item.get("imageUrl")
-    if not url:
-        return idx, None
 
-    downloaded = _download_image(url)
+    # Try RSS/provided URL first, then fall back to og:image from the article page
+    downloaded = _download_image(url) if url else None
+    if not downloaded:
+        og_url = _fetch_og_image(item.get("sourceUrl", ""))
+        if og_url:
+            downloaded = _download_image(og_url)
     if not downloaded:
         return idx, None
     raw_bytes, mime = downloaded
 
     enhanced = _gemini_enhance(raw_bytes, mime)
     if not enhanced:
-        return idx, None
+        # Gemini unavailable/failed — upload raw image as-is
+        new_url = _upload_to_media(raw_bytes, mime, item.get("title", "news thumbnail")[:120])
+        return idx, new_url
     enh_bytes, enh_mime = enhanced
 
     new_url = _upload_to_media(enh_bytes, enh_mime, item.get("title", "news thumbnail")[:120])
@@ -302,12 +307,13 @@ def _enhance_item_image(idx_item: tuple[int, dict]) -> tuple[int, str | None]:
 
 
 def _enhance_all_images(items: list[dict]) -> list[dict]:
-    """Enhance every item that has an imageUrl using Gemini, upload to media service."""
-    candidates = [(i, it) for i, it in enumerate(items) if it.get("imageUrl")]
+    """Enhance every item that has an imageUrl (or can get one via og:image) using Gemini."""
+    candidates = list(enumerate(items))
     if not candidates:
         return items
 
-    print(f"   ✨ Enhancing {len(candidates)} thumbnail(s) with Gemini…")
+    with_url = sum(1 for _, it in candidates if it.get("imageUrl"))
+    print(f"   ✨ Fetching/enhancing {len(candidates)} thumbnail(s) ({with_url} with RSS image)…")
     enhanced = [dict(it) for it in items]
 
     with ThreadPoolExecutor(max_workers=min(len(candidates), 5)) as pool:
@@ -377,7 +383,6 @@ def save_news(items_json: str) -> str:
     """
     try:
         items = json.loads(items_json)
-        items = _enrich_images(items)
         items = _enhance_all_images(items)
         result = _save(items)
         got = sum(1 for it in items if it.get("imageUrl"))
