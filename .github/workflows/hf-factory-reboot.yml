@@ -1,0 +1,21 @@
+name: HF Space Factory Reboot
+
+on:
+  workflow_dispatch:
+
+jobs:
+  reboot:
+    name: Factory reboot HF Space
+    runs-on: ubuntu-latest
+    steps:
+      - name: Factory reboot mishrabp/myblogs
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          echo "Sending factory reboot request..."
+          curl -s -X POST \
+            "https://huggingface.co/api/spaces/mishrabp/myblogs/restart?factory=true" \
+            -H "Authorization: Bearer ${HF_TOKEN}" \
+            -H "Content-Type: application/json"
+          echo ""
+          echo "Reboot triggered."
