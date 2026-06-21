@@ -34,7 +34,7 @@ let chunkItems     = []     // { text, element: DOMElement | null }[]
 
 // Build chunks from rendered DOM elements so we can highlight them while reading.
 // Split text only when it exceeds maxLen, always cutting at a sentence boundary.
-function splitAtSentences(text, el, items, maxLen = 1000) {
+function splitAtSentences(text, el, items, maxLen = 600) {
   if (text.length <= maxLen) { items.push({ text, element: el }); return }
   // Collect positions just after each sentence-ending punctuation + whitespace
   const ends = []
@@ -151,9 +151,9 @@ async function runFrom(startIdx, session) {
     if (session !== sessionId) return
     ttsChunkIdx.value = i
 
-    // Fetch this chunk + 5 ahead so audio is always buffered well in advance
+    // Fetch this chunk + 10 ahead so audio is always buffered well in advance
     fetchChunkCached(i)
-    for (let p = 1; p <= 5; p++) {
+    for (let p = 1; p <= 10; p++) {
       if (i + p < ttsTotalChunks.value) fetchChunkCached(i + p)
     }
 
@@ -213,8 +213,8 @@ async function openPlayer() {
   chunkBlobs = []
 
   ensureAudioEl()
-  // Pre-warm first 5 chunks immediately so playback never has to wait
-  for (let k = 0; k < Math.min(5, chunkItems.length); k++) fetchChunkCached(k)
+  // Pre-warm first 10 chunks immediately so playback never has to wait
+  for (let k = 0; k < Math.min(10, chunkItems.length); k++) fetchChunkCached(k)
 
   ttsState.value = 'loading'
   const session = ++sessionId
@@ -222,9 +222,9 @@ async function openPlayer() {
 }
 
 function togglePlayPause() {
-  if (!audioEl) return
-  if (ttsState.value === 'playing') { audioEl.pause(); ttsState.value = 'paused' }
-  else if (ttsState.value === 'paused') { audioEl.play(); ttsState.value = 'playing' }
+  if (ttsState.value === 'playing') { audioEl?.pause(); ttsState.value = 'paused' }
+  else if (ttsState.value === 'paused') { audioEl?.play(); ttsState.value = 'playing' }
+  else if (ttsState.value === 'idle') { openPlayer() }
 }
 
 function stopPlayback() {
@@ -560,16 +560,20 @@ onMounted(async () => {
 
 /* Highlight paragraphs inside v-html while they're being read */
 :deep(.tts-reading) {
-  background-color: rgba(79, 70, 229, 0.1);
-  border-radius: 6px;
-  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.12);
-  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+  background-color: rgba(79, 70, 229, 0.15) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 0 0 5px rgba(79, 70, 229, 0.18) !important;
+  outline: 2px solid rgba(79, 70, 229, 0.25) !important;
+  outline-offset: 2px !important;
+  transition: background-color 0.25s ease, box-shadow 0.25s ease !important;
 }
 
 /* Highlight the excerpt block when it's being read */
 .story-excerpt.tts-reading {
-  background-color: rgba(79, 70, 229, 0.15) !important;
-  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.2);
+  background-color: rgba(79, 70, 229, 0.2) !important;
+  box-shadow: 0 0 0 5px rgba(79, 70, 229, 0.25) !important;
+  outline: 2px solid rgba(79, 70, 229, 0.3) !important;
+  outline-offset: 2px !important;
 }
 
 .tts-slider {

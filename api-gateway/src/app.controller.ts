@@ -351,7 +351,7 @@ export class AppController {
 
         const kokoro = await axios.post(
           'https://api-inference.huggingface.co/models/hexgrad/Kokoro-82M',
-          { inputs: text, parameters: { voice: 'af_heart', speed: 0.88 } },
+          { inputs: text, parameters: { voice: 'af_heart', speed: 0.82 } },
           { headers, responseType: 'arraybuffer', timeout: 60_000 },
         );
         const buf = Buffer.from(kokoro.data as ArrayBuffer);
@@ -367,7 +367,7 @@ export class AppController {
     }
 
     const PROFILES: Record<string, { voice: string; rate: number; pitch: string }> = {
-      story: { voice: 'en-IE-EmilyNeural', rate: 0.72, pitch: '-1st' },
+      story: { voice: 'en-IE-EmilyNeural', rate: 0.65, pitch: '-2st' },
       blog:  { voice: 'en-US-JennyNeural', rate: 0.82, pitch: '+0Hz' },
       news:  { voice: 'en-US-AriaNeural',  rate: 0.95, pitch: '+0Hz' },
     };
