@@ -44,31 +44,28 @@ FROM node:20-slim
 
 # System packages: nginx, supervisor, Python for local TTS service
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nginx supervisor python3 python3-venv \
+    nginx supervisor python3 python3-venv espeak-ng \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /var/log/supervisor /run/nginx
 
 # Python virtual environment — isolates TTS deps from system Python
 RUN python3 -m venv /opt/tts-venv
 
-# PyTorch CPU-only (much smaller than CUDA build; sufficient for TTS inference)
+# PyTorch CPU-only (much smaller than CUDA build; sufficient for inference)
 RUN /opt/tts-venv/bin/pip install --no-cache-dir \
     torch --index-url https://download.pytorch.org/whl/cpu
 
-# TTS service dependencies
+# TTS service dependencies (kokoro + soundfile on top of the pre-installed torch)
 COPY tts-service/requirements.txt /app/tts-service/requirements.txt
 RUN /opt/tts-venv/bin/pip install --no-cache-dir -r /app/tts-service/requirements.txt
 
-# Download facebook/mms-tts-eng into the image at build time.
-# HF_HOME points the cache into /app/models so the layer is predictable.
+# Download Kokoro-82M into the image at build time.
 ENV HF_HOME=/app/models
 RUN /opt/tts-venv/bin/python -c "\
-from transformers import AutoTokenizer, VitsModel; \
-print('Downloading mms-tts-eng tokenizer...', flush=True); \
-AutoTokenizer.from_pretrained('facebook/mms-tts-eng'); \
-print('Downloading mms-tts-eng model weights...', flush=True); \
-VitsModel.from_pretrained('facebook/mms-tts-eng'); \
-print('Model download complete.', flush=True)"
+from kokoro import KPipeline; \
+print('Downloading Kokoro-82M model...', flush=True); \
+KPipeline(lang_code='a'); \
+print('Kokoro model ready.', flush=True)"
 
 COPY tts-service/app.py   /app/tts-service/app.py
 COPY tts-service/start.sh /app/tts-service/start.sh

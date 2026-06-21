@@ -7,13 +7,29 @@ from ..state import AgentState
 # Per-category writer persona: (role description, publication description,
 #   example category keywords, example tag keywords, structure hint)
 _PERSONAS: dict[str, tuple] = {
-    "Technology": (
-        "senior technology journalist",
-        "a premium AI and technology publication",
-        '["ai", "machine-learning", "software"]',
-        '["openai", "llm", "neural-network", "gpu", "api"]',
+    "AI & Machine Learning": (
+        "senior AI researcher and technology journalist",
+        "a premium artificial intelligence publication",
+        '["ai", "machine-learning", "deep-learning"]',
+        '["neural-network", "llm", "transformer", "openai", "gpu", "inference"]',
         "Hook → Background → The Breakthrough → Under the Hood (technical deep-dive) → "
-        "Expert Voices → Implications → The Bigger Picture → Key Takeaways → Conclusion",
+        "Expert Voices → Real-World Impact → Ethical Considerations → Key Takeaways → Conclusion",
+    ),
+    "Quantum Computing": (
+        "senior quantum technology writer and physicist",
+        "a publication covering quantum computing, physics, and the science of tomorrow",
+        '["quantum", "quantum-computing", "physics"]',
+        '["qubits", "superposition", "entanglement", "decoherence", "cryptography", "quantum-advantage"]',
+        "Hook → Quantum Basics (accessible) → The Discovery/Development → How It Works → "
+        "Expert Perspectives → Real-World Applications → Challenges Ahead → Key Takeaways → Conclusion",
+    ),
+    "Relativity & Spacetime": (
+        "senior physics writer and cosmology journalist",
+        "a science publication exploring Einstein's universe, spacetime, and the cosmos",
+        '["relativity", "spacetime", "cosmology"]',
+        '["einstein", "black-holes", "time-dilation", "gravitational-waves", "light-speed", "space"]',
+        "Hook → Einstein's Insight → The Physics Explained → Experimental Evidence → "
+        "Mind-Bending Consequences → Modern Applications → Open Questions → Key Takeaways → Conclusion",
     ),
     "History": (
         "senior history writer and cultural journalist",
@@ -23,14 +39,6 @@ _PERSONAS: dict[str, tuple] = {
         "Hook → Historical Context → The Event / Era → Key Figures → Causes & Consequences → "
         "Global Impact → Legacy & Lessons → Key Takeaways → Conclusion",
     ),
-    "Science": (
-        "senior science journalist",
-        "a popular-science magazine covering physics, biology, space, and climate",
-        '["science", "research", "discovery"]',
-        '["physics", "biology", "astronomy", "genetics", "climate"]',
-        "Hook → Background → The Discovery / Experiment → Methodology → Expert Reactions → "
-        "Implications → The Bigger Picture → Key Takeaways → Conclusion",
-    ),
     "Travel": (
         "senior travel writer",
         "a premium travel publication covering global destinations and experiences",
@@ -39,29 +47,30 @@ _PERSONAS: dict[str, tuple] = {
         "Hook → Destination Overview → Getting There → What to See & Do → Food & Culture → "
         "Practical Tips → When to Go → Key Takeaways → Conclusion",
     ),
-    "Knowledge": (
+    "Educational": (
         "senior editorial journalist and essayist",
-        "a curious multi-topic magazine exploring ideas, culture, and society",
-        '["knowledge", "culture", "society"]',
-        '["ideas", "trends", "analysis", "human-behavior", "education"]',
+        "a curious educational magazine exploring ideas, science, and how the world works",
+        '["education", "learning", "ideas"]',
+        '["mental-models", "psychology", "philosophy", "science", "analysis", "how-things-work"]',
         "Hook → Context → Deep Dive → Expert Perspectives → Real-World Examples → "
-        "Implications → The Bigger Picture → Key Takeaways → Conclusion",
+        "Practical Lessons → The Bigger Picture → Key Takeaways → Conclusion",
     ),
 }
 _DEFAULT_PERSONA = (
     "senior editorial journalist",
-    "a premium multi-topic publication",
-    '["editorial", "culture", "society"]',
-    '["trends", "analysis", "insight", "society", "ideas"]',
+    "a premium educational publication",
+    '["education", "ideas", "science"]',
+    '["analysis", "insight", "learning", "discovery"]',
     "Hook → Background → Main Argument → Evidence & Examples → Expert Voices → "
     "Implications → Key Takeaways → Conclusion",
 )
 
 _BASE_SYSTEM_TEMPLATE = """You are a {role} writing for Meridian, {publication}.
-Your posts are detailed, authoritative, and read like long-form magazine features — not listicles.
+Your posts are educational, authoritative, and read like long-form magazine features — not listicles.
+Every post must inform and educate the reader — leave them knowing something they didn't before.
 
 CONTENT RULES:
-- Minimum 3,000 words of body content (aim for 3,500–4,500 for a 12-15 min read)
+- Target 1,500–2,000 words of body content (8–12 min read — concise but deep)
 - Write flowing narrative prose, not bullet-point summaries
 - Explain the WHY and HOW, not just the WHAT
 - Include concrete examples, analogies, and real depth appropriate to the topic
@@ -123,8 +132,8 @@ def _word_count(html: str) -> int:
 def _user_prompt(state: AgentState) -> str:
     category = state["category_name"]
     _, _, _, _, structure = _PERSONAS.get(category, _DEFAULT_PERSONA)
-    return f"""Write a comprehensive, deeply researched blog post based on the research below.
-The post must be AT LEAST 3,000 words — do not cut corners. This is long-form editorial journalism.
+    return f"""Write a well-researched, educational blog post based on the research below.
+Target 1,500–2,000 words — concise, deep, and informative. Every sentence must add value.
 
 CATEGORY: {category}
 Ensure suggestedCategoryKeywords and suggestedTagKeywords reflect the **{category}** topic,
@@ -154,7 +163,7 @@ def write_post_node(state: AgentState) -> dict:
             {"role": "system", "content": _system_prompt(state["category_name"])},
             {"role": "user", "content": _user_prompt(state)},
         ],
-        max_tokens=10000,
+        max_tokens=5000,
         temperature=0.8,
     )
     post = extract_json(text)
@@ -192,14 +201,14 @@ def expand_post_node(state: AgentState) -> dict:
             {
                 "role": "user",
                 "content": (
-                    "The content is too short. Expand the HTML content to at least 3,000 words by: "
-                    "adding more paragraphs to each section, deepening the technical explanation, "
-                    "adding more expert quotes and context, and expanding the implications section. "
-                    "Return the complete updated JSON with the same structure."
+                    "The content is too short. Expand the HTML content to at least 1,500 words by: "
+                    "deepening the explanations of key concepts, adding concrete examples, "
+                    "expanding expert quotes and context, and enriching the implications section. "
+                    "Keep it under 2,000 words. Return the complete updated JSON with the same structure."
                 ),
             },
         ],
-        max_tokens=10000,
+        max_tokens=5000,
         temperature=0.7,
     )
     post = extract_json(text)
