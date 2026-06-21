@@ -14,12 +14,12 @@ on:
         options:
           - random_general
           - ai_trending
-          - AI/ML
-          - Quantum
-          - Relativity
-          - Educational
+          - AI
+          - Technology
+          - Science
           - History
           - Travel
+          - Knowledge
 
 jobs:
   post-agent:
