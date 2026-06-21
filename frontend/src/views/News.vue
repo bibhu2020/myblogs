@@ -19,14 +19,17 @@ const ttsError       = ref('')
 const playerOpen     = ref(false)
 const activeIdx      = ref(-1)
 
-let sessionId      = 0
-let audioEl        = null
-let currentBlobUrl = null
-let resolveChunk   = null
-let chunkFetches   = []
-let chunkData      = []   // { text, storyIdx }[]
+let sessionId       = 0
+let audioCtx        = null
+let nextStartAt     = 0
+let highlightTimers = []
+let rafId           = null
+let chunkStartTimes = []
+let chunkDurations  = []
+let chunkFetches    = []
+let chunkData       = []   // { text, storyIdx }[]
 
-function _splitText(text, maxLen = 280) {
+function _splitText(text, maxLen = 200) {
   const parts = []
   let rem = text.trim()
   while (rem.length > 0) {
@@ -49,7 +52,7 @@ function _buildChunks(newsList, regionLabel) {
   })
   newsList.forEach((item, i) => {
     chunks.push({ text: `Story ${i + 1}. ${item.title}.`, storyIdx: i })
-    _splitText(item.summary || '', 280).forEach(part =>
+    _splitText(item.summary || '', 200).forEach(part =>
       chunks.push({ text: part, storyIdx: i })
     )
   })
@@ -63,62 +66,78 @@ function _fetchChunk(text) {
     .catch(e => ({ _ttsError: e?.response?.data?.message || e?.message || 'TTS unavailable' }))
 }
 
-function _ensureAudio() {
-  if (!audioEl) {
-    audioEl = new Audio()
-    // silent WAV activates element under Safari autoplay policy
-    audioEl.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='
-    const p = audioEl.play(); if (p) p.catch(() => {})
-    audioEl.pause()
-    audioEl.src = ''
+function _ensureAudioCtx() {
+  if (!audioCtx || audioCtx.state === 'closed') {
+    audioCtx = new AudioContext()
+    nextStartAt = audioCtx.currentTime
   }
-  return audioEl
+  return audioCtx
 }
 
-function _playBlob(blob, idx) {
-  return new Promise(resolve => {
-    resolveChunk = resolve
-    const el = _ensureAudio()
-    const url = URL.createObjectURL(blob)
-    currentBlobUrl = url
-    el.src = url
-    el.ontimeupdate = () => {
-      if (!el.duration) return
-      ttsProgress.value = (idx + el.currentTime / el.duration) / ttsTotalChunks.value
-    }
-    const done = () => {
-      URL.revokeObjectURL(url)
-      if (currentBlobUrl === url) currentBlobUrl = null
-      el.ontimeupdate = el.onended = el.onerror = null
-      resolveChunk = null
-      resolve()
-    }
-    el.onended = done
-    el.onerror = done
-    el.play().catch(done)
-  })
+function _clearTimers() {
+  highlightTimers.forEach(id => clearTimeout(id))
+  highlightTimers = []
 }
 
-function _cancelCurrent() {
-  if (audioEl) { audioEl.pause(); audioEl.src = '' }
-  if (currentBlobUrl) { URL.revokeObjectURL(currentBlobUrl); currentBlobUrl = null }
-  if (resolveChunk) { resolveChunk(); resolveChunk = null }
+function _stopRaf() {
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null }
+}
+
+function _startRaf() {
+  _stopRaf()
+  function tick() {
+    const ctx = audioCtx
+    if (!ctx || ctx.state === 'closed') return
+    const now = ctx.currentTime
+    for (let j = 0; j < chunkStartTimes.length; j++) {
+      const st  = chunkStartTimes[j]
+      const dur = chunkDurations[j]
+      if (st !== undefined && dur && now >= st && now < st + dur) {
+        ttsProgress.value = (j + (now - st) / dur) / ttsTotalChunks.value
+        break
+      }
+    }
+    rafId = requestAnimationFrame(tick)
+  }
+  rafId = requestAnimationFrame(tick)
+}
+
+async function _decodeAndSchedule(blob, i) {
+  const ctx = audioCtx
+  try {
+    const arrayBuf = await blob.arrayBuffer()
+    const audioBuf = await ctx.decodeAudioData(arrayBuf)
+    const source = ctx.createBufferSource()
+    source.buffer = audioBuf
+    source.connect(ctx.destination)
+    const startAt = Math.max(ctx.currentTime + 0.02, nextStartAt)
+    source.start(startAt)
+    nextStartAt = startAt + audioBuf.duration
+    chunkStartTimes[i] = startAt
+    chunkDurations[i]  = audioBuf.duration
+    // Scroll news item into view when this chunk starts playing
+    const si = chunkData[i]?.storyIdx ?? -1
+    const ms = Math.max(0, (startAt - ctx.currentTime) * 1000)
+    highlightTimers.push(setTimeout(() => {
+      if (si >= 0) {
+        activeIdx.value = si
+        document.getElementById(`news-item-${si}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      } else {
+        activeIdx.value = -1
+      }
+    }, ms))
+    return source
+  } catch { return null }
 }
 
 async function _runFrom(start, session) {
   for (let i = start; i < ttsTotalChunks.value; i++) {
     if (session !== sessionId) return
     ttsChunkIdx.value = i
-    const si = chunkData[i]?.storyIdx ?? -1
-    if (si >= 0) {
-      activeIdx.value = si
-      document.getElementById(`news-item-${si}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-    } else {
-      activeIdx.value = -1
-    }
-    ttsState.value = 'loading'
+    if (i === start) ttsState.value = 'loading'
+
     if (!chunkFetches[i]) chunkFetches[i] = _fetchChunk(chunkData[i].text)
-    for (let p = 1; p <= 3; p++) {
+    for (let p = 1; p <= 4; p++) {
       const ahead = i + p
       if (ahead < ttsTotalChunks.value && !chunkFetches[ahead])
         chunkFetches[ahead] = _fetchChunk(chunkData[ahead].text)
@@ -130,10 +149,18 @@ async function _runFrom(start, session) {
       ttsError.value = result?._ttsError || 'TTS unavailable'
       return
     }
-    ttsState.value = 'playing'
-    await _playBlob(result, i)
+    const source = await _decodeAndSchedule(result, i)
+    if (!source) {
+      ttsState.value = 'error'
+      ttsError.value = 'Audio decode failed'
+      return
+    }
+    if (i === start) { ttsState.value = 'playing'; _startRaf() }
+    await new Promise(resolve => { source.onended = resolve })
     if (session !== sessionId) return
   }
+  _stopRaf()
+  _clearTimers()
   ttsState.value = 'idle'
   ttsProgress.value = 0
   ttsChunkIdx.value = 0
@@ -146,6 +173,7 @@ async function openPlayer() {
   ttsError.value = ''
   if (ttsState.value !== 'idle' && ttsState.value !== 'error') return
   ttsState.value = 'idle'
+  _ensureAudioCtx()
   const list = filtered.value
   const regionLabel = activeRegion.value === 'all' ? '' : ` ${activeRegion.value}`
   chunkData = _buildChunks(list, regionLabel)
@@ -153,8 +181,11 @@ async function openPlayer() {
   ttsProgress.value = 0
   ttsChunkIdx.value = 0
   chunkFetches = new Array(chunkData.length).fill(null)
-  _ensureAudio()
-  for (let k = 0; k < Math.min(4, chunkData.length); k++)
+  nextStartAt = audioCtx.currentTime + 0.05
+  chunkStartTimes = []
+  chunkDurations = []
+  _clearTimers()
+  for (let k = 0; k < Math.min(2, chunkData.length); k++)
     chunkFetches[k] = _fetchChunk(chunkData[k].text)
   ttsState.value = 'loading'
   const session = ++sessionId
@@ -162,14 +193,17 @@ async function openPlayer() {
 }
 
 function togglePlayPause() {
-  if (!audioEl) return
-  if (ttsState.value === 'playing') { audioEl.pause(); ttsState.value = 'paused' }
-  else if (ttsState.value === 'paused') { audioEl.play(); ttsState.value = 'playing' }
+  if (!audioCtx) return
+  if (ttsState.value === 'playing') { audioCtx.suspend(); ttsState.value = 'paused' }
+  else if (ttsState.value === 'paused') { audioCtx.resume(); ttsState.value = 'playing' }
 }
 
 function stopPlayback() {
   sessionId++
-  _cancelCurrent()
+  _clearTimers()
+  _stopRaf()
+  if (audioCtx) { audioCtx.close(); audioCtx = null }
+  nextStartAt = 0; chunkStartTimes = []; chunkDurations = []
   ttsState.value = 'idle'
   ttsProgress.value = 0
   ttsChunkIdx.value = 0
@@ -178,7 +212,12 @@ function stopPlayback() {
 }
 
 watch(activeRegion, () => { if (playerOpen.value) stopPlayback() })
-onUnmounted(() => { sessionId++; _cancelCurrent(); if (audioEl) { audioEl.src = ''; audioEl = null } })
+onUnmounted(() => {
+  sessionId++
+  _clearTimers()
+  _stopRaf()
+  if (audioCtx) { audioCtx.close(); audioCtx = null }
+})
 
 // ── Regions / colours ────────────────────────────────────────────────────────
 const REGIONS = [

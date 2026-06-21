@@ -27,12 +27,15 @@ const ttsError       = ref('')
 const playerOpen     = ref(false)
 
 let sessionId         = 0
-let audioEl           = null
-let currentBlobUrl    = null
-let resolveChunk      = null
+let audioCtx          = null
+let nextStartAt       = 0
+let highlightTimers   = []
+let rafId             = null
+let chunkStartTimes   = []
+let chunkDurations    = []
 let chunkFetches      = []
 let chunkTexts        = []
-let chunkElements     = []   // DOM element to highlight per chunk
+let chunkElements     = []
 let lastHighlightedEl = null
 
 function buildChunksWithDOM(contentSelector, title, maxLen = 300) {
@@ -107,51 +110,69 @@ function fetchOneChunk(text) {
     .catch(e => ({ _ttsError: e?.response?.data?.message || e?.message || 'TTS unavailable' }))
 }
 
-function ensureAudioEl() {
-  if (!audioEl) {
-    audioEl = new Audio()
-    audioEl.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='
-    const p = audioEl.play(); if (p) p.catch(() => {})
-    audioEl.pause()
-    audioEl.src = ''
+function ensureAudioCtx() {
+  if (!audioCtx || audioCtx.state === 'closed') {
+    audioCtx = new AudioContext()
+    nextStartAt = audioCtx.currentTime
   }
-  return audioEl
+  return audioCtx
 }
 
-function playChunk(blob, chunkIdx) {
-  return new Promise(resolve => {
-    resolveChunk = resolve
-    const el = ensureAudioEl()
-    const url = URL.createObjectURL(blob)
-    currentBlobUrl = url
-    el.src = url
-    el.ontimeupdate = () => {
-      if (!el.duration) return
-      ttsProgress.value = (chunkIdx + el.currentTime / el.duration) / ttsTotalChunks.value
+function _clearTimers() {
+  highlightTimers.forEach(id => clearTimeout(id))
+  highlightTimers = []
+}
+
+function _stopRaf() {
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null }
+}
+
+function _startRaf() {
+  _stopRaf()
+  function tick() {
+    const ctx = audioCtx
+    if (!ctx || ctx.state === 'closed') return
+    const now = ctx.currentTime
+    for (let j = 0; j < chunkStartTimes.length; j++) {
+      const st  = chunkStartTimes[j]
+      const dur = chunkDurations[j]
+      if (st !== undefined && dur && now >= st && now < st + dur) {
+        ttsProgress.value = (j + (now - st) / dur) / ttsTotalChunks.value
+        break
+      }
     }
-    const cleanup = (reason) => {
-      URL.revokeObjectURL(url)
-      if (currentBlobUrl === url) currentBlobUrl = null
-      el.ontimeupdate = null; el.onended = null; el.onerror = null
-      resolveChunk = null
-      resolve(reason)
-    }
-    el.onended = () => cleanup('ended')
-    el.onerror = () => cleanup('error')
-    el.play().catch(() => cleanup('error'))
-  })
+    rafId = requestAnimationFrame(tick)
+  }
+  rafId = requestAnimationFrame(tick)
+}
+
+async function _decodeAndSchedule(blob, i) {
+  const ctx = audioCtx
+  try {
+    const arrayBuf = await blob.arrayBuffer()
+    const audioBuf = await ctx.decodeAudioData(arrayBuf)
+    const source = ctx.createBufferSource()
+    source.buffer = audioBuf
+    source.connect(ctx.destination)
+    const startAt = Math.max(ctx.currentTime + 0.02, nextStartAt)
+    source.start(startAt)
+    nextStartAt = startAt + audioBuf.duration
+    chunkStartTimes[i] = startAt
+    chunkDurations[i]  = audioBuf.duration
+    const ms = Math.max(0, (startAt - ctx.currentTime) * 1000)
+    highlightTimers.push(setTimeout(() => highlightChunk(i), ms))
+    return source
+  } catch { return null }
 }
 
 async function runFrom(startIdx, session) {
   for (let i = startIdx; i < ttsTotalChunks.value; i++) {
     if (session !== sessionId) return
     ttsChunkIdx.value = i
-    ttsState.value = 'loading'
-    highlightChunk(i)
+    if (i === startIdx) ttsState.value = 'loading'
 
     if (!chunkFetches[i]) chunkFetches[i] = fetchOneChunk(chunkTexts[i])
-    // 6-ahead pipeline — prefetch generously to keep audio gapless
-    for (let p = 1; p <= 6; p++) {
+    for (let p = 1; p <= 4; p++) {
       const ahead = i + p
       if (ahead < ttsTotalChunks.value && !chunkFetches[ahead])
         chunkFetches[ahead] = fetchOneChunk(chunkTexts[ahead])
@@ -164,20 +185,23 @@ async function runFrom(startIdx, session) {
       ttsError.value = result?._ttsError || 'TTS unavailable'
       return
     }
-    ttsState.value = 'playing'
-    await playChunk(result, i)
+    const source = await _decodeAndSchedule(result, i)
+    if (!source) {
+      clearHighlight()
+      ttsState.value = 'error'
+      ttsError.value = 'Audio decode failed'
+      return
+    }
+    if (i === startIdx) { ttsState.value = 'playing'; _startRaf() }
+    await new Promise(resolve => { source.onended = resolve })
     if (session !== sessionId) return
   }
   clearHighlight()
+  _stopRaf()
+  _clearTimers()
   ttsState.value = 'idle'
   ttsProgress.value = 0
   ttsChunkIdx.value = 0
-}
-
-function cancelCurrentChunk() {
-  if (audioEl) { audioEl.pause(); audioEl.src = '' }
-  if (currentBlobUrl) { URL.revokeObjectURL(currentBlobUrl); currentBlobUrl = null }
-  if (resolveChunk) { resolveChunk('cancelled'); resolveChunk = null }
 }
 
 async function openPlayer() {
@@ -185,9 +209,10 @@ async function openPlayer() {
   ttsError.value = ''
   if (ttsState.value !== 'idle' && ttsState.value !== 'error') return
   ttsState.value = 'idle'
+  ensureAudioCtx()
 
   await nextTick()
-  const { chunks, elements } = buildChunksWithDOM('.story-content', story.value.title, 300)
+  const { chunks, elements } = buildChunksWithDOM('.story-content', story.value.title, 200)
   if (!chunks.length) return
 
   chunkTexts = chunks
@@ -196,10 +221,12 @@ async function openPlayer() {
   ttsProgress.value = 0
   ttsChunkIdx.value = 0
   chunkFetches = new Array(chunks.length).fill(null)
+  nextStartAt = audioCtx.currentTime + 0.05
+  chunkStartTimes = []
+  chunkDurations = []
+  _clearTimers()
 
-  ensureAudioEl()
-  // Warm up the first 6 chunks for a gapless start
-  for (let k = 0; k < Math.min(6, chunks.length); k++)
+  for (let k = 0; k < Math.min(2, chunks.length); k++)
     chunkFetches[k] = fetchOneChunk(chunkTexts[k])
 
   ttsState.value = 'loading'
@@ -208,15 +235,18 @@ async function openPlayer() {
 }
 
 function togglePlayPause() {
-  if (!audioEl) return
-  if (ttsState.value === 'playing') { audioEl.pause(); ttsState.value = 'paused' }
-  else if (ttsState.value === 'paused') { audioEl.play(); ttsState.value = 'playing' }
+  if (!audioCtx) return
+  if (ttsState.value === 'playing') { audioCtx.suspend(); ttsState.value = 'paused' }
+  else if (ttsState.value === 'paused') { audioCtx.resume(); ttsState.value = 'playing' }
 }
 
 function stopPlayback() {
   sessionId++
-  cancelCurrentChunk()
+  _clearTimers()
+  _stopRaf()
   clearHighlight()
+  if (audioCtx) { audioCtx.close(); audioCtx = null }
+  nextStartAt = 0; chunkStartTimes = []; chunkDurations = []
   ttsState.value = 'idle'
   ttsProgress.value = 0
   ttsChunkIdx.value = 0
@@ -225,11 +255,16 @@ function stopPlayback() {
 async function seekTo(fraction) {
   if (!ttsTotalChunks.value || !chunkTexts.length) return
   const target = Math.max(0, Math.min(Math.floor(fraction * ttsTotalChunks.value), ttsTotalChunks.value - 1))
-  const session = ++sessionId
-  cancelCurrentChunk()
+  _clearTimers()
+  _stopRaf()
+  clearHighlight()
+  if (audioCtx) { audioCtx.close(); audioCtx = null }
+  nextStartAt = 0; chunkStartTimes = []; chunkDurations = []
   ttsProgress.value = target / ttsTotalChunks.value
   ttsChunkIdx.value = target
   ttsState.value = 'loading'
+  ensureAudioCtx()
+  const session = ++sessionId
   await new Promise(r => setTimeout(r, 0))
   if (session !== sessionId) return
   await runFrom(target, session)
@@ -237,12 +272,13 @@ async function seekTo(fraction) {
 
 function closePlayer() {
   sessionId++
-  cancelCurrentChunk()
+  _clearTimers()
+  _stopRaf()
   clearHighlight()
-  if (audioEl) { audioEl.src = ''; audioEl = null }
-  chunkFetches = []
-  chunkTexts = []
-  chunkElements = []
+  if (audioCtx) { audioCtx.close(); audioCtx = null }
+  nextStartAt = 0
+  chunkFetches = []; chunkTexts = []; chunkElements = []
+  chunkStartTimes = []; chunkDurations = []
   ttsTotalChunks.value = 0
   ttsState.value = 'idle'
   ttsProgress.value = 0
@@ -253,8 +289,9 @@ function closePlayer() {
 
 onUnmounted(() => {
   sessionId++
-  cancelCurrentChunk()
-  if (audioEl) { audioEl.src = ''; audioEl = null }
+  _clearTimers()
+  _stopRaf()
+  if (audioCtx) { audioCtx.close(); audioCtx = null }
 })
 
 onMounted(async () => {
