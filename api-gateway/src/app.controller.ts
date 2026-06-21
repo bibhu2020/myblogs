@@ -356,8 +356,9 @@ export class AppController {
     }
 
     // ── Fallback: HF Inference API (facebook/mms-tts-eng) ───────────────────
+    // Retries once if HF returns 503 "model loading" (estimated_time in body).
     if (hfToken) {
-      try {
+      const hfCall = async () => {
         const r = await fetch(
           'https://api-inference.huggingface.co/models/facebook/mms-tts-eng',
           {
@@ -367,7 +368,28 @@ export class AppController {
             signal: AbortSignal.timeout(90_000),
           },
         );
+        if (r.status === 503) {
+          // Model is loading — read estimated_time and retry once
+          const body = await r.json().catch(() => ({})) as { estimated_time?: number };
+          const wait = Math.min((body.estimated_time ?? 20) * 1000, 30_000);
+          await new Promise(resolve => setTimeout(resolve, wait));
+          const r2 = await fetch(
+            'https://api-inference.huggingface.co/models/facebook/mms-tts-eng',
+            {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${hfToken}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ inputs: text }),
+              signal: AbortSignal.timeout(90_000),
+            },
+          );
+          if (!r2.ok) throw new Error(`HF TTS: ${r2.status}`);
+          return r2;
+        }
         if (!r.ok) throw new Error(`HF TTS: ${r.status}`);
+        return r;
+      };
+      try {
+        const r = await hfCall();
         const buf = Buffer.from(await r.arrayBuffer());
         const ct = r.headers.get('content-type') || 'audio/flac';
         res.set({ 'Content-Type': ct, 'Content-Length': String(buf.length) });
