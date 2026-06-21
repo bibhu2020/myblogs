@@ -72,3 +72,15 @@ jobs:
 
           git remote add hf https://mishrabp:${HF_TOKEN}@huggingface.co/spaces/mishrabp/myblogs
           git push hf hf-deploy:main --force
+
+      # ── Factory-reboot the Space so the new container starts fresh ─────────
+      - name: Factory reboot HF Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          echo "Triggering factory reboot..."
+          curl -s -X POST \
+            "https://huggingface.co/api/spaces/mishrabp/myblogs/restart?factory=true" \
+            -H "Authorization: Bearer ${HF_TOKEN}"
+          echo ""
+          echo "Done."
