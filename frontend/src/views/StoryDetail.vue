@@ -12,8 +12,10 @@ const story = ref(null)
 const error = ref(null)
 
 const GENRE_ICONS = {
-  Adventure: '🏕️', Fantasy: '🧙', Mystery: '🔍', Fable: '🦁',
-  'Science Fiction': '🚀', 'Historical Fiction': '🏛️', Mythology: '⚡',
+  'AI & Machine Learning': '🤖',
+  'Quantum Adventure':     '⚛️',
+  'Relativity & Spacetime':'🌌',
+  'Indian Mythology':      '🙏',
 }
 
 // ── TTS player ────────────────────────────────────────────────────────────────
@@ -23,29 +25,79 @@ const ttsChunkIdx    = ref(0)
 const ttsTotalChunks = ref(0)
 const playerOpen     = ref(false)
 
-let sessionId      = 0
-let audioEl        = null
-let currentBlobUrl = null
-let resolveChunk   = null
-let chunkFetches   = []
-let chunkTexts     = []
+let sessionId         = 0
+let audioEl           = null
+let currentBlobUrl    = null
+let resolveChunk      = null
+let chunkFetches      = []
+let chunkTexts        = []
+let chunkElements     = []   // DOM element to highlight per chunk
+let lastHighlightedEl = null
 
-function splitChunks(html, maxLen = 500) {
-  const div = document.createElement('div')
-  div.innerHTML = html
-  const full = (div.textContent || div.innerText || '').trim()
+function buildChunksWithDOM(contentSelector, title, maxLen = 300) {
   const chunks = []
-  let remaining = full
-  while (remaining.length > 0) {
-    if (remaining.length <= maxLen) { chunks.push(remaining); break }
-    let cut = remaining.lastIndexOf('. ', maxLen)
-    if (cut < maxLen * 0.4) cut = remaining.lastIndexOf(' ', maxLen)
-    if (cut < 0) cut = maxLen
-    else cut += 1
-    chunks.push(remaining.slice(0, cut).trim())
-    remaining = remaining.slice(cut).trim()
+  const elements = []
+
+  if (title) { chunks.push(title); elements.push(null) }
+
+  const contentEl = document.querySelector(contentSelector)
+  if (!contentEl) return { chunks, elements }
+
+  const nodes = contentEl.querySelectorAll('p, h2, h3, h4, blockquote, li')
+  let accText = ''
+  let accEl = null
+
+  function flush() {
+    if (accText) { chunks.push(accText); elements.push(accEl); accText = ''; accEl = null }
   }
-  return chunks.filter(Boolean)
+  function addSplit(text, el) {
+    let rem = text
+    while (rem.length > 0) {
+      if (rem.length <= maxLen) { chunks.push(rem); elements.push(el); break }
+      let cut = rem.lastIndexOf('. ', maxLen)
+      if (cut < maxLen * 0.4) cut = rem.lastIndexOf(' ', maxLen)
+      if (cut < 0) cut = maxLen; else cut += 1
+      chunks.push(rem.slice(0, cut).trim()); elements.push(el)
+      rem = rem.slice(cut).trim()
+    }
+  }
+
+  for (const node of nodes) {
+    const text = (node.textContent || '').trim()
+    if (!text) continue
+    if (!accText) {
+      if (text.length > maxLen) { addSplit(text, node) }
+      else { accText = text; accEl = node }
+    } else if (accText.length + 1 + text.length <= maxLen) {
+      accText += ' ' + text
+    } else {
+      flush()
+      if (text.length > maxLen) { addSplit(text, node) }
+      else { accText = text; accEl = node }
+    }
+  }
+  flush()
+  return { chunks, elements }
+}
+
+function clearHighlight() {
+  if (lastHighlightedEl) {
+    lastHighlightedEl.style.removeProperty('background-color')
+    lastHighlightedEl.style.removeProperty('border-radius')
+    lastHighlightedEl.style.removeProperty('transition')
+    lastHighlightedEl = null
+  }
+}
+
+function highlightChunk(i) {
+  clearHighlight()
+  const el = chunkElements[i]
+  if (!el) return
+  el.style.backgroundColor = 'rgba(79, 70, 229, 0.10)'
+  el.style.borderRadius = '4px'
+  el.style.transition = 'background-color 0.35s ease'
+  lastHighlightedEl = el
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
 function fetchOneChunk(text) {
@@ -94,8 +146,11 @@ async function runFrom(startIdx, session) {
     if (session !== sessionId) return
     ttsChunkIdx.value = i
     ttsState.value = 'loading'
+    highlightChunk(i)
+
     if (!chunkFetches[i]) chunkFetches[i] = fetchOneChunk(chunkTexts[i])
-    for (let p = 1; p <= 3; p++) {
+    // 6-ahead pipeline — prefetch generously to keep audio gapless
+    for (let p = 1; p <= 6; p++) {
       const ahead = i + p
       if (ahead < ttsTotalChunks.value && !chunkFetches[ahead])
         chunkFetches[ahead] = fetchOneChunk(chunkTexts[ahead])
@@ -107,6 +162,7 @@ async function runFrom(startIdx, session) {
     await playChunk(blob, i)
     if (session !== sessionId) return
   }
+  clearHighlight()
   ttsState.value = 'idle'
   ttsProgress.value = 0
   ttsChunkIdx.value = 0
@@ -121,17 +177,23 @@ function cancelCurrentChunk() {
 async function openPlayer() {
   playerOpen.value = true
   if (ttsState.value !== 'idle') return
-  const bodyChunks = splitChunks(story.value.content, 200)
-  const chunks = story.value.title ? [story.value.title, ...bodyChunks] : bodyChunks
+
+  await nextTick()
+  const { chunks, elements } = buildChunksWithDOM('.story-content', story.value.title, 300)
   if (!chunks.length) return
+
   chunkTexts = chunks
+  chunkElements = elements
   ttsTotalChunks.value = chunks.length
   ttsProgress.value = 0
   ttsChunkIdx.value = 0
   chunkFetches = new Array(chunks.length).fill(null)
+
   ensureAudioEl()
-  for (let k = 0; k < Math.min(4, chunks.length); k++)
+  // Warm up the first 6 chunks for a gapless start
+  for (let k = 0; k < Math.min(6, chunks.length); k++)
     chunkFetches[k] = fetchOneChunk(chunkTexts[k])
+
   ttsState.value = 'loading'
   const session = ++sessionId
   await runFrom(0, session)
@@ -146,6 +208,7 @@ function togglePlayPause() {
 function stopPlayback() {
   sessionId++
   cancelCurrentChunk()
+  clearHighlight()
   ttsState.value = 'idle'
   ttsProgress.value = 0
   ttsChunkIdx.value = 0
@@ -167,9 +230,11 @@ async function seekTo(fraction) {
 function closePlayer() {
   sessionId++
   cancelCurrentChunk()
+  clearHighlight()
   if (audioEl) { audioEl.src = ''; audioEl = null }
   chunkFetches = []
   chunkTexts = []
+  chunkElements = []
   ttsTotalChunks.value = 0
   ttsState.value = 'idle'
   ttsProgress.value = 0

@@ -31,29 +31,79 @@ const ttsTotalChunks = ref(0)
 const playerOpen     = ref(false)
 
 // Non-reactive internal state
-let sessionId      = 0        // incremented on each new playback/seek to invalidate old loops
-let audioEl        = null     // single reused <audio> element (avoids Safari per-element activation)
-let currentBlobUrl = null     // blob URL to revoke on cleanup
-let resolveChunk   = null     // exposes the current playChunk resolver for instant cancellation
-let chunkFetches   = []       // per-chunk fetch promises, filled lazily (3-ahead pipeline)
-let chunkTexts     = []       // text for each chunk, required for lazy fetching
+let sessionId         = 0        // incremented on each new playback/seek to invalidate old loops
+let audioEl           = null     // single reused <audio> element (avoids Safari per-element activation)
+let currentBlobUrl    = null     // blob URL to revoke on cleanup
+let resolveChunk      = null     // exposes the current playChunk resolver for instant cancellation
+let chunkFetches      = []       // per-chunk fetch promises, filled lazily (6-ahead pipeline)
+let chunkTexts        = []       // text for each chunk, required for lazy fetching
+let chunkElements     = []       // DOM element to highlight per chunk
+let lastHighlightedEl = null
 
-function splitChunks(html, maxLen = 500) {
-  const div = document.createElement('div')
-  div.innerHTML = html
-  const full = (div.textContent || div.innerText || '').trim()
+function buildChunksWithDOM(contentSelector, title, maxLen = 300) {
   const chunks = []
-  let remaining = full
-  while (remaining.length > 0) {
-    if (remaining.length <= maxLen) { chunks.push(remaining); break }
-    let cut = remaining.lastIndexOf('. ', maxLen)
-    if (cut < maxLen * 0.4) cut = remaining.lastIndexOf(' ', maxLen)
-    if (cut < 0) cut = maxLen
-    else cut += 1
-    chunks.push(remaining.slice(0, cut).trim())
-    remaining = remaining.slice(cut).trim()
+  const elements = []
+
+  if (title) { chunks.push(title); elements.push(null) }
+
+  const contentEl = document.querySelector(contentSelector)
+  if (!contentEl) return { chunks, elements }
+
+  const nodes = contentEl.querySelectorAll('p, h2, h3, h4, blockquote, li')
+  let accText = ''
+  let accEl = null
+
+  function flush() {
+    if (accText) { chunks.push(accText); elements.push(accEl); accText = ''; accEl = null }
   }
-  return chunks.filter(Boolean)
+  function addSplit(text, el) {
+    let rem = text
+    while (rem.length > 0) {
+      if (rem.length <= maxLen) { chunks.push(rem); elements.push(el); break }
+      let cut = rem.lastIndexOf('. ', maxLen)
+      if (cut < maxLen * 0.4) cut = rem.lastIndexOf(' ', maxLen)
+      if (cut < 0) cut = maxLen; else cut += 1
+      chunks.push(rem.slice(0, cut).trim()); elements.push(el)
+      rem = rem.slice(cut).trim()
+    }
+  }
+
+  for (const node of nodes) {
+    const text = (node.textContent || '').trim()
+    if (!text) continue
+    if (!accText) {
+      if (text.length > maxLen) { addSplit(text, node) }
+      else { accText = text; accEl = node }
+    } else if (accText.length + 1 + text.length <= maxLen) {
+      accText += ' ' + text
+    } else {
+      flush()
+      if (text.length > maxLen) { addSplit(text, node) }
+      else { accText = text; accEl = node }
+    }
+  }
+  flush()
+  return { chunks, elements }
+}
+
+function clearHighlight() {
+  if (lastHighlightedEl) {
+    lastHighlightedEl.style.removeProperty('background-color')
+    lastHighlightedEl.style.removeProperty('border-radius')
+    lastHighlightedEl.style.removeProperty('transition')
+    lastHighlightedEl = null
+  }
+}
+
+function highlightChunk(i) {
+  clearHighlight()
+  const el = chunkElements[i]
+  if (!el) return
+  el.style.backgroundColor = 'rgba(99, 102, 241, 0.10)'
+  el.style.borderRadius = '4px'
+  el.style.transition = 'background-color 0.35s ease'
+  lastHighlightedEl = el
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
 function fetchOneChunk(text) {
@@ -111,13 +161,13 @@ async function runFrom(startIdx, session) {
   for (let i = startIdx; i < ttsTotalChunks.value; i++) {
     if (session !== sessionId) return   // a newer session (seek/stop) took over
     ttsChunkIdx.value = i
-    ttsState.value = 'loading'          // show spinner while awaiting synthesis
+    ttsState.value = 'loading'
+    highlightChunk(i)
 
-    // Start this chunk's fetch lazily if not already in flight
     if (!chunkFetches[i]) chunkFetches[i] = fetchOneChunk(chunkTexts[i])
 
-    // 3-ahead: keep a pipeline of up to 3 chunks in-flight so playback never stalls
-    for (let p = 1; p <= 3; p++) {
+    // 6-ahead pipeline — prefetch generously for gapless playback
+    for (let p = 1; p <= 6; p++) {
       const ahead = i + p
       if (ahead < ttsTotalChunks.value && !chunkFetches[ahead])
         chunkFetches[ahead] = fetchOneChunk(chunkTexts[ahead])
@@ -128,7 +178,7 @@ async function runFrom(startIdx, session) {
 
     if (!blob) {
       console.warn(`[TTS] chunk ${i} synthesis failed — skipping`)
-      continue  // skip bad chunks instead of aborting the whole article
+      continue
     }
 
     ttsState.value = 'playing'
@@ -136,6 +186,7 @@ async function runFrom(startIdx, session) {
     if (session !== sessionId) return
   }
   // Natural end
+  clearHighlight()
   ttsState.value = 'idle'
   ttsProgress.value = 0
   ttsChunkIdx.value = 0
@@ -152,23 +203,22 @@ async function openPlayer() {
   playerOpen.value = true
   if (ttsState.value !== 'idle') return
 
-  // 200-char chunks: ~3× faster per-chunk than 500 chars — reduces the gap between segments
-  const bodyChunks = splitChunks(post.value.content, 200)
-  const chunks = post.value.title ? [post.value.title, ...bodyChunks] : bodyChunks
+  // Activate audio element synchronously before any async work — Safari autoplay policy.
+  ensureAudioEl()
+
+  await nextTick()
+  const { chunks, elements } = buildChunksWithDOM('.post-content', post.value.title, 300)
   if (!chunks.length) return
 
   chunkTexts = chunks
+  chunkElements = elements
   ttsTotalChunks.value = chunks.length
   ttsProgress.value = 0
   ttsChunkIdx.value = 0
   chunkFetches = new Array(chunks.length).fill(null)
 
-  // Activate audio element NOW, synchronously in the gesture handler,
-  // before any async work begins — required by Safari's autoplay policy.
-  ensureAudioEl()
-
-  // Warm up the first 4 chunks immediately so the pipeline is full before playback starts.
-  for (let k = 0; k < Math.min(4, chunks.length); k++)
+  // Warm up the first 6 chunks for a gapless start
+  for (let k = 0; k < Math.min(6, chunks.length); k++)
     chunkFetches[k] = fetchOneChunk(chunkTexts[k])
 
   ttsState.value = 'loading'
@@ -184,8 +234,9 @@ function togglePlayPause() {
 
 // Stop: halt playback and reset to beginning — player stays open
 function stopPlayback() {
-  sessionId++             // invalidate running loop
+  sessionId++
   cancelCurrentChunk()
+  clearHighlight()
   ttsState.value = 'idle'
   ttsProgress.value = 0
   ttsChunkIdx.value = 0
@@ -213,9 +264,11 @@ async function seekTo(fraction) {
 function closePlayer() {
   sessionId++
   cancelCurrentChunk()
-  if (audioEl) { audioEl.src = ''; audioEl = null }  // release element on close
+  clearHighlight()
+  if (audioEl) { audioEl.src = ''; audioEl = null }
   chunkFetches = []
   chunkTexts = []
+  chunkElements = []
   ttsTotalChunks.value = 0
   ttsState.value = 'idle'
   ttsProgress.value = 0

@@ -234,9 +234,7 @@ def _upload_to_media(buf: bytes, mime: str, alt: str) -> str | None:
 
 
 _ENHANCE_MODELS = [
-    "gemini-3.1-flash-image",
-    "gemini-2.5-flash-image",
-    "gemini-3-pro-image",
+    "gemini-2.0-flash-preview-image-generation",
 ]
 
 _ENHANCE_PROMPT = (

@@ -7,40 +7,40 @@ from ..state import AgentState
 
 CATEGORIES = [
     {
-        "name": "AI",
+        "name": "AI & Machine Learning",
         "pool": "ai",
-        "research_style": "AI and machine learning",
+        "research_style": "artificial intelligence and machine learning",
         "discover_prompt": lambda d: (
             f"Today is {d}. Search the web for the single most exciting or surprising AI / machine "
             "learning discovery, breakthrough, or development from the past 7 days. Consider: new model "
             "releases with surprising capabilities, landmark research papers, safety/alignment "
-            "breakthroughs, or industry-shaking events. Pick ONE topic — the one with the most "
-            "discussion, surprise value, or significance. Return: the exact topic name, why it's buzzing "
-            "right now, 3–5 key facts with specific numbers/names, and 2–3 direct source URLs if available."
+            "breakthroughs, or industry-shaking events. Focus on educational depth — explain WHY it "
+            "matters and HOW it works. Return: the exact topic, why it's significant, 4–6 key technical "
+            "facts with specific numbers/names, and 2–3 direct source URLs."
         ),
     },
     {
-        "name": "Technology",
-        "pool": "general",
-        "research_style": "technology and engineering",
+        "name": "Quantum Computing",
+        "pool": "science",
+        "research_style": "quantum computing and quantum physics",
         "discover_prompt": lambda d: (
-            f"Today is {d}. Search the web for the single most interesting technology development from "
-            "the past 7 days — outside of pure AI/ML. Consider: major software releases, hardware "
-            "breakthroughs, cybersecurity events, space tech, quantum computing, biotech, or big tech "
-            "news. Pick ONE topic with the most buzz or real-world impact. Return: the exact topic, why "
-            "it matters, 3–5 concrete facts, and 2–3 source URLs."
+            f"Today is {d}. Search the web for the most interesting recent development in quantum "
+            "computing, quantum cryptography, or quantum physics (past 3 months). Consider: new qubit "
+            "milestones, error-correction breakthroughs, quantum supremacy experiments, or real-world "
+            "quantum applications. Return: the specific development, the physics behind it (superposition, "
+            "entanglement, decoherence), 4–6 concrete facts, and source URLs."
         ),
     },
     {
-        "name": "Science",
-        "pool": "general",
-        "research_style": "science and research",
+        "name": "Relativity & Spacetime",
+        "pool": "science",
+        "research_style": "relativity, spacetime, and cosmology",
         "discover_prompt": lambda d: (
-            f"Today is {d}. Search the web for the most fascinating scientific discovery or research "
-            "finding published in the past 2 weeks. Consider: physics, astronomy, biology, climate "
-            "science, medicine, or any field where researchers found something genuinely surprising. "
-            "Pick ONE discovery. Return: the finding, the research team/institution, 3–5 key facts "
-            "with numbers, and source URLs."
+            f"Today is {d}. Pick a fascinating topic related to Einstein's theories of relativity, "
+            "spacetime, black holes, gravitational waves, time dilation, or cosmology. This can be a "
+            "recent discovery, a classic concept explained in modern context, or a surprising consequence "
+            "of relativity that most people don't know. Return: the specific topic, the physics "
+            "explained accessibly, 4–6 concrete facts or phenomena, and reference sources."
         ),
     },
     {
@@ -50,8 +50,9 @@ CATEGORIES = [
         "discover_prompt": lambda d: (
             f"Today is {d}. Pick a fascinating, lesser-known historical event, figure, or turning point "
             "that most people don't know about — something that genuinely changed the world or reveals "
-            "a surprising truth about the past. Return: the specific topic, why it's surprising or "
-            "underappreciated, 3–5 concrete historical facts, and reference sources."
+            "a surprising truth about the past. Prefer stories with scientific or technological relevance. "
+            "Return: the specific topic, why it's surprising or underappreciated, 4–6 concrete historical "
+            "facts, and reference sources."
         ),
     },
     {
@@ -60,20 +61,21 @@ CATEGORIES = [
         "research_style": "travel and destinations",
         "discover_prompt": lambda d: (
             f"Today is {d}. Search the web for the most buzzworthy travel destination, hidden gem, or "
-            "travel experience gaining attention right now. Return: the specific destination or trend, "
-            "why it's getting buzz, 3–5 concrete facts, and source URLs."
+            "educational travel experience gaining attention right now. Focus on destinations with "
+            "scientific, historical, or cultural depth worth learning about. Return: the specific "
+            "destination or trend, why it's educational and interesting, 4–6 concrete facts, and URLs."
         ),
     },
     {
-        "name": "Knowledge",
+        "name": "Educational",
         "pool": "general",
-        "research_style": "knowledge and ideas",
+        "research_style": "educational concepts, ideas, and mental models",
         "discover_prompt": lambda d: (
-            f"Today is {d}. Pick one genuinely fascinating concept, phenomenon, or 'how does that "
-            "actually work' question from any field — psychology, economics, mathematics, philosophy, "
-            "linguistics, or everyday life. Choose something where the real answer surprises most "
-            "people. Return: the specific concept, what makes it surprising, 3–5 concrete facts or "
-            "examples, and reference sources."
+            f"Today is {d}. Pick one genuinely fascinating educational concept, scientific phenomenon, "
+            "or 'how does that actually work' question — from psychology, economics, mathematics, "
+            "philosophy, linguistics, biology, or everyday life. Choose something where the real answer "
+            "surprises most people and has deep educational value. Return: the specific concept, what "
+            "makes it surprising, 4–6 concrete facts or examples, and reference sources."
         ),
     },
 ]

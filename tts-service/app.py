@@ -1,46 +1,48 @@
 import io
+import os
 import threading
 from functools import lru_cache
-import numpy as np
-import scipy.io.wavfile as wavfile
-import torch
-from flask import Flask, jsonify, request, send_file
-from transformers import AutoTokenizer, VitsModel
 
-MODEL = 'facebook/mms-tts-eng'
+import numpy as np
+import soundfile as sf
+from flask import Flask, jsonify, request, send_file
+from kokoro import KPipeline
+
+VOICE = os.getenv('TTS_VOICE', 'af_heart')  # warm, emotional storytelling voice
+SPEED = float(os.getenv('TTS_SPEED', '1.0'))
+
 app = Flask(__name__)
 
-print(f'Loading {MODEL}...', flush=True)
-_tokenizer = AutoTokenizer.from_pretrained(MODEL)
-_model = VitsModel.from_pretrained(MODEL)
-_model.eval()
-# PyTorch VITS inference is not thread-safe — one inference at a time.
-# Gunicorn handles concurrent HTTP connections; this lock serialises the GPU/CPU work.
+print(f'Loading Kokoro-82M (voice: {VOICE})...', flush=True)
+_pipeline = KPipeline(lang_code='a')  # American English
 _lock = threading.Lock()
 print('TTS model ready.', flush=True)
 
 
-@lru_cache(maxsize=128)
+@lru_cache(maxsize=256)
 def _synthesize(text: str) -> bytes:
-    """Synthesize text → WAV bytes. Result is cached so replays and seeks are instant."""
+    """Synthesize text → 24kHz WAV via Kokoro-82M. Cached for instant replays."""
     with _lock:
-        inputs = _tokenizer(text, return_tensors='pt')
-        with torch.no_grad():
-            waveform = _model(**inputs).waveform.squeeze().numpy()
-    rate = _model.config.sampling_rate
+        audio_chunks = []
+        for _, _, audio in _pipeline(text, voice=VOICE, speed=SPEED):
+            audio_chunks.append(audio)
+    if not audio_chunks:
+        return b''
+    full_audio = np.concatenate(audio_chunks)
     buf = io.BytesIO()
-    wavfile.write(buf, rate, (waveform * 32767).astype(np.int16))
+    sf.write(buf, full_audio, 24000, format='WAV')
     return buf.getvalue()
 
 
 @app.route('/health')
 def health():
-    return jsonify({'status': 'ok'})
+    return jsonify({'status': 'ok', 'model': 'Kokoro-82M', 'voice': VOICE})
 
 
 @app.route('/tts', methods=['POST'])
 def synthesize():
-    text = (request.get_json(silent=True) or {}).get('text', '').strip()
+    body = request.get_json(silent=True) or {}
+    text = body.get('text', '').strip()
     if not text:
         return jsonify({'error': 'text required'}), 400
     try:
@@ -51,5 +53,4 @@ def synthesize():
 
 
 if __name__ == '__main__':
-    # Dev only — production uses gunicorn via start.sh
     app.run(host='0.0.0.0', port=5050, threaded=True)
