@@ -15,9 +15,43 @@ export class SeedService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    await this.migrateCategories();
     const count = await this.catRepo.count();
     if (count > 0) return;
     await this.seed();
+  }
+
+  // Rename old categories to the new physics/AI theme and add Relativity if missing.
+  // Runs on every startup — safe to call multiple times (idempotent).
+  async migrateCategories() {
+    const renames = [
+      { oldSlug: 'technology', name: 'AI/ML',       slug: 'ai-ml',       color: '#6366F1', icon: '🤖',  description: 'Deep explorations of artificial intelligence, machine learning, neural networks, and the emerging world of thinking machines' },
+      { oldSlug: 'science',    name: 'Quantum',      slug: 'quantum',     color: '#8B5CF6', icon: '⚛️',  description: 'Quantum mechanics, quantum computing, and the strange world below the classical limit — from the ultraviolet catastrophe to entanglement' },
+      { oldSlug: 'knowledge',  name: 'Educational',  slug: 'educational', color: '#F59E0B', icon: '📚',  description: 'Clear, animated explanations of the most beautiful ideas in physics and computing, designed for curious laypeople' },
+    ];
+    for (const r of renames) {
+      const cat = await this.catRepo.findOne({ where: { slug: r.oldSlug } });
+      if (cat) {
+        await this.catRepo.update(cat.id, { name: r.name, slug: r.slug, color: r.color, icon: r.icon, description: r.description });
+        console.log(`Migrated category: ${r.oldSlug} → ${r.slug}`);
+      }
+    }
+    // Add Relativity if it doesn't already exist
+    const hasRelativity = await this.catRepo.findOne({ where: { slug: 'relativity' } });
+    if (!hasRelativity) {
+      await this.catRepo.save({ name: 'Relativity', slug: 'relativity', color: '#0EA5E9', icon: '🌌', description: "Einstein's theories of special and general relativity, spacetime, black holes, time dilation, and the large-scale structure of the cosmos" });
+      console.log('Added category: Relativity');
+    }
+    // Update Travel description to science-travel focus
+    const travel = await this.catRepo.findOne({ where: { slug: 'travel' } });
+    if (travel && !travel.description?.includes('CERN')) {
+      await this.catRepo.update(travel.id, { description: "Journeys to the world's most scientifically fascinating places — CERN, observatories, quantum labs, and destinations where breakthroughs happen", color: '#10B981', icon: '✈️' });
+    }
+    // Update History description to science history
+    const history = await this.catRepo.findOne({ where: { slug: 'history' } });
+    if (history && !history.description?.includes('quantum')) {
+      await this.catRepo.update(history.id, { description: 'The history of quantum mechanics, relativity, computing, and the scientists who fundamentally changed our understanding of the universe', color: '#92400E', icon: '🏛️' });
+    }
   }
 
   async seed() {
