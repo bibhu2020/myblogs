@@ -16,7 +16,7 @@ jobs:
             --max-time 30 \
             --retry 2 \
             --retry-delay 5 \
-            "https://mishrabp-myblogs.hf.space/")
+            "https://mishrabp-meridian.hf.space/")
           echo "HTTP status: $STATUS"
           if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
             echo "Space is alive."

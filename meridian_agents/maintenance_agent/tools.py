@@ -7,7 +7,7 @@ from pathlib import Path
 
 import requests
 
-SERVER_BASE = os.getenv("SERVER_BASE", "https://mishrabP-myblogs.hf.space")
+SERVER_BASE = os.getenv("SERVER_BASE", "https://mishrabp-meridian.hf.space")
 REPO_ROOT = str(Path(__file__).parent.parent.parent)
 
 

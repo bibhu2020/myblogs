@@ -218,7 +218,7 @@ def _generate_image(
 
 def generate_images_node(state: AgentState) -> dict:
     category = state["category_name"]
-    server_base = os.getenv("SERVER_BASE", "https://mishrabP-myblogs.hf.space")
+    server_base = os.getenv("SERVER_BASE", "https://mishrabp-meridian.hf.space")
 
     # Featured image
     is_travel = category == "Travel"

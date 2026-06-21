@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import requests
 
-SERVER_BASE = os.getenv("SERVER_BASE", "https://mishrabP-myblogs.hf.space")
+SERVER_BASE = os.getenv("SERVER_BASE", "https://mishrabp-meridian.hf.space")
 
 
 def _now_iso() -> str:
