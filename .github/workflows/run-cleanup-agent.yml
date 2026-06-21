@@ -1,0 +1,47 @@
+name: Run Cleanup Agent
+
+on:
+  schedule:
+    # Run daily at 2:00 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Delete content older than this many days'
+        required: false
+        default: '30'
+      dry_run:
+        description: 'Dry run (preview only, no deletions)'
+        required: false
+        default: 'false'
+
+jobs:
+  cleanup:
+    name: Delete posts and stories older than 30 days
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r meridian_agents/requirements.txt
+
+      - name: Run cleanup agent
+        env:
+          BLOG_API_URL: ${{ secrets.BLOG_API_URL || 'https://mishrabp-myblogs.hf.space/api' }}
+          MCP_API_KEY: ${{ secrets.MCP_API_KEY }}
+        run: |
+          DAYS="${{ github.event.inputs.days || '30' }}"
+          DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
+
+          if [ "$DRY_RUN" = "true" ]; then
+            python3 -m meridian_agents.cleanup --days "$DAYS" --dry-run
+          else
+            python3 -m meridian_agents.cleanup --days "$DAYS"
+          fi

@@ -22,46 +22,60 @@ export class SeedService implements OnModuleInit {
 
   async seed() {
     // Categories
-    const tech     = await this.catRepo.save({ name: 'Technology', slug: 'technology', description: 'Latest in tech, AI, and software development',                         color: '#3B82F6', icon: '💻' });
-    const travel   = await this.catRepo.save({ name: 'Travel',     slug: 'travel',     description: 'Adventures, destinations, and travel guides',                          color: '#10B981', icon: '✈️' });
-    const history  = await this.catRepo.save({ name: 'History',    slug: 'history',    description: 'Stories of civilizations, empires, and the events that shaped humanity', color: '#92400E', icon: '🏛️' });
-    const science  = await this.catRepo.save({ name: 'Science',    slug: 'science',    description: 'Discoveries, breakthroughs, and the forces that govern our universe',    color: '#7C3AED', icon: '🔬' });
-    const knowledge= await this.catRepo.save({ name: 'Knowledge',  slug: 'knowledge',  description: 'Ideas, mental models, and frameworks for thinking and learning better',  color: '#DC2626', icon: '📚' });
+    const aiml      = await this.catRepo.save({ name: 'AI/ML',       slug: 'ai-ml',       description: 'Deep explorations of artificial intelligence, machine learning, neural networks, and the emerging world of thinking machines',                   color: '#6366F1', icon: '🤖' });
+    const travel    = await this.catRepo.save({ name: 'Travel',       slug: 'travel',       description: 'Journeys to the world\'s most scientifically fascinating places — CERN, observatories, quantum labs, and destinations where breakthroughs happen', color: '#10B981', icon: '✈️' });
+    const history   = await this.catRepo.save({ name: 'History',      slug: 'history',      description: 'The history of quantum mechanics, relativity, computing, and the scientists who fundamentally changed our understanding of the universe',            color: '#92400E', icon: '🏛️' });
+    const quantum   = await this.catRepo.save({ name: 'Quantum',      slug: 'quantum',      description: 'Quantum mechanics, quantum computing, and the strange world below the classical limit — from the ultraviolet catastrophe to entanglement',          color: '#8B5CF6', icon: '⚛️' });
+    const educational = await this.catRepo.save({ name: 'Educational', slug: 'educational', description: 'Clear, animated explanations of the most beautiful ideas in physics and computing, designed for curious laypeople',                                color: '#F59E0B', icon: '📚' });
+    const relativity  = await this.catRepo.save({ name: 'Relativity',  slug: 'relativity',  description: 'Einstein\'s theories of special and general relativity, spacetime, black holes, time dilation, and the large-scale structure of the cosmos',       color: '#0EA5E9', icon: '🌌' });
 
     // Tags
     const tags = await this.tagRepo.save([
-      { name: 'JavaScript', slug: 'javascript' },
-      { name: 'TypeScript', slug: 'typescript' },
+      // AI/ML
       { name: 'AI', slug: 'ai' },
-      { name: 'Web Dev', slug: 'web-dev' },
-      { name: 'React', slug: 'react' },
-      { name: 'Vue.js', slug: 'vuejs' },
-      { name: 'NestJS', slug: 'nestjs' },
-      { name: 'Docker', slug: 'docker' },
+      { name: 'Machine Learning', slug: 'machine-learning' },
+      { name: 'Neural Networks', slug: 'neural-networks' },
+      { name: 'LLM', slug: 'llm' },
+      { name: 'Generative AI', slug: 'generative-ai' },
+      // Quantum
+      { name: 'Quantum Mechanics', slug: 'quantum-mechanics' },
+      { name: 'Quantum Computing', slug: 'quantum-computing' },
+      { name: 'Entanglement', slug: 'entanglement' },
+      { name: 'Superposition', slug: 'superposition' },
+      { name: 'Wave Function', slug: 'wave-function' },
+      // Relativity
+      { name: 'Relativity', slug: 'relativity' },
+      { name: 'Spacetime', slug: 'spacetime' },
+      { name: 'Black Holes', slug: 'black-holes' },
+      { name: 'Time Dilation', slug: 'time-dilation' },
+      { name: 'Einstein', slug: 'einstein' },
+      // Travel
+      { name: 'CERN', slug: 'cern' },
+      { name: 'Observatory', slug: 'observatory' },
+      { name: 'Photography', slug: 'photography' },
       { name: 'Asia', slug: 'asia' },
       { name: 'Europe', slug: 'europe' },
-      { name: 'Adventure', slug: 'adventure' },
-      { name: 'Photography', slug: 'photography' },
-      { name: 'Budget Travel', slug: 'budget-travel' },
+      // Educational / Physics
+      { name: 'Photoelectric Effect', slug: 'photoelectric-effect' },
+      { name: 'Blackbody Radiation', slug: 'blackbody-radiation' },
+      { name: 'Double Slit', slug: 'double-slit' },
+      { name: 'Physics', slug: 'physics' },
+      { name: 'Explainer', slug: 'explainer' },
+      // History of Science
+      { name: 'History of Science', slug: 'history-of-science' },
+      { name: 'Planck', slug: 'planck' },
+      { name: 'Bohr', slug: 'bohr' },
+      // Keep some legacy ones used by existing posts
+      { name: 'JavaScript', slug: 'javascript' },
+      { name: 'NestJS', slug: 'nestjs' },
+      { name: 'Docker', slug: 'docker' },
+      { name: 'Space', slug: 'space' },
       { name: 'Food', slug: 'food' },
-      // History
+      { name: 'Adventure', slug: 'adventure' },
+      { name: 'Web Dev', slug: 'web-dev' },
       { name: 'Ancient World', slug: 'ancient-world' },
       { name: 'Medieval', slug: 'medieval' },
-      { name: 'Modern History', slug: 'modern-history' },
-      { name: 'Archaeology', slug: 'archaeology' },
       { name: 'Civilization', slug: 'civilization' },
-      // Science
-      { name: 'Physics', slug: 'physics' },
-      { name: 'Biology', slug: 'biology' },
-      { name: 'Space', slug: 'space' },
-      { name: 'Genetics', slug: 'genetics' },
-      { name: 'Quantum', slug: 'quantum' },
-      // Knowledge
-      { name: 'Learning', slug: 'learning' },
-      { name: 'Productivity', slug: 'productivity' },
-      { name: 'Philosophy', slug: 'philosophy' },
-      { name: 'Psychology', slug: 'psychology' },
-      { name: 'Mental Models', slug: 'mental-models' },
     ]);
 
     const tagMap: Record<string, Tag> = Object.fromEntries(tags.map(t => [t.slug, t]));
@@ -104,7 +118,7 @@ export class SeedService implements OnModuleInit {
         authorName: 'Site Admin',
         readTime: 5,
         views: 1247,
-        category: tech,
+        category: aiml,
         tags: [tagMap['ai'], tagMap['web-dev'], tagMap['javascript']],
       },
       {
@@ -151,8 +165,8 @@ await app.listen();</code></pre>
         authorName: 'Site Admin',
         readTime: 8,
         views: 892,
-        category: tech,
-        tags: [tagMap['nestjs'], tagMap['typescript'], tagMap['docker']],
+        category: aiml,
+        tags: [tagMap['nestjs'], tagMap['ai'], tagMap['docker']],
       },
       {
         title: 'Vue 3 Composition API: Why It Changes Everything',
@@ -203,8 +217,8 @@ const { count, increment } = useCounter(10)
         authorName: 'Site Admin',
         readTime: 6,
         views: 654,
-        category: tech,
-        tags: [tagMap['vuejs'], tagMap['javascript'], tagMap['web-dev']],
+        category: aiml,
+        tags: [tagMap['javascript'], tagMap['web-dev'], tagMap['ai']],
       },
     ]);
 
@@ -321,7 +335,7 @@ const { count, increment } = useCounter(10)
         readTime: 12,
         views: 1876,
         category: travel,
-        tags: [tagMap['asia'], tagMap['budget-travel'], tagMap['adventure'], tagMap['food']],
+        tags: [tagMap['asia'], tagMap['adventure'], tagMap['food'], tagMap['photography']],
       },
       {
         title: 'The Amalfi Coast: Italy\'s Most Dramatic Coastline',
@@ -392,7 +406,7 @@ const { count, increment } = useCounter(10)
         featuredImage: 'https://images.unsplash.com/photo-1548013146-72479768bada?w=1200&q=80',
         status: PostStatus.PUBLISHED, authorId: 1, authorName: 'Site Admin',
         readTime: 9, views: 876, category: history,
-        tags: [tagMap['ancient-world'], tagMap['civilization'], tagMap['archaeology']],
+        tags: [tagMap['ancient-world'], tagMap['civilization'], tagMap['history-of-science']],
       },
       {
         title: 'The Black Death: How a Pandemic Reshaped Medieval Europe',
@@ -402,7 +416,7 @@ const { count, increment } = useCounter(10)
         featuredImage: 'https://images.unsplash.com/photo-1578496480157-697fc14d2e55?w=1200&q=80',
         status: PostStatus.PUBLISHED, authorId: 1, authorName: 'Site Admin',
         readTime: 10, views: 1421, category: history,
-        tags: [tagMap['medieval'], tagMap['modern-history'], tagMap['civilization']],
+        tags: [tagMap['medieval'], tagMap['civilization'], tagMap['history-of-science']],
       },
     ]);
 
@@ -419,8 +433,8 @@ For the Sun: r_s ≈ 3 km
 For a 10 solar-mass black hole: r_s ≈ 30 km</code></pre><h2>Hawking Radiation</h2><p>In 1974, Stephen Hawking predicted that black holes slowly emit thermal radiation and lose mass over time. At the event horizon, one particle of a virtual pair can fall in while the other escapes — carrying energy away from the black hole. A stellar black hole of 10 solar masses would take roughly 2 × 10⁶⁷ years to evaporate, far longer than the current age of the universe.</p><blockquote><p>In April 2019, the Event Horizon Telescope released the first image of a black hole — the supermassive black hole at the center of galaxy M87. Einstein himself had doubted they could physically exist. The universe had other ideas.</p></blockquote>`,
         featuredImage: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=1200&q=80',
         status: PostStatus.PUBLISHED, authorId: 1, authorName: 'Site Admin',
-        readTime: 9, views: 2089, category: science,
-        tags: [tagMap['physics'], tagMap['space'], tagMap['quantum']],
+        readTime: 9, views: 2089, category: quantum,
+        tags: [tagMap['physics'], tagMap['space'], tagMap['quantum-mechanics']],
       },
       {
         title: 'CRISPR Explained: The Gene Editing Revolution That Could Change Medicine',
@@ -429,8 +443,8 @@ For a 10 solar-mass black hole: r_s ≈ 30 km</code></pre><h2>Hawking Radiation<
         content: `<h2>From Bacterial Immunity to Nobel Prize</h2><p>In the 1980s and 1990s, microbiologists noticed strange repetitive sequences in bacterial DNA — Clustered Regularly Interspaced Short Palindromic Repeats, or CRISPR. It turned out they were bacterial memory: stored snippets of defeated viruses. In 2012, Jennifer Doudna and Emmanuelle Charpentier showed this system could be repurposed as a precise gene-editing tool. In 2020, they received the Nobel Prize in Chemistry.</p><h2>How It Works</h2><ol><li>A guide RNA is designed to match the target sequence in the genome</li><li>The gRNA-Cas9 complex searches the genome for a matching sequence</li><li>When found, Cas9 cuts both strands of the DNA double helix</li><li>The cell repairs the break — either deleting base pairs or accepting new genetic material</li></ol><blockquote><p>CRISPR edits DNA with the precision of a word processor's find-and-replace — but for the three billion base pairs of the human genome.</p></blockquote><h2>What It Has Already Achieved</h2><p>In December 2023, the FDA approved Casgevy — the first CRISPR-based medicine, treating sickle cell disease. Early trial results showed patients essentially cured: free from the severe pain crises that had defined their lives. CRISPR-edited crops are also on the market: disease-resistant wheat, higher-yield tomatoes, mushrooms that don't brown.</p><h2>The Ethical Frontier</h2><p>In 2018, Chinese scientist He Jiankui shocked the world by announcing births of twins whose embryonic DNA he had edited with CRISPR. He was sentenced to three years in prison. The questions CRISPR forces remain hard: where is the line between treating disease and enhancement? Who should access gene therapies priced at $2.2 million per patient?</p>`,
         featuredImage: 'https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=1200&q=80',
         status: PostStatus.PUBLISHED, authorId: 1, authorName: 'Site Admin',
-        readTime: 8, views: 1567, category: science,
-        tags: [tagMap['biology'], tagMap['genetics'], tagMap['physics']],
+        readTime: 8, views: 1567, category: quantum,
+        tags: [tagMap['physics'], tagMap['explainer'], tagMap['ai']],
       },
       {
         title: 'Quantum Entanglement: When Particles Share a Fate Across Any Distance',
@@ -439,8 +453,8 @@ For a 10 solar-mass black hole: r_s ≈ 30 km</code></pre><h2>Hawking Radiation<
         content: `<h2>Einstein Called It "Spooky Action at a Distance"</h2><p>In 1935, Einstein, Podolsky, and Rosen published a paper intended to show that quantum mechanics must be incomplete. They described particles whose quantum states are correlated regardless of distance. Einstein believed there must be "hidden variables" — pre-set properties that determined outcomes in advance. He was wrong. Experiment has proven it, definitively and repeatedly.</p><h2>What Entanglement Actually Is</h2><p>Two entangled photons, each in a superposition of vertical or horizontal polarization. When you measure one and find it vertically polarized, you instantly know its partner will be horizontally polarized — even if it's across the galaxy. Bell's theorem (1964) and subsequent experiments (the 2022 Nobel Prize-winning work of Alain Aspect, John Clauser, and Anton Zeilinger) proved that no hidden variable explanation can account for the observed correlations.</p><h2>Does This Allow Faster-Than-Light Communication?</h2><p>No. When you measure your entangled particle, you get a random result. You cannot control the outcome. The correlation is only visible after-the-fact comparison via a classical channel, limited to the speed of light. Special relativity remains intact.</p><h2>Real-World Applications</h2><p>Entanglement enables quantum key distribution — cryptographic methods where any eavesdropping attempt is physically detectable. Quantum computers use entangled qubits to perform certain calculations exponentially faster than classical computers. Shor's algorithm (1994) demonstrated a sufficiently large quantum computer could factor large numbers efficiently — breaking RSA encryption.</p><blockquote><p>Quantum mechanics is not only stranger than you suppose; it is stranger than you can suppose.</p></blockquote>`,
         featuredImage: 'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=1200&q=80',
         status: PostStatus.PUBLISHED, authorId: 1, authorName: 'Site Admin',
-        readTime: 10, views: 1892, category: science,
-        tags: [tagMap['physics'], tagMap['quantum'], tagMap['space']],
+        readTime: 10, views: 1892, category: quantum,
+        tags: [tagMap['physics'], tagMap['quantum-mechanics'], tagMap['entanglement']],
       },
     ]);
 
@@ -453,8 +467,8 @@ For a 10 solar-mass black hole: r_s ≈ 30 km</code></pre><h2>Hawking Radiation<
         content: `<h2>The Four Steps</h2><p>Richard Feynman won the Nobel Prize in Physics in 1965. Colleagues noted something unusual: he seemed to understand physics at an almost physical, intuitive level. His secret was a specific approach to learning that treats understanding as binary — either you can explain it simply, or you don't understand it yet.</p><h3>Step 1: Choose a Concept and Study It</h3><p>Study it using primary sources. Read the chapter, watch the lecture, work through the examples.</p><h3>Step 2: Teach It to a Child</h3><p>Write the concept's name at the top of a blank page. Explain it in plain language as if teaching someone with no background. No jargon allowed.</p><blockquote><p>"If you can't explain it simply, you don't understand it well enough."</p></blockquote><h3>Step 3: Identify Gaps and Go Back to Source</h3><p>Wherever your explanation broke down — wherever you wrote "and somehow this leads to..." — return to your source material. You've identified precisely what you don't understand.</p><h3>Step 4: Simplify and Use Analogies</h3><p>Once you can explain something clearly, make it more concise and vivid. Find analogies — comparisons to things your student already knows. Feynman was a master: electrical resistance as water flowing through a narrow pipe; quantum amplitude as a rotating arrow.</p><h2>Why This Works</h2><p>The Feynman Technique forces you to confront the difference between recognition and recall. Reading triggers recognition — things feel comprehensible. But genuine understanding requires recall — reconstructing the concept from scratch. Teaching forces recall. It also eliminates the "illusion of explanatory depth" — the well-documented bias where people systematically overestimate how well they understand complex systems.</p>`,
         featuredImage: 'https://images.unsplash.com/photo-1456406644174-8ddd4cd52a06?w=1200&q=80',
         status: PostStatus.PUBLISHED, authorId: 1, authorName: 'Site Admin',
-        readTime: 7, views: 3241, category: knowledge,
-        tags: [tagMap['learning'], tagMap['psychology'], tagMap['philosophy']],
+        readTime: 7, views: 3241, category: educational,
+        tags: [tagMap['explainer'], tagMap['physics'], tagMap['history-of-science']],
       },
       {
         title: "Charlie Munger's Mental Models: A Framework for Clearer Thinking",
@@ -463,8 +477,8 @@ For a 10 solar-mass black hole: r_s ≈ 30 km</code></pre><h2>Hawking Radiation<
         content: `<h2>The Idea</h2><p>Charlie Munger, Warren Buffett's partner at Berkshire Hathaway, believes most people think too narrowly — they apply one field's tools to every problem. He calls this the "man with a hammer" problem. His solution is a "latticework of mental models" — the most powerful ideas from across multiple disciplines, applied as the situation demands.</p><blockquote><p>"You must know the big ideas in the big disciplines and use them routinely. All the time. In combination." — Charlie Munger</p></blockquote><h2>The Most Powerful Models</h2><h3>Compound Interest (Mathematics)</h3><p>Compounding describes any situation where growth builds on prior growth: knowledge, relationships, skills. The implication: start earlier, be patient, never interrupt compounding unnecessarily.</p><h3>Critical Mass (Physics)</h3><p>The minimum amount needed for a self-sustaining reaction. Applies to: social network growth, skill acquisition, organizational culture. Effort below critical mass is often wasted; above it, things suddenly accelerate.</p><h3>Incentive-Caused Bias (Psychology)</h3><p>People reliably rationalize behaviors that serve their interests, largely unconsciously. As Munger puts it: "Never ask a barber if you need a haircut." Always ask: what are the incentives of the people involved?</p><h3>Regression to the Mean (Statistics)</h3><p>Extreme outcomes tend to be followed by less extreme outcomes, because extreme outcomes are partly caused by extreme luck. Failing to account for this causes systematic errors in evaluation and prediction.</p><h2>How to Build Your Latticework</h2><ol><li>Read broadly across disciplines — history, biology, physics, psychology, economics</li><li>Identify the core idea each field has discovered</li><li>Practice applying models outside their home domain</li><li>Build your list explicitly — write down the models and review them</li></ol>`,
         featuredImage: 'https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=1200&q=80',
         status: PostStatus.PUBLISHED, authorId: 1, authorName: 'Site Admin',
-        readTime: 8, views: 2789, category: knowledge,
-        tags: [tagMap['mental-models'], tagMap['philosophy'], tagMap['learning']],
+        readTime: 8, views: 2789, category: educational,
+        tags: [tagMap['explainer'], tagMap['physics'], tagMap['ai']],
       },
       {
         title: 'Deep Work: Achieving Extraordinary Focus in a Distracted World',
@@ -473,8 +487,8 @@ For a 10 solar-mass black hole: r_s ≈ 30 km</code></pre><h2>Hawking Radiation<
         content: `<h2>The Problem</h2><p>Knowledge workers today face a paradox: we have access to more information and more powerful tools than any previous generation, yet it's harder than ever to produce work of genuine depth. Email, Slack, meetings, and social media have created an environment where sustained concentration is increasingly rare — and increasingly valuable.</p><h2>Deep Work vs Shallow Work</h2><p>Deep work: professional activities performed in distraction-free concentration that push your cognitive capabilities to their limit. Shallow work: non-cognitively demanding, logistical tasks often performed while distracted — email, scheduling, routine meetings.</p><blockquote><p>A deep work session for a programmer might produce an elegant algorithm that would take a week of shallow, interrupted work. A writer doing deep work for four hours might produce the same quality prose that would take three fragmented days otherwise.</p></blockquote><h2>The Four Philosophies</h2><ul><li><strong>Monastic</strong> — Eliminate all shallow obligations (Donald Knuth has no email address)</li><li><strong>Bimodal</strong> — Divide time into deep and shallow periods (Bill Gates's "Think Weeks")</li><li><strong>Rhythmic</strong> — Block the same hours every day for focused work (most practical for most people)</li><li><strong>Journalistic</strong> — Switch into deep work whenever a block of time appears (requires practice)</li></ul><h2>The 4-Hour Limit</h2><p>Deliberate practice research suggests experts rarely sustain more than four hours of intense focus per day. You don't need eight hours of deep work. You need four good hours, protected from distraction, done consistently. A person who produces four hours of genuinely focused work daily will, over months and years, compound their skills and output in ways not available to someone doing the same clock hours but fragmented across constant interruptions.</p>`,
         featuredImage: 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=1200&q=80',
         status: PostStatus.PUBLISHED, authorId: 1, authorName: 'Site Admin',
-        readTime: 9, views: 3890, category: knowledge,
-        tags: [tagMap['productivity'], tagMap['learning'], tagMap['mental-models']],
+        readTime: 9, views: 3890, category: educational,
+        tags: [tagMap['explainer'], tagMap['ai'], tagMap['machine-learning']],
       },
     ]);
 
