@@ -77,6 +77,17 @@ CONTENT RULES:
 - Use pull quotes from real people (from the research) inside <blockquote> tags
 - Add code snippets with <pre><code class="language-X"> only if the topic genuinely involves code
 
+TTS WRITING STYLE (this content is read aloud by an AI voice as an educational lecture):
+- Open each major section with a rhetorical question or a short punchy statement that hooks the ear
+- Use transitional phrases that work spoken aloud: "Now, here's where it gets interesting.",
+  "Let's think about what this actually means.", "Notice something important here."
+- Introduce technical terms with an immediate plain-English definition in the same sentence
+- Keep sentences varied: short ones land key points, longer ones build context — never three long ones in a row
+- Use commas and em dashes (—) deliberately to create natural breath pauses for the voice
+- Avoid parenthetical asides in brackets; make them separate sentences instead
+- Write numbers and acronyms to be spoken: "ninety-three million miles" not "93M miles";
+  spell out "A.I." or "artificial intelligence" not just "AI" on first use
+
 IMAGE PLACEHOLDERS:
 Place 4–6 image placeholders throughout using this EXACT format (on its own line):
 [[IMAGE: vivid visual description of what the image should show — style, subject, composition, mood]]
