@@ -48,10 +48,16 @@ _REGION_FEEDS: dict[str, list[tuple[str, str]]] = {
         ("The Hindu Odisha", "https://www.thehindu.com/news/national/other-states/feeder/default.rss"),
     ],
     "ai": [
-        ("TechCrunch AI",       "https://techcrunch.com/category/artificial-intelligence/feed/"),
-        ("The Verge AI",        "https://www.theverge.com/ai-artificial-intelligence/rss/index.xml"),
+        ("TechCrunch AI",        "https://techcrunch.com/category/artificial-intelligence/feed/"),
+        ("The Verge AI",         "https://www.theverge.com/ai-artificial-intelligence/rss/index.xml"),
         ("MIT Technology Review","https://www.technologyreview.com/feed/"),
-        ("VentureBeat AI",      "https://venturebeat.com/category/ai/feed/"),
+        ("VentureBeat AI",       "https://venturebeat.com/category/ai/feed/"),
+    ],
+    "finance": [
+        ("Reuters Business",  "https://feeds.reuters.com/reuters/businessNews"),
+        ("CNBC Finance",      "https://www.cnbc.com/id/10001147/device/rss/rss.html"),
+        ("MarketWatch",       "https://feeds.content.dowjones.io/public/rss/mw_realtimeheadlines"),
+        ("Financial Times",   "https://www.ft.com/rss/home"),
     ],
 }
 
@@ -301,7 +307,7 @@ def save_news(items_json: str) -> str:
     article's source page before saving.
 
     Args:
-        items_json: JSON array of exactly 12 news items. Each item must have:
+        items_json: JSON array of exactly 14 news items. Each item must have:
             - title (str): Headline
             - summary (str): ~100-word neutral journalistic summary
             - sourceUrl (str): Direct article URL (from the search results)

@@ -18,20 +18,30 @@ from .tracer import start_run, complete_run
 
 _TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-_REGIONS = ["world", "usa", "india", "odisha", "ai"]
+_REGIONS = ["world", "usa", "india", "odisha", "ai", "finance"]
 
 _INSTRUCTIONS = """\
 You are the Meridian News Agent. You have been given a batch of freshly-fetched news
-articles across five regions. Your job is to curate exactly 12 stories, write a crisp
+articles across six regions. Your job is to curate exactly 14 stories, write a crisp
 summary for each, and save them via save_news().
 
 SELECTION RULES:
-- Target: 3 world, 3 usa, 2 india, 2 odisha, 2 ai
+- Target: 3 world, 3 usa, 2 india, 2 odisha, 2 ai, 2 finance
 - The 2 "ai" stories MUST come from the ai region and cover the latest AI developments
+- The 2 "finance" stories MUST come from the finance region (markets, economy, banking, trade)
 - If a region has fewer articles than needed, take what's available and
   fill the gap from whichever region has the most articles
 - No duplicate topics across regions
 - Prefer articles with a non-null image field
+
+BUZZ & IMPACT CRITERION (most important selection filter):
+- Within each region's quota, always pick the stories with the HIGHEST public interest
+- Signals of a high-buzz story: affects many people, involves a major institution/country/company,
+  has market-moving implications, represents a significant first or reversal, or is breaking news
+- Avoid niche/local stories when a more impactful alternative exists in the same region
+- Within AI: prefer stories about product launches, model releases, regulation, or major research
+- Within Finance: prefer stories about stock markets, central bank decisions, major earnings,
+  economic indicators, or large-scale mergers/acquisitions
 
 SUMMARY RULES:
 - Each summary: ~100 words, neutral journalistic tone
@@ -49,12 +59,12 @@ TTS WRITING STYLE (summaries will be read aloud by a news-anchor AI voice):
 - Each sentence should be a complete broadcast-ready thought
 
 OUTPUT:
-Call save_news() once with a JSON array of exactly 12 items, each with:
+Call save_news() once with a JSON array of exactly 14 items, each with:
   {
     "title":       "<headline verbatim or lightly improved>",
     "summary":     "<~100-word summary>",
     "sourceUrl":   "<url from the article>",
-    "region":      "<world|usa|india|odisha|ai>",
+    "region":      "<world|usa|india|odisha|ai|finance>",
     "imageUrl":    "<image field value, or null>",
     "sourceName":  "<source field value>",
     "publishedAt": "<date field value, or null>"
