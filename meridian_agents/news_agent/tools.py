@@ -233,130 +233,56 @@ def _upload_to_media(buf: bytes, mime: str, alt: str) -> str | None:
         return None
 
 
-_ENHANCE_MODELS = [
-    "gemini-2.0-flash-preview-image-generation",
-]
+def _fetch_item_image(idx_item: tuple[int, dict]) -> tuple[int, str | None]:
+    """Download and upload the real thumbnail for a news item.
 
-_ENHANCE_PROMPT = (
-    "Enhance this news thumbnail: sharpen focus, remove blur and noise, "
-    "improve brightness and contrast. Keep the same subject and composition. "
-    "Return a crisp, professional image suitable for a news website."
-)
-
-
-def _gemini_enhance(image_bytes: bytes, mime: str) -> tuple[bytes, str] | None:
-    """Send an image to Gemini for enhancement and return (enhanced_bytes, mime)."""
-    api_key = os.getenv("GEMINI_API_KEY", "")
-    if not api_key:
-        return None
-    try:
-        from google import genai
-        from google.genai import types
-
-        client = genai.Client(api_key=api_key)
-        parts = [
-            types.Part.from_bytes(data=image_bytes, mime_type=mime),
-            types.Part.from_text(text=_ENHANCE_PROMPT),
-        ]
-        cfg = types.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"])
-
-        for model_name in _ENHANCE_MODELS:
-            try:
-                response = client.models.generate_content(
-                    model=model_name, contents=parts, config=cfg
-                )
-                for part in response.candidates[0].content.parts:
-                    if getattr(part, "inline_data", None):
-                        enh_bytes = part.inline_data.data
-                        enh_mime  = part.inline_data.mime_type
-                        ok, _ = _validate_image(enh_bytes)
-                        if ok:
-                            return enh_bytes, enh_mime
-            except Exception:
-                continue
-        return None
-    except Exception as exc:
-        print(f"      ⚠️  Gemini enhance: {exc}")
-        return None
-
-
-def _enhance_item_image(idx_item: tuple[int, dict]) -> tuple[int, str | None]:
-    """Download, enhance via Gemini, upload, and return (idx, new_url or None)."""
+    Tries the RSS-provided imageUrl first; falls back to scraping og:image from
+    the source article page. The image is uploaded as-is — no AI generation is
+    applied so the thumbnail always matches the actual news story.
+    """
     idx, item = idx_item
     url = item.get("imageUrl")
 
-    # Try RSS/provided URL first, then fall back to og:image from the article page
+    # Try RSS/provided URL first
     downloaded = _download_image(url) if url else None
+
+    # Fall back to og:image scraped from the article source page
     if not downloaded:
         og_url = _fetch_og_image(item.get("sourceUrl", ""))
         if og_url:
             downloaded = _download_image(og_url)
+
     if not downloaded:
         return idx, None
+
     raw_bytes, mime = downloaded
-
-    enhanced = _gemini_enhance(raw_bytes, mime)
-    if not enhanced:
-        # Gemini unavailable/failed — upload raw image as-is
-        new_url = _upload_to_media(raw_bytes, mime, item.get("title", "news thumbnail")[:120])
-        return idx, new_url
-    enh_bytes, enh_mime = enhanced
-
-    new_url = _upload_to_media(enh_bytes, enh_mime, item.get("title", "news thumbnail")[:120])
+    new_url = _upload_to_media(raw_bytes, mime, item.get("title", "news thumbnail")[:120])
     return idx, new_url
 
 
 def _enhance_all_images(items: list[dict]) -> list[dict]:
-    """Enhance every item that has an imageUrl (or can get one via og:image) using Gemini."""
+    """Fetch and upload real thumbnails for every news item (RSS or og:image fallback)."""
     candidates = list(enumerate(items))
     if not candidates:
         return items
 
     with_url = sum(1 for _, it in candidates if it.get("imageUrl"))
-    print(f"   ✨ Fetching/enhancing {len(candidates)} thumbnail(s) ({with_url} with RSS image)…")
-    enhanced = [dict(it) for it in items]
+    print(f"   🖼  Fetching {len(candidates)} thumbnail(s) ({with_url} with RSS image)…")
+    result = [dict(it) for it in items]
 
     with ThreadPoolExecutor(max_workers=min(len(candidates), 5)) as pool:
-        futures = {pool.submit(_enhance_item_image, pair): pair[0] for pair in candidates}
+        futures = {pool.submit(_fetch_item_image, pair): pair[0] for pair in candidates}
         for f in as_completed(futures):
             idx, new_url = f.result()
             title = items[idx].get("title", "")[:55]
             if new_url:
-                enhanced[idx]["imageUrl"] = new_url
+                result[idx]["imageUrl"] = new_url
                 print(f"      ✓ {title}")
             else:
-                # Enhancement failed or produced invalid output — clear the URL so
-                # it doesn't pollute the media library with a broken image
-                enhanced[idx]["imageUrl"] = None
-                print(f"      ✗ {title} (image skipped — invalid or too small)")
+                result[idx]["imageUrl"] = None
+                print(f"      ✗ {title} (no image found)")
 
-    return enhanced
-
-
-# ── Image enrichment (run after agent selects articles) ──────────────────────
-
-def _enrich_images(items: list[dict]) -> list[dict]:
-    """Fetch og:image for items that have no imageUrl yet."""
-    need = [(i, it) for i, it in enumerate(items) if not it.get("imageUrl")]
-    if not need:
-        return items
-
-    print(f"   🖼  Fetching og:image for {len(need)} articles…")
-    results: dict[int, str | None] = {}
-
-    with ThreadPoolExecutor(max_workers=len(need)) as pool:
-        futures = {pool.submit(_fetch_og_image, it["sourceUrl"]): i
-                   for i, it in need}
-        for f in as_completed(futures):
-            results[futures[f]] = f.result()
-
-    enriched = [dict(it) for it in items]
-    for i, _ in need:
-        enriched[i]["imageUrl"] = results.get(i)
-        status = "✓" if results.get(i) else "✗"
-        print(f"      {status} {enriched[i]['title'][:55]}")
-
-    return enriched
+    return result
 
 
 # ── Save tool (called by the agent) ──────────────────────────────────────────

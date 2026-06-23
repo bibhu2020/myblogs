@@ -26,17 +26,18 @@ const ttsTotalChunks = ref(0)
 const ttsError       = ref('')
 const playerOpen     = ref(false)
 
-let sessionId         = 0
-let audioCtx          = null
-let nextStartAt       = 0
-let highlightTimers   = []
-let rafId             = null
-let chunkStartTimes   = []
-let chunkDurations    = []
-let chunkFetches      = []
-let chunkTexts        = []
-let chunkElements     = []
-let lastHighlightedEl = null
+let sessionId             = 0
+let audioCtx              = null
+let nextStartAt           = 0
+let highlightTimers       = []
+let rafId                 = null
+let chunkStartTimes       = []
+let chunkDurations        = []
+let chunkFetches          = []
+let chunkTexts            = []
+let chunkElements         = []
+let lastHighlightedEl     = null
+let speculativeTitleFetch = null
 
 function buildChunksWithDOM(contentSelector, title, maxLen = 300) {
   const chunks = []
@@ -186,6 +187,7 @@ async function runFrom(startIdx, session) {
       return
     }
     const source = await _decodeAndSchedule(result, i)
+    if (session !== sessionId) return
     if (!source) {
       clearHighlight()
       ttsState.value = 'error'
@@ -193,7 +195,16 @@ async function runFrom(startIdx, session) {
       return
     }
     if (i === startIdx) { ttsState.value = 'playing'; _startRaf() }
-    await new Promise(resolve => { source.onended = resolve })
+    await new Promise(resolve => {
+      source.onended = resolve
+      const watchdog = setInterval(() => {
+        if (session !== sessionId || !audioCtx || audioCtx.state === 'closed') {
+          clearInterval(watchdog)
+          resolve(null)
+        }
+      }, 200)
+      source.addEventListener('ended', () => clearInterval(watchdog), { once: true })
+    })
     if (session !== sessionId) return
   }
   clearHighlight()
@@ -226,8 +237,12 @@ async function openPlayer() {
   chunkDurations = []
   _clearTimers()
 
-  for (let k = 0; k < Math.min(2, chunks.length); k++)
-    chunkFetches[k] = fetchOneChunk(chunkTexts[k])
+  if (speculativeTitleFetch && chunks[0] === story.value.title) {
+    chunkFetches[0] = speculativeTitleFetch
+  }
+  speculativeTitleFetch = null
+  for (let k = 0; k < Math.min(4, chunks.length); k++)
+    if (!chunkFetches[k]) chunkFetches[k] = fetchOneChunk(chunkTexts[k])
 
   ttsState.value = 'loading'
   const session = ++sessionId
@@ -292,12 +307,14 @@ onUnmounted(() => {
   _clearTimers()
   _stopRaf()
   if (audioCtx) { audioCtx.close(); audioCtx = null }
+  speculativeTitleFetch = null
 })
 
 onMounted(async () => {
   try {
     const res = await api.get(`/stories/${route.params.slug}`)
     story.value = res.data
+    if (story.value?.title) speculativeTitleFetch = fetchOneChunk(story.value.title)
     await nextTick()
     const codeBlocks = document.querySelectorAll('.story-content pre code')
     if (codeBlocks.length) {
@@ -333,7 +350,7 @@ onMounted(async () => {
       </div>
     </div>
 
-    <article v-else class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <article v-else class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10" :class="playerOpen ? 'pb-28 sm:pb-10' : ''">
 
       <!-- Breadcrumb -->
       <nav class="flex items-center gap-2 text-sm text-gray-400 mb-6">
@@ -371,64 +388,15 @@ onMounted(async () => {
         <span>{{ story.views }} readers</span>
       </div>
 
-      <!-- Mobile TTS button — above featured image -->
-      <div class="sm:hidden mb-6">
-        <div v-if="!playerOpen">
-          <button @click="openPlayer"
-            class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors w-full justify-center">
-            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
-            </svg>
-            Listen to this story
-          </button>
-        </div>
-        <div v-else class="bg-white border border-indigo-100 rounded-2xl shadow-lg p-4">
-          <!-- Header -->
-          <div class="flex items-center gap-2 mb-3">
-            <div class="flex items-end gap-0.5 h-5 flex-shrink-0" aria-hidden="true">
-              <span v-for="i in 4" :key="i"
-                class="w-1 rounded-full bg-indigo-500"
-                :class="ttsState === 'playing' ? 'tts-bar' : 'h-1 opacity-40'"
-                :style="ttsState === 'playing' ? `animation-delay:${i * 80}ms` : ''"></span>
-            </div>
-            <p class="text-sm font-semibold text-gray-800 truncate flex-1">{{ story.title }}</p>
-            <span v-if="ttsTotalChunks" class="text-xs text-gray-500 flex-shrink-0">{{ ttsChunkIdx + 1 }}/{{ ttsTotalChunks }}</span>
-            <button @click="closePlayer" class="flex-shrink-0 ml-1 text-gray-400 hover:text-gray-600">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-            </button>
-          </div>
-          <!-- Error state -->
-          <div v-if="ttsState === 'error'" class="mb-3 flex items-center gap-2">
-            <span class="text-xs text-red-600 flex-1">Audio unavailable — {{ ttsError }}</span>
-            <button @click="openPlayer" class="text-xs text-indigo-600 underline flex-shrink-0">Retry</button>
-          </div>
-          <template v-else>
-          <!-- Seek -->
-          <input type="range" min="0" max="100"
-            :value="Math.round(ttsProgress * 100)"
-            :disabled="ttsState === 'loading'"
-            class="tts-slider w-full mb-3"
-            @change="seekTo($event.target.value / 100)" />
-          <!-- Controls -->
-          <div class="flex items-center gap-2">
-            <button @click="stopPlayback"
-              :disabled="ttsState === 'idle' || ttsState === 'loading'"
-              class="flex items-center justify-center w-8 h-8 rounded-lg transition-colors"
-              :class="ttsState === 'idle' || ttsState === 'loading' ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'"
-              title="Stop">
-              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
-            </button>
-            <button @click="ttsState === 'loading' ? null : togglePlayPause()"
-              class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex-1 justify-center"
-              :class="ttsState === 'loading' ? 'bg-gray-100 text-gray-400 cursor-wait' : 'bg-indigo-600 text-white hover:bg-indigo-700'">
-              <svg v-if="ttsState === 'loading'" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
-              <svg v-else-if="ttsState === 'playing'" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
-              <svg v-else class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-              {{ ttsState === 'loading' ? 'Loading…' : ttsState === 'playing' ? 'Pause' : 'Resume' }}
-            </button>
-          </div>
-          </template>
-        </div>
+      <!-- Mobile TTS trigger button — sm:hidden; player itself is Teleported to bottom -->
+      <div v-if="!playerOpen" class="sm:hidden mb-6">
+        <button @click="openPlayer"
+          class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors w-full justify-center">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+          </svg>
+          Listen to this story
+        </button>
       </div>
 
       <!-- Featured image -->
@@ -470,6 +438,53 @@ onMounted(async () => {
         <span class="text-gray-400 text-sm">{{ story.views }} readers</span>
       </div>
     </article>
+
+    <!-- Mobile TTS fixed bottom bar -->
+    <Teleport to="body">
+      <div v-if="playerOpen && story" class="sm:hidden fixed bottom-0 left-0 right-0 z-50 shadow-2xl bg-white border-t border-indigo-100">
+        <div class="px-4 pt-2 pb-4">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="flex items-end gap-0.5 h-4 flex-shrink-0" aria-hidden="true">
+              <span v-for="i in 4" :key="i" class="w-1 rounded-full bg-indigo-500"
+                :class="ttsState === 'playing' ? 'tts-bar' : 'h-1 opacity-40'"
+                :style="ttsState === 'playing' ? `animation-delay:${i * 80}ms` : ''"></span>
+            </div>
+            <p class="text-xs font-semibold text-gray-800 truncate flex-1">{{ story.title }}</p>
+            <span v-if="ttsTotalChunks" class="text-xs text-gray-500 flex-shrink-0">{{ ttsChunkIdx + 1 }}/{{ ttsTotalChunks }}</span>
+            <button @click="closePlayer" class="flex-shrink-0 ml-2 text-gray-400 hover:text-gray-600" title="Close">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div v-if="ttsState === 'error'" class="flex items-center gap-2 mt-1">
+            <span class="text-xs text-red-600 flex-1">Audio unavailable — {{ ttsError }}</span>
+            <button @click="openPlayer" class="text-xs text-indigo-600 underline flex-shrink-0">Retry</button>
+          </div>
+          <template v-else>
+            <input type="range" min="0" max="100"
+              :value="Math.round(ttsProgress * 100)"
+              :disabled="ttsState === 'loading'"
+              class="tts-slider w-full mb-2"
+              @change="seekTo($event.target.value / 100)" />
+            <div class="flex items-center gap-2">
+              <button @click="stopPlayback" :disabled="ttsState === 'idle' || ttsState === 'loading'"
+                class="flex items-center justify-center w-8 h-8 rounded-lg transition-colors"
+                :class="ttsState === 'idle' || ttsState === 'loading' ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'"
+                title="Stop">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+              </button>
+              <button @click="ttsState === 'loading' ? null : togglePlayPause()"
+                class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-colors flex-1 justify-center"
+                :class="ttsState === 'loading' ? 'bg-gray-100 text-gray-400 cursor-wait' : 'bg-indigo-600 text-white hover:bg-indigo-700'">
+                <svg v-if="ttsState === 'loading'" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                <svg v-else-if="ttsState === 'playing'" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
+                <svg v-else class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                {{ ttsState === 'loading' ? 'Loading…' : ttsState === 'playing' ? 'Pause' : 'Resume' }}
+              </button>
+            </div>
+          </template>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Desktop TTS sliding panel — fixed right side, hidden on mobile -->
     <Teleport to="body">

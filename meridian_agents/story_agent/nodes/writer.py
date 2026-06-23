@@ -191,7 +191,7 @@ OUTPUT FORMAT — return a single JSON object:
 }
 
 IMPORTANT: Content must be 1,000–1,400 words. Short sentences. Simple words. Warm and cosy tone.
-JSON VALIDITY: Use &ldquo; and &rdquo; for dialogue quotes. No raw double-quotes inside JSON string values."""
+JSON VALIDITY: In the "content" HTML field, use &ldquo; and &rdquo; instead of raw " for dialogue. All other fields (title, excerpt, moralLesson, featuredImagePrompt) must be plain text — use normal apostrophes ' not &rsquo;, no HTML entities at all."""
 
 _SYSTEM_PROMPT_8_15 = """You are a master storyteller writing for Meridian Story Corner — a collection of magical,
 illustrated stories for children and young adults ages 8–15.
@@ -230,7 +230,7 @@ OUTPUT FORMAT — return a single JSON object:
 }
 
 IMPORTANT: Target 1,800–2,200 words. Complete story — no summaries or fade-outs.
-JSON VALIDITY: Use &ldquo; and &rdquo; for dialogue quotes. No raw double-quotes inside JSON string values."""
+JSON VALIDITY: In the "content" HTML field, use &ldquo; and &rdquo; instead of raw " for dialogue. All other fields (title, excerpt, moralLesson, featuredImagePrompt) must be plain text — use normal apostrophes ' not &rsquo;, no HTML entities at all."""
 
 _SYSTEM_PROMPT_16_20 = """You are a sophisticated storyteller writing for Meridian Story Corner — a collection of
 dark, intelligent fiction for older teens and young adults ages 16–20.
@@ -270,7 +270,7 @@ OUTPUT FORMAT — return a single JSON object:
 }
 
 IMPORTANT: Target 2,000–2,500 words. Every scene fully written — no summaries.
-JSON VALIDITY: Use &ldquo; and &rdquo; for dialogue quotes. No raw double-quotes inside JSON string values."""
+JSON VALIDITY: In the "content" HTML field, use &ldquo; and &rdquo; instead of raw " for dialogue. All other fields (title, excerpt, moralLesson, featuredImagePrompt) must be plain text — use normal apostrophes ' not &rsquo;, no HTML entities at all."""
 
 _SYSTEM_PROMPTS = {
     '3-7': _SYSTEM_PROMPT_3_7,
