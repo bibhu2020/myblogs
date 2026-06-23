@@ -1,4 +1,5 @@
 """Shared LLM client: Gemini 2.5 Flash (free) first, gpt-4o fallback."""
+import html as _html
 import json
 import os
 import re
@@ -76,6 +77,15 @@ def extract_json(text: str) -> dict:
     except json.JSONDecodeError:
         pass
 
+    # Strip control characters invalid in JSON strings (not \n \r \t which are meaningful)
+    sanitised = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", cleaned)
+    if sanitised != cleaned:
+        try:
+            return json.loads(sanitised)
+        except json.JSONDecodeError:
+            pass
+        cleaned = sanitised
+
     # Find outermost { ... } block
     match = re.search(r"\{[\s\S]*\}", cleaned)
     if match:
@@ -114,7 +124,8 @@ def _extract_fields(text: str) -> dict:
             text,
         )
         if m:
-            result[field] = m.group(1)  # None if matched null
+            val = m.group(1)  # None if matched null
+            result[field] = _html.unescape(val) if val is not None else None
 
     # 'content' field: take everything between '"content": "' and the last '"'
     # that immediately precedes optional whitespace and the closing '}'.
