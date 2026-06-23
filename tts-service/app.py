@@ -1,5 +1,6 @@
 import io
 import os
+import re
 import threading
 from functools import lru_cache
 
@@ -55,6 +56,22 @@ def _get_pipeline(lang_code: str) -> tuple[KPipeline, threading.Lock]:
     return _pipelines[lang_code], _locks[lang_code]
 
 
+# ── Text normalisation (runs before synthesis) ────────────────────────────────
+_RE_ALLCAPS = re.compile(r'\b[A-Z]{4,}\b')   # 4+ letter ALL-CAPS words
+
+
+def _normalize_text(text: str) -> str:
+    """Prepare text for Kokoro so onomatopoeia sounds natural rather than being spelled out.
+
+    - 4+ letter ALL-CAPS words → lowercase, keeping repeated letters intact
+      WHOOOOSH → whoooosh  (espeak-ng elongates the vowel)
+      ZOOOOOM  → zooooom
+      BOOM     → boom
+    - Short ALL-CAPS (≤3 letters) untouched so they ARE spelled out: AI, US, DNA
+    """
+    return _RE_ALLCAPS.sub(lambda m: m.group(0).lower(), text)
+
+
 # ── Core synthesis (cached for instant replays of identical requests) ─────────
 @lru_cache(maxsize=512)
 def _synthesize(text: str, lang_code: str, voice: str, speed_str: str) -> bytes:
@@ -86,6 +103,7 @@ def synthesize():
         return jsonify({'error': 'text required'}), 400
 
     lang_code, voice, speed = _STYLE_MAP.get(style, _DEFAULT)
+    text = _normalize_text(text)
 
     try:
         wav = _synthesize(text, lang_code, voice, str(speed))
