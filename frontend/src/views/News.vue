@@ -240,6 +240,7 @@ const REGIONS = [
   { key: 'usa',    label: 'USA',       flag: '🇺🇸' },
   { key: 'india',  label: 'India',     flag: '🇮🇳' },
   { key: 'odisha', label: 'Odisha',    flag: '🏛️' },
+  { key: 'ai',     label: 'AI',        flag: '🤖' },
 ]
 
 const REGION_COLORS = {
@@ -247,14 +248,16 @@ const REGION_COLORS = {
   usa:    'bg-red-100 text-red-700',
   india:  'bg-orange-100 text-orange-700',
   odisha: 'bg-purple-100 text-purple-700',
+  ai:     'bg-violet-100 text-violet-700',
 }
-const REGION_FLAGS = { world: '🌍', usa: '🇺🇸', india: '🇮🇳', odisha: '🏛️' }
+const REGION_FLAGS = { world: '🌍', usa: '🇺🇸', india: '🇮🇳', odisha: '🏛️', ai: '🤖' }
 
 const FALLBACK_IMAGES = {
   world:  'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400&q=80',
   usa:    'https://images.unsplash.com/photo-1485738422979-f5c462d49f74?w=400&q=80',
   india:  'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=400&q=80',
   odisha: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&q=80',
+  ai:     'https://images.unsplash.com/photo-1677442135703-1787eea5ce01?w=400&q=80',
 }
 
 const filtered = computed(() =>
