@@ -1,5 +1,6 @@
 import io
 import os
+import re
 import threading
 from functools import lru_cache
 
@@ -55,6 +56,30 @@ def _get_pipeline(lang_code: str) -> tuple[KPipeline, threading.Lock]:
     return _pipelines[lang_code], _locks[lang_code]
 
 
+# ── Text normalisation (runs before synthesis) ────────────────────────────────
+_RE_ALLCAPS   = re.compile(r'\b[A-Z]{4,}\b')          # 4+ letter ALL-CAPS words
+_RE_RPT_UPPER = re.compile(r'([A-Z])\1{2,}')          # 3+ consecutive uppercase repeats
+_RE_RPT_ANY   = re.compile(r'([a-zA-Z])\1{2,}')       # 3+ consecutive any-case repeats
+
+
+def _normalize_text(text: str) -> str:
+    """Prepare text for Kokoro so onomatopoeia sounds natural rather than being spelled out.
+
+    - 4+ letter ALL-CAPS words: collapse 3+ repeated letters then lowercase
+      WHOOOOSH → whoosh   ZOOOOOM → zoom   BOOM → boom   CRASH → crash
+    - Short ALL-CAPS (≤3 letters) left alone so they ARE spelled out: AI, US, DNA
+    - Any remaining word with 3+ consecutive repeated letters: collapse to 2
+      Whoooosh → Whoosh   zoooom → zoom   hisssss → hiss
+    """
+    def _fix_allcaps(m: re.Match) -> str:
+        collapsed = _RE_RPT_UPPER.sub(r'\1\1', m.group(0))  # 3+ repeats → 2
+        return collapsed.lower()
+
+    text = _RE_ALLCAPS.sub(_fix_allcaps, text)
+    text = _RE_RPT_ANY.sub(lambda m: m.group(1) * 2, text)
+    return text
+
+
 # ── Core synthesis (cached for instant replays of identical requests) ─────────
 @lru_cache(maxsize=512)
 def _synthesize(text: str, lang_code: str, voice: str, speed_str: str) -> bytes:
@@ -86,6 +111,7 @@ def synthesize():
         return jsonify({'error': 'text required'}), 400
 
     lang_code, voice, speed = _STYLE_MAP.get(style, _DEFAULT)
+    text = _normalize_text(text)
 
     try:
         wav = _synthesize(text, lang_code, voice, str(speed))
