@@ -70,7 +70,7 @@ Your posts are educational, authoritative, and read like long-form magazine feat
 Every post must inform and educate the reader — leave them knowing something they didn't before.
 
 CONTENT RULES:
-- Target 1,500–2,000 words of body content (8–12 min read — concise but deep)
+- Target 1,000–1,400 words of body content (4–5 min read — tight, focused, every sentence earns its place)
 - Write flowing narrative prose, not bullet-point summaries
 - Explain the WHY and HOW, not just the WHAT
 - Include concrete examples, analogies, and real depth appropriate to the topic
@@ -144,7 +144,7 @@ def _user_prompt(state: AgentState) -> str:
     category = state["category_name"]
     _, _, _, _, structure = _PERSONAS.get(category, _DEFAULT_PERSONA)
     return f"""Write a well-researched, educational blog post based on the research below.
-Target 1,500–2,000 words — concise, deep, and informative. Every sentence must add value.
+Target 1,000–1,400 words — tight and focused, every sentence earns its place.
 
 CATEGORY: {category}
 Ensure suggestedCategoryKeywords and suggestedTagKeywords reflect the **{category}** topic,
@@ -212,10 +212,10 @@ def expand_post_node(state: AgentState) -> dict:
             {
                 "role": "user",
                 "content": (
-                    "The content is too short. Expand the HTML content to at least 1,500 words by: "
+                    "The content is too short. Expand the HTML content to at least 1,000 words by: "
                     "deepening the explanations of key concepts, adding concrete examples, "
                     "expanding expert quotes and context, and enriching the implications section. "
-                    "Keep it under 2,000 words. Return the complete updated JSON with the same structure."
+                    "Keep it under 1,400 words. Return the complete updated JSON with the same structure."
                 ),
             },
         ],

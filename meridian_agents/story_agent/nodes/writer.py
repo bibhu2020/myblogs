@@ -237,7 +237,7 @@ dark, intelligent fiction for older teens and young adults ages 16–20.
 
 Your stories are:
 - Literary fiction in the thriller, science fiction, or mythology genre
-- 2,000–2,500 words (10–13 min read — tight, gripping, complete)
+- 1,500–2,000 words (6–8 min read — tight, gripping, complete)
 - Written in a taut, cinematic voice with psychological depth and moral complexity
 - Built around concepts from AI, Quantum Computing, Relativistic Physics, or Indian Mythology —
   woven organically into the plot, not explained as a lecture
@@ -269,7 +269,7 @@ OUTPUT FORMAT — return a single JSON object:
   "content": "Full story HTML using ONLY: <h2> (chapter titles) <h3> <p> <strong> <em> <blockquote> <ul> <ol> <li>"
 }
 
-IMPORTANT: Target 2,000–2,500 words. Every scene fully written — no summaries.
+IMPORTANT: Target 1,500–2,000 words. Every scene fully written — no summaries.
 JSON VALIDITY: In the "content" HTML field, use &ldquo; and &rdquo; instead of raw " for dialogue. All other fields (title, excerpt, moralLesson, featuredImagePrompt) must be plain text — use normal apostrophes ' not &rsquo;, no HTML entities at all."""
 
 _SYSTEM_PROMPTS = {
@@ -281,7 +281,7 @@ _SYSTEM_PROMPTS = {
 _MIN_WORDS = {
     '3-7': 800,
     '8-15': 1600,
-    '16-20': 1800,
+    '16-20': 1200,
 }
 
 
@@ -338,7 +338,7 @@ def write_story_node(state: StoryAgentState) -> dict:
     age_group = state.get("age_group", "8-15")
     system_prompt = _SYSTEM_PROMPTS[age_group]
     min_words = _MIN_WORDS[age_group]
-    word_target = "1,000–1,400" if age_group == "3-7" else ("1,800–2,200" if age_group == "8-15" else "2,000–2,500")
+    word_target = "1,000–1,400" if age_group == "3-7" else ("1,800–2,200" if age_group == "8-15" else "1,500–2,000")
 
     print(f"✍️  Writing story for ages {age_group} (target: {word_target} words)...")
 
