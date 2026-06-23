@@ -57,27 +57,19 @@ def _get_pipeline(lang_code: str) -> tuple[KPipeline, threading.Lock]:
 
 
 # ── Text normalisation (runs before synthesis) ────────────────────────────────
-_RE_ALLCAPS   = re.compile(r'\b[A-Z]{4,}\b')          # 4+ letter ALL-CAPS words
-_RE_RPT_UPPER = re.compile(r'([A-Z])\1{2,}')          # 3+ consecutive uppercase repeats
-_RE_RPT_ANY   = re.compile(r'([a-zA-Z])\1{2,}')       # 3+ consecutive any-case repeats
+_RE_ALLCAPS = re.compile(r'\b[A-Z]{4,}\b')   # 4+ letter ALL-CAPS words
 
 
 def _normalize_text(text: str) -> str:
     """Prepare text for Kokoro so onomatopoeia sounds natural rather than being spelled out.
 
-    - 4+ letter ALL-CAPS words: collapse 3+ repeated letters then lowercase
-      WHOOOOSH → whoosh   ZOOOOOM → zoom   BOOM → boom   CRASH → crash
-    - Short ALL-CAPS (≤3 letters) left alone so they ARE spelled out: AI, US, DNA
-    - Any remaining word with 3+ consecutive repeated letters: collapse to 2
-      Whoooosh → Whoosh   zoooom → zoom   hisssss → hiss
+    - 4+ letter ALL-CAPS words → lowercase, keeping repeated letters intact
+      WHOOOOSH → whoooosh  (espeak-ng elongates the vowel)
+      ZOOOOOM  → zooooom
+      BOOM     → boom
+    - Short ALL-CAPS (≤3 letters) untouched so they ARE spelled out: AI, US, DNA
     """
-    def _fix_allcaps(m: re.Match) -> str:
-        collapsed = _RE_RPT_UPPER.sub(r'\1\1', m.group(0))  # 3+ repeats → 2
-        return collapsed.lower()
-
-    text = _RE_ALLCAPS.sub(_fix_allcaps, text)
-    text = _RE_RPT_ANY.sub(lambda m: m.group(1) * 2, text)
-    return text
+    return _RE_ALLCAPS.sub(lambda m: m.group(0).lower(), text)
 
 
 # ── Core synthesis (cached for instant replays of identical requests) ─────────
