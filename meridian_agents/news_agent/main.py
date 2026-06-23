@@ -18,17 +18,20 @@ from .tracer import start_run, complete_run
 
 _TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-_REGIONS = ["world", "usa", "india", "odisha", "ai", "finance"]
+_REGIONS = ["world", "usa", "india", "odisha", "ai", "finance", "sports"]
 
 _INSTRUCTIONS = """\
 You are the Meridian News Agent. You have been given a batch of freshly-fetched news
-articles across six regions. Your job is to curate exactly 14 stories, write a crisp
+articles across seven regions. Your job is to curate exactly 16 stories, write a crisp
 summary for each, and save them via save_news().
 
 SELECTION RULES:
-- Target: 3 world, 3 usa, 2 india, 2 odisha, 2 ai, 2 finance
+- Target: 3 world, 3 usa, 2 india, 2 odisha, 2 ai, 2 finance, 2 sports
 - The 2 "ai" stories MUST come from the ai region and cover the latest AI developments
 - The 2 "finance" stories MUST come from the finance region (markets, economy, banking, trade)
+- The 2 "sports" stories MUST come from the sports region and cover the most talked-about
+  sporting events globally (major tournaments, record-breaking performances, transfer news,
+  championship results — prioritise the sport with the most current global buzz)
 - If a region has fewer articles than needed, take what's available and
   fill the gap from whichever region has the most articles
 - No duplicate topics across regions
@@ -42,6 +45,8 @@ BUZZ & IMPACT CRITERION (most important selection filter):
 - Within AI: prefer stories about product launches, model releases, regulation, or major research
 - Within Finance: prefer stories about stock markets, central bank decisions, major earnings,
   economic indicators, or large-scale mergers/acquisitions
+- Within Sports: prefer stories about ongoing major tournaments (World Cup, Olympics, Grand Slams,
+  Champions League, IPL, NBA playoffs) or athletes/teams generating the most global conversation
 
 SUMMARY RULES:
 - Each summary: ~100 words, neutral journalistic tone
@@ -59,12 +64,12 @@ TTS WRITING STYLE (summaries will be read aloud by a news-anchor AI voice):
 - Each sentence should be a complete broadcast-ready thought
 
 OUTPUT:
-Call save_news() once with a JSON array of exactly 14 items, each with:
+Call save_news() once with a JSON array of exactly 16 items, each with:
   {
     "title":       "<headline verbatim or lightly improved>",
     "summary":     "<~100-word summary>",
     "sourceUrl":   "<url from the article>",
-    "region":      "<world|usa|india|odisha|ai|finance>",
+    "region":      "<world|usa|india|odisha|ai|finance|sports>",
     "imageUrl":    "<image field value, or null>",
     "sourceName":  "<source field value>",
     "publishedAt": "<date field value, or null>"
@@ -111,7 +116,7 @@ async def _run(articles: list[dict]) -> str:
     prompt = (
         f"Today is {_TODAY}. Here are the freshly fetched news articles:\n\n"
         f"```json\n{json.dumps(articles, indent=2)}\n```\n\n"
-        "Select 10 stories, write summaries, and call save_news()."
+        "Select 16 stories (3 world, 3 usa, 2 india, 2 odisha, 2 ai, 2 finance, 2 sports), write summaries, and call save_news()."
     )
     result = await Runner.run(agent, input=prompt, max_turns=10)
     return result.final_output or "(no output)"
