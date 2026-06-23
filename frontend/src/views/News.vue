@@ -4,6 +4,7 @@ import Navbar from '../components/Navbar.vue'
 import Footer from '../components/Footer.vue'
 import api from '../api'
 import { format, parseISO, isValid } from 'date-fns'
+import { useWakeLock } from '../composables/useWakeLock'
 
 const items       = ref([])
 const lastUpdated = ref(null)
@@ -18,6 +19,9 @@ const ttsTotalChunks = ref(0)
 const ttsError       = ref('')
 const playerOpen     = ref(false)
 const activeIdx      = ref(-1)
+
+const { acquireWakeLock, releaseWakeLock } = useWakeLock()
+watch(ttsState, v => v === 'playing' ? acquireWakeLock() : releaseWakeLock())
 
 let sessionId       = 0
 let audioCtx        = null

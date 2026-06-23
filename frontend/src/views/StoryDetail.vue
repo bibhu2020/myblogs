@@ -1,10 +1,11 @@
 <script setup>
-import { onMounted, onUnmounted, ref, nextTick } from 'vue'
+import { onMounted, onUnmounted, ref, nextTick, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import Navbar from '../components/Navbar.vue'
 import Footer from '../components/Footer.vue'
 import api from '../api'
 import { format } from 'date-fns'
+import { useWakeLock } from '../composables/useWakeLock'
 // highlight.js is loaded lazily only when code blocks are present in the story
 
 const route = useRoute()
@@ -25,6 +26,9 @@ const ttsChunkIdx    = ref(0)
 const ttsTotalChunks = ref(0)
 const ttsError       = ref('')
 const playerOpen     = ref(false)
+
+const { acquireWakeLock, releaseWakeLock } = useWakeLock()
+watch(ttsState, v => v === 'playing' ? acquireWakeLock() : releaseWakeLock())
 
 let sessionId             = 0
 let audioCtx              = null

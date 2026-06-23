@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted, ref, nextTick, computed } from 'vue'
+import { onMounted, onUnmounted, ref, nextTick, computed, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { useBlogStore } from '../stores/blog'
 import { useLayoutStore } from '../stores/layout'
@@ -8,6 +8,7 @@ import Footer from '../components/Footer.vue'
 import PostCard from '../components/PostCard.vue'
 import api from '../api'
 import { format } from 'date-fns'
+import { useWakeLock } from '../composables/useWakeLock'
 // highlight.js is loaded lazily only when code blocks are present in the post
 
 const blog = useBlogStore()
@@ -30,6 +31,9 @@ const ttsChunkIdx    = ref(0)        // current chunk index (0-based)
 const ttsTotalChunks = ref(0)
 const ttsError       = ref('')
 const playerOpen     = ref(false)
+
+const { acquireWakeLock, releaseWakeLock } = useWakeLock()
+watch(ttsState, v => v === 'playing' ? acquireWakeLock() : releaseWakeLock())
 
 // Non-reactive internal state — AudioContext-based for gapless playback
 let sessionId             = 0
