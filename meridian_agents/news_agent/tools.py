@@ -59,6 +59,12 @@ _REGION_FEEDS: dict[str, list[tuple[str, str]]] = {
         ("MarketWatch",       "https://feeds.content.dowjones.io/public/rss/mw_realtimeheadlines"),
         ("Financial Times",   "https://www.ft.com/rss/home"),
     ],
+    "sports": [
+        ("BBC Sport",         "https://feeds.bbci.co.uk/sport/rss.xml"),
+        ("The Guardian Sport","https://www.theguardian.com/sport/rss"),
+        ("Sky Sports",        "https://www.skysports.com/rss/12040"),
+        ("ESPN",              "https://www.espn.com/espn/rss/news"),
+    ],
 }
 
 
@@ -354,11 +360,11 @@ def save_news(items_json: str) -> str:
     article's source page before saving.
 
     Args:
-        items_json: JSON array of exactly 14 news items. Each item must have:
+        items_json: JSON array of exactly 16 news items. Each item must have:
             - title (str): Headline
             - summary (str): ~100-word neutral journalistic summary
             - sourceUrl (str): Direct article URL (from the search results)
-            - region (str): 'world' | 'usa' | 'india' | 'odisha'
+            - region (str): 'world' | 'usa' | 'india' | 'odisha' | 'ai' | 'finance' | 'sports'
             - imageUrl (str | null): Image URL from the search result, or null
             - sourceName (str): Publication name
             - publishedAt (str | null): date field from the search result
