@@ -255,12 +255,12 @@ const REGION_COLORS = {
 const REGION_FLAGS = { world: '🌍', usa: '🇺🇸', india: '🇮🇳', odisha: '🏛️', ai: '🤖', finance: '💹' }
 
 const FALLBACK_IMAGES = {
-  world:   'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400&q=80',
-  usa:     'https://images.unsplash.com/photo-1485738422979-f5c462d49f74?w=400&q=80',
-  india:   'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=400&q=80',
-  odisha:  'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&q=80',
-  ai:      'https://images.unsplash.com/photo-1677442135703-1787eea5ce01?w=400&q=80',
-  finance: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&q=80',
+  world:   'https://images.unsplash.com/photo-1521295121783-8a321d551ad2?w=400&q=80', // desk globe
+  usa:     'https://images.unsplash.com/photo-1485738422979-f5c462d49f74?w=400&q=80', // Statue of Liberty
+  india:   'https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=400&q=80', // Taj Mahal
+  odisha:  'https://images.unsplash.com/photo-1597505686823-233a95175f40?w=400&q=80', // Odishan temple
+  ai:      'https://images.unsplash.com/photo-1677442135703-1787eea5ce01?w=400&q=80', // circuit-board brain
+  finance: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&q=80', // candlestick chart
 }
 
 const filtered = computed(() =>
