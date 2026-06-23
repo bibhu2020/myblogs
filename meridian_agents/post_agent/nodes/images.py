@@ -9,6 +9,22 @@ from ...auth import make_agent_jwt
 from ..state import AgentState
 
 
+def _is_good_image(data: bytes) -> bool:
+    """Return False for blank / solid-colour / malformed images (failed AI generation)."""
+    if len(data) < 2048:
+        return False
+    try:
+        from PIL import Image, ImageStat
+        img = Image.open(BytesIO(data)).convert("L")
+        w, h = img.size
+        if w < 64 or h < 64:
+            return False
+        # Near-zero stddev means the image is mostly one colour — generation failure
+        return ImageStat.Stat(img).stddev[0] >= 8.0
+    except Exception:
+        return True  # unknown format — let the upload attempt proceed
+
+
 def _upload_image(buf: bytes, mime: str, alt: str, server_base: str) -> str:
     jwt = make_agent_jwt()
     ext = "jpg" if "jpeg" in mime else "webp" if "webp" in mime else "png"
@@ -183,9 +199,11 @@ def _generate_image(
     if category == "Travel":
         try:
             buf, mime, credit = _try_unsplash(unsplash_query or prompt)
-            note = f" (photo by {credit} on Unsplash)" if credit else " (Unsplash)"
-            print(f"  ✓ Real travel photo{note}")
-            return buf, mime
+            if _is_good_image(buf):
+                note = f" (photo by {credit} on Unsplash)" if credit else " (Unsplash)"
+                print(f"  ✓ Real travel photo{note}")
+                return buf, mime
+            print("  ⚠️  Unsplash (travel): blank image — falling back to AI generation")
         except Exception as e:
             print(f"  ⚠️  Unsplash (travel): {e} — falling back to AI generation")
 
@@ -198,6 +216,9 @@ def _generate_image(
     for name, fn in providers:
         try:
             buf, mime = fn()  # type: ignore[misc]
+            if not _is_good_image(buf):
+                print(f"  ⚠️  {name}: blank/failed image — skipping")
+                continue
             print(f"  ✓ {name}")
             return buf, mime
         except Exception as e:
