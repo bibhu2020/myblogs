@@ -182,55 +182,96 @@ def fetch_region_news(region: str, _query: str = "", max_results: int = 10) -> l
     return result
 
 
-# ── Image enhancement via Gemini ─────────────────────────────────────────────
+# ── Thumbnail pipeline ───────────────────────────────────────────────────────
 
-_MIN_DIMENSION = 100   # pixels — filters tracking pixels / tiny icons
-_MIN_BYTES     = 4096  # bytes  — filters empty or near-empty responses
+_MIN_DIMENSION  = 100    # pixels — rejects tracking pixels / tiny icons
+_MIN_BYTES      = 4096   # bytes  — rejects empty / near-empty responses
+_THUMB_W        = 800    # target thumbnail width
+_THUMB_H        = 450    # target thumbnail height (16:9)
 
 
 def _validate_image(data: bytes) -> tuple[bool, str]:
-    """Return (ok, mime) after verifying data is a real image with acceptable dimensions."""
+    """Return (ok, mime) after checking the bytes are a real image of acceptable size."""
     if len(data) < _MIN_BYTES:
         return False, ""
     try:
         from PIL import Image
         img = Image.open(BytesIO(data))
-        img.verify()                       # raises on corrupt files
-        img = Image.open(BytesIO(data))    # re-open after verify (PIL limitation)
+        img.verify()
+        img = Image.open(BytesIO(data))   # re-open after verify (PIL limitation)
         w, h = img.size
         if w < _MIN_DIMENSION or h < _MIN_DIMENSION:
             return False, ""
         fmt = (img.format or "JPEG").lower()
-        mime = f"image/{fmt}" if fmt != "jpg" else "image/jpeg"
-        return True, mime
+        return True, "image/jpeg" if fmt == "jpg" else f"image/{fmt}"
     except Exception:
         return False, ""
 
 
 def _download_image(url: str, timeout: int = 15) -> tuple[bytes, str] | None:
-    """Download an image, validate it is a real image, and return (bytes, mime_type)."""
+    """Download a URL and return (bytes, mime) if it is a valid image, else None."""
+    if not url:
+        return None
     try:
         resp = requests.get(url, headers=_HEADERS, timeout=timeout, allow_redirects=True)
         if resp.status_code != 200:
             return None
-        ct = resp.headers.get("content-type", "").split(";")[0].strip()
-        if not ct.startswith("image/"):
+        if not resp.headers.get("content-type", "").startswith("image/"):
             return None
         ok, mime = _validate_image(resp.content)
-        if not ok:
-            return None
-        return resp.content, mime
+        return (resp.content, mime) if ok else None
     except Exception:
         return None
 
 
+def _enhance_thumbnail(data: bytes) -> bytes:
+    """Center-crop to 16:9 and resize to 800×450 JPEG.
+
+    Produces a consistent thumbnail regardless of the source image's dimensions
+    or aspect ratio. Returns the original bytes unchanged on any error.
+    """
+    try:
+        from PIL import Image, ImageOps
+        img = Image.open(BytesIO(data))
+        # Normalise colour mode
+        if img.mode == "RGBA":
+            bg = Image.new("RGB", img.size, (255, 255, 255))
+            bg.paste(img, mask=img.split()[3])
+            img = bg
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+
+        # Auto-rotate based on EXIF orientation
+        img = ImageOps.exif_transpose(img)
+
+        # Center-crop to 16:9
+        src_w, src_h = img.size
+        if src_w / src_h > _THUMB_W / _THUMB_H:
+            # Too wide — trim sides
+            new_w = int(src_h * _THUMB_W / _THUMB_H)
+            left = (src_w - new_w) // 2
+            img = img.crop((left, 0, left + new_w, src_h))
+        else:
+            # Too tall — trim top & bottom
+            new_h = int(src_w * _THUMB_H / _THUMB_W)
+            top = (src_h - new_h) // 2
+            img = img.crop((0, top, src_w, top + new_h))
+
+        img = img.resize((_THUMB_W, _THUMB_H), Image.LANCZOS)
+
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=85, optimize=True)
+        return buf.getvalue()
+    except Exception:
+        return data   # fall through with original bytes on any error
+
+
 def _upload_to_media(buf: bytes, mime: str, alt: str) -> str | None:
-    """Upload image bytes to the Meridian media service and return the URL."""
+    """Upload image bytes to the Meridian media service and return the hosted URL."""
     server_base = os.getenv("SERVER_BASE", "http://localhost:3000")
     try:
         jwt = make_agent_jwt(name="News Agent", email="news-agent@meridian.internal")
-        ext = "jpg" if "jpeg" in mime else "webp" if "webp" in mime else "png"
-        files = {"file": (f"news-{int(time.time())}.{ext}", BytesIO(buf), mime)}
+        files = {"file": (f"news-{int(time.time())}.jpg", BytesIO(buf), "image/jpeg")}
         res = requests.post(
             f"{server_base}/api/media/upload",
             headers={"Authorization": f"Bearer {jwt}"},
@@ -238,38 +279,44 @@ def _upload_to_media(buf: bytes, mime: str, alt: str) -> str | None:
             data={"alt": alt[:200]},
             timeout=60,
         )
-        if not res.ok:
-            return None
-        return res.json().get("url")
+        return res.json().get("url") if res.ok else None
     except Exception:
         return None
 
 
 def _fetch_item_image(idx_item: tuple[int, dict]) -> tuple[int, str | None]:
-    """Download and upload the real thumbnail for a news item.
+    """Best-effort thumbnail pipeline for one news item.
 
-    Tries the RSS-provided imageUrl first; falls back to scraping og:image from
-    the source article page. The image is uploaded as-is — no AI generation is
-    applied so the thumbnail always matches the actual news story.
+    Attempt order:
+      1. RSS/LLM-provided imageUrl
+      2. og:image / twitter:image scraped from the source article page
+    Each candidate is downloaded, validated, enhanced (center-crop → 800×450 JPEG),
+    and uploaded to the media service. Returns (idx, url) or (idx, None) on total failure.
     """
     idx, item = idx_item
-    url = item.get("imageUrl")
+    source_url = item.get("sourceUrl", "")
 
-    # Try RSS/provided URL first
-    downloaded = _download_image(url) if url else None
+    # Build candidate list: RSS image first, then og:image scrape
+    candidates: list[str] = []
+    rss_url = item.get("imageUrl")
+    if rss_url:
+        candidates.append(rss_url)
+    og_url = _fetch_og_image(source_url) if source_url else None
+    if og_url and og_url != rss_url:
+        candidates.append(og_url)
 
-    # Fall back to og:image scraped from the article source page
-    if not downloaded:
-        og_url = _fetch_og_image(item.get("sourceUrl", ""))
-        if og_url:
-            downloaded = _download_image(og_url)
+    for url in candidates:
+        downloaded = _download_image(url)
+        if not downloaded:
+            continue
+        raw_bytes, _ = downloaded
+        enhanced = _enhance_thumbnail(raw_bytes)
+        hosted_url = _upload_to_media(enhanced, "image/jpeg",
+                                      item.get("title", "news thumbnail")[:120])
+        if hosted_url:
+            return idx, hosted_url
 
-    if not downloaded:
-        return idx, None
-
-    raw_bytes, mime = downloaded
-    new_url = _upload_to_media(raw_bytes, mime, item.get("title", "news thumbnail")[:120])
-    return idx, new_url
+    return idx, None
 
 
 def _enhance_all_images(items: list[dict]) -> list[dict]:
