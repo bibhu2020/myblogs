@@ -170,7 +170,10 @@ def fetch_region_news(region: str, _query: str = "", max_results: int = 10) -> l
     def _sort_key(a):
         try:
             import email.utils
-            return email.utils.parsedate_to_datetime(a["date"])
+            dt = email.utils.parsedate_to_datetime(a["date"])
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
         except Exception:
             return datetime.min.replace(tzinfo=timezone.utc)
 
