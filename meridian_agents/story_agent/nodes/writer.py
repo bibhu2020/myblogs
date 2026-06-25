@@ -160,7 +160,7 @@ illustrated picture-book stories for very young children ages 3–7.
 
 Your stories are:
 - Short, joyful narrative fiction written in simple language (max 2-syllable words preferred)
-- 1,000–1,400 words — long enough to fill a bedtime read-aloud session
+- 650–900 words — a perfect bedtime read-aloud length
 - Told in a cosy, reassuring voice that feels like a parent reading at bedtime
 - Full of vivid sensory detail, gentle humour, and warm emotion
 - Divided into 3–5 short named sections (not long chapters)
@@ -176,7 +176,7 @@ TTS READ-ALOUD STYLE (this story will be read by an AI voice to young children):
 - Write dialogue naturally — it lands warmly when spoken aloud
 
 IMAGE PLACEHOLDERS:
-Place 4–6 image placeholders using this EXACT format (on its own line):
+Place 3–4 image placeholders using this EXACT format (on its own line):
 [[IMAGE: children's picture-book illustration — bright, cheerful scene with soft colours and simple shapes]]
 
 Use a bright, rounded, watercolour picture-book art style in all image descriptions.
@@ -190,7 +190,7 @@ OUTPUT FORMAT — return a single JSON object:
   "content": "Full story HTML using ONLY: <h2> (section titles) <p> <strong> <em>"
 }
 
-IMPORTANT: Content must be 1,000–1,400 words. Short sentences. Simple words. Warm and cosy tone.
+IMPORTANT: Content must be 650–900 words. Short sentences. Simple words. Warm and cosy tone.
 JSON VALIDITY: In the "content" HTML field, use &ldquo; and &rdquo; instead of raw " for dialogue. All other fields (title, excerpt, moralLesson, featuredImagePrompt) must be plain text — use normal apostrophes ' not &rsquo;, no HTML entities at all."""
 
 _SYSTEM_PROMPT_8_15 = """You are a master storyteller writing for Meridian Story Corner — a collection of magical,
@@ -198,7 +198,7 @@ illustrated stories for children and young adults ages 8–15.
 
 Your stories are:
 - Narrative fiction (NOT a blog post or article)
-- 1,800–2,200 words of immersive story (10–12 min read — concise but complete)
+- 1,000–1,300 words of immersive story (5–6 min read — concise but complete)
 - Written in a warm, engaging voice that respects the reader's intelligence
 - Rich with vivid description, authentic dialogue, and emotional depth
 - Divided into 3–4 named sections or chapters
@@ -215,7 +215,7 @@ TTS READ-ALOUD STYLE (this story will be performed by an emotional AI voice):
 - Avoid passive voice in action scenes — active verbs drive the drama forward
 
 IMAGE PLACEHOLDERS:
-Place 4–5 image placeholders in key dramatic moments using this EXACT format (on its own line):
+Place 3–4 image placeholders in key dramatic moments using this EXACT format (on its own line):
 [[IMAGE: children's book illustration — vivid description of the scene, characters, mood, colours]]
 
 Use a watercolour / illustrated storybook art style in all image descriptions.
@@ -229,7 +229,7 @@ OUTPUT FORMAT — return a single JSON object:
   "content": "Full story HTML using ONLY: <h2> (chapter titles) <h3> <p> <strong> <em> <blockquote> <ul> <ol> <li>"
 }
 
-IMPORTANT: Target 1,800–2,200 words. Complete story — no summaries or fade-outs.
+IMPORTANT: Target 1,000–1,300 words. Complete story — no summaries or fade-outs.
 JSON VALIDITY: In the "content" HTML field, use &ldquo; and &rdquo; instead of raw " for dialogue. All other fields (title, excerpt, moralLesson, featuredImagePrompt) must be plain text — use normal apostrophes ' not &rsquo;, no HTML entities at all."""
 
 _SYSTEM_PROMPT_16_20 = """You are a sophisticated storyteller writing for Meridian Story Corner — a collection of
@@ -237,7 +237,7 @@ dark, intelligent fiction for older teens and young adults ages 16–20.
 
 Your stories are:
 - Literary fiction in the thriller, science fiction, or mythology genre
-- 1,500–2,000 words (6–8 min read — tight, gripping, complete)
+- 850–1,100 words (4–5 min read — tight, gripping, complete)
 - Written in a taut, cinematic voice with psychological depth and moral complexity
 - Built around concepts from AI, Quantum Computing, Relativistic Physics, or Indian Mythology —
   woven organically into the plot, not explained as a lecture
@@ -255,7 +255,7 @@ TTS READ-ALOUD STYLE (this story will be performed by a dramatic AI voice):
 - Write the final paragraph so each sentence is shorter than the last — creates a closing cadence
 
 IMAGE PLACEHOLDERS:
-Place 4–5 image placeholders at pivotal moments using this EXACT format (on its own line):
+Place 3–4 image placeholders at pivotal moments using this EXACT format (on its own line):
 [[IMAGE: cinematic digital illustration — dramatic scene description, lighting, mood, style]]
 
 Use a dark, detailed, cinematic digital-art style in all image descriptions.
@@ -269,7 +269,7 @@ OUTPUT FORMAT — return a single JSON object:
   "content": "Full story HTML using ONLY: <h2> (chapter titles) <h3> <p> <strong> <em> <blockquote> <ul> <ol> <li>"
 }
 
-IMPORTANT: Target 1,500–2,000 words. Every scene fully written — no summaries.
+IMPORTANT: Target 850–1,100 words. Every scene fully written — no summaries.
 JSON VALIDITY: In the "content" HTML field, use &ldquo; and &rdquo; instead of raw " for dialogue. All other fields (title, excerpt, moralLesson, featuredImagePrompt) must be plain text — use normal apostrophes ' not &rsquo;, no HTML entities at all."""
 
 _SYSTEM_PROMPTS = {
@@ -279,9 +279,9 @@ _SYSTEM_PROMPTS = {
 }
 
 _MIN_WORDS = {
-    '3-7': 800,
-    '8-15': 1600,
-    '16-20': 1200,
+    '3-7': 500,
+    '8-15': 800,
+    '16-20': 650,
 }
 
 
@@ -338,7 +338,7 @@ def write_story_node(state: StoryAgentState) -> dict:
     age_group = state.get("age_group", "8-15")
     system_prompt = _SYSTEM_PROMPTS[age_group]
     min_words = _MIN_WORDS[age_group]
-    word_target = "1,000–1,400" if age_group == "3-7" else ("1,800–2,200" if age_group == "8-15" else "1,500–2,000")
+    word_target = "650–900" if age_group == "3-7" else ("1,000–1,300" if age_group == "8-15" else "850–1,100")
 
     print(f"✍️  Writing story for ages {age_group} (target: {word_target} words)...")
 
@@ -355,7 +355,7 @@ Requirements:
 - Rich dialogue — let characters talk and reveal themselves through speech
 - Vivid scene-setting — make the reader SEE and FEEL the world
 - Emotional journey — the protagonist must face real challenges and grow
-- {'4–6' if age_group == '3-7' else '6–8'} [[IMAGE: ...]] placeholders at key moments
+- 3–4 [[IMAGE: ...]] placeholders at key moments
 - The moral should emerge naturally from events, not be stated preachy at the end
 
 Write every scene completely — do not abbreviate or summarise. Stay within the word target."""
@@ -365,7 +365,7 @@ Write every scene completely — do not abbreviate or summarise. Stay within the
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        max_tokens=6000,
+        max_tokens=8192,
         temperature=0.85,
     )
     data = extract_json(text)
@@ -410,7 +410,7 @@ def expand_story_node(state: StoryAgentState) -> dict:
                 ),
             },
         ],
-        max_tokens=6000,
+        max_tokens=8192,
         temperature=0.75,
     )
     data = extract_json(text)

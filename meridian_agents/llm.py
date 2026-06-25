@@ -94,13 +94,18 @@ def extract_json(text: str) -> dict:
             return json.loads(candidate)
         except json.JSONDecodeError:
             pass
+    else:
+        # No closing } found — response is likely truncated. Fall through to
+        # field-by-field extraction on the raw cleaned text so we can salvage
+        # whatever fields the LLM did produce.
+        candidate = cleaned
 
-        # Field-by-field extraction — robust against unescaped double quotes in
-        # the "content" HTML (dialogue, HTML attributes, etc.).
-        # Assumes "content" is the last field (true for all Meridian agent prompts).
-        result = _extract_fields(candidate)
-        if result and ("title" in result or "content" in result):
-            return result
+    # Field-by-field extraction — robust against unescaped double quotes in
+    # the "content" HTML (dialogue, HTML attributes, etc.).
+    # Assumes "content" is the last field (true for all Meridian agent prompts).
+    result = _extract_fields(candidate)
+    if result and ("title" in result or "content" in result):
+        return result
 
     raise ValueError(
         f"No valid JSON found in LLM response. First 300 chars: {text[:300]!r}"
