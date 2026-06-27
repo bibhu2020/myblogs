@@ -84,12 +84,15 @@ def _build_agent() -> Agent:
     if not gemini_key:
         raise RuntimeError("GEMINI_API_KEY is required for the news agent.")
 
+    _GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai/"
+
     # SDK >=0.17 defaults to the Responses API which Gemini doesn't implement.
-    # Force Chat Completions by passing an explicit client pointed at Gemini.
-    gemini_client = AsyncOpenAI(
-        api_key=gemini_key,
-        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-    )
+    # _get_client() may ignore the passed openai_client and fall back to env
+    # vars, so set both env vars AND pass an explicit client to cover both paths.
+    os.environ["OPENAI_API_KEY"] = gemini_key
+    os.environ["OPENAI_BASE_URL"] = _GEMINI_BASE
+
+    gemini_client = AsyncOpenAI(api_key=gemini_key, base_url=_GEMINI_BASE)
     model = OpenAIChatCompletionsModel(
         model="gemini-2.5-flash",
         openai_client=gemini_client,
