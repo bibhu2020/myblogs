@@ -4,31 +4,40 @@ FROM node:20-slim AS builder
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ && rm -rf /var/lib/apt/lists/*
 
-# Install all workspace deps in one shot using the root lock file
-WORKDIR /app
-COPY package*.json ./
-COPY api-gateway/package.json  ./api-gateway/
-COPY auth-service/package.json ./auth-service/
-COPY blog-service/package.json ./blog-service/
-COPY media-service/package.json ./media-service/
-COPY frontend/package.json     ./frontend/
-RUN npm ci
+# auth-service
+WORKDIR /app/auth-service
+COPY auth-service/package.json ./
+RUN npm install --legacy-peer-deps
+COPY auth-service/ ./
+RUN npm run build && npm prune --production --legacy-peer-deps
 
-# Copy source and build each service
-COPY api-gateway/  ./api-gateway/
-COPY auth-service/ ./auth-service/
-COPY blog-service/ ./blog-service/
-COPY media-service/ ./media-service/
-COPY frontend/     ./frontend/
+# blog-service
+WORKDIR /app/blog-service
+COPY blog-service/package.json ./
+RUN npm install --legacy-peer-deps
+COPY blog-service/ ./
+RUN npm run build && npm prune --production --legacy-peer-deps
 
-RUN npm run build --workspace=auth-service
-RUN npm run build --workspace=blog-service
-RUN npm run build --workspace=media-service
-RUN npm run build --workspace=api-gateway
-RUN npm run build --workspace=frontend
+# media-service
+WORKDIR /app/media-service
+COPY media-service/package.json ./
+RUN npm install --legacy-peer-deps
+COPY media-service/ ./
+RUN npm run build && npm prune --production --legacy-peer-deps
 
-# Prune dev dependencies so production image stays lean
-RUN npm prune --production --workspaces --include-workspace-root
+# api-gateway
+WORKDIR /app/api-gateway
+COPY api-gateway/package.json ./
+RUN npm install --legacy-peer-deps
+COPY api-gateway/ ./
+RUN npm run build && npm prune --production --legacy-peer-deps
+
+# frontend — build static assets only
+WORKDIR /app/frontend
+COPY frontend/package.json ./
+RUN npm install --legacy-peer-deps
+COPY frontend/ ./
+RUN npm run build
 
 # ── Production ────────────────────────────────────────────────────────────────
 FROM node:20-slim
@@ -65,9 +74,6 @@ print('Kokoro models ready.', flush=True)"
 COPY tts-service/app.py   /app/tts-service/app.py
 COPY tts-service/start.sh /app/tts-service/start.sh
 RUN chmod +x /app/tts-service/start.sh
-
-# Shared node_modules (workspace hoisted, dev deps pruned)
-COPY --from=builder /app/node_modules /app/node_modules
 
 # auth-service
 COPY --from=builder /app/auth-service/dist         /app/auth-service/dist
