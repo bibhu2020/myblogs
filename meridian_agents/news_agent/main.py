@@ -9,9 +9,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
-from openai import AsyncOpenAI
 from agents import Agent, Runner
-from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 
 from .tools import fetch_region_news, save_news
 from .tracer import start_run, complete_run
@@ -84,17 +82,15 @@ def _build_agent() -> Agent:
     if not gemini_key:
         raise RuntimeError("GEMINI_API_KEY is required for the news agent.")
 
-    gemini_client = AsyncOpenAI(
-        api_key=gemini_key,
-        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-    )
-    model = OpenAIChatCompletionsModel(
-        model="gemini-2.5-flash",
-        openai_client=gemini_client,
-    )
+    # The Agents SDK builds its internal OpenAI client from OPENAI_API_KEY /
+    # OPENAI_BASE_URL. Point both at Gemini's OpenAI-compatible endpoint so
+    # the SDK routes all calls there regardless of its internal client creation.
+    os.environ["OPENAI_API_KEY"] = gemini_key
+    os.environ["OPENAI_BASE_URL"] = "https://generativelanguage.googleapis.com/v1beta/openai/"
+
     return Agent(
         name="MeridianNewsAgent",
-        model=model,
+        model="gemini-2.5-flash",
         instructions=_INSTRUCTIONS,
         tools=[save_news],
     )
