@@ -20,7 +20,7 @@
     "@tiptap/starter-kit": "^3.27.1",
     "@tiptap/vue-3": "^3.26.1",
     "@vueuse/core": "^14.3.0",
-    "axios": "^1.16.1",
+    "axios": "^1.18.0",
     "date-fns": "^4.4.0",
     "highlight.js": "^11.11.1",
     "lowlight": "^3.3.0",
