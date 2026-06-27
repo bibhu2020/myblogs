@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.20",
-    "@tailwindcss/vite": "^4.3.0",
+    "@tailwindcss/vite": "^4.3.1",
     "@tiptap/extension-code-block-lowlight": "^3.26.1",
     "@tiptap/extension-image": "^3.27.1",
     "@tiptap/extension-link": "^3.26.1",
