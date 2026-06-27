@@ -9,7 +9,7 @@
     "test:cov": "jest --coverage --passWithNoTests"
   },
   "dependencies": {
-    "@nestjs/common": "^10.0.0",
+    "@nestjs/common": "^11.1.27",
     "@nestjs/core": "^11.1.27",
     "@nestjs/jwt": "^10.2.0",
     "@nestjs/passport": "^10.0.3",
