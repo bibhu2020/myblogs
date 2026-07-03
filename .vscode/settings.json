@@ -1,0 +1,6 @@
+{
+    "sonarlint.connectedMode.project": {
+        "connectionId": "sonarqube-local",
+        "projectKey": "base-kiwi-sauce"
+    }
+}
