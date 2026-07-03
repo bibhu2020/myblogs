@@ -21,6 +21,7 @@ export class Comment {
   @Column({ default: false })
   approved: boolean;
 
+  /* istanbul ignore next -- lazy relation resolver, only invoked by a live TypeORM connection */
   @ManyToOne(() => Post, post => post.comments)
   post: Post;
 

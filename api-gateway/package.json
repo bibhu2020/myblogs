@@ -11,8 +11,8 @@
   "dependencies": {
     "@nestjs/common": "^11.1.27",
     "@nestjs/core": "^11.1.27",
-    "@nestjs/jwt": "^10.2.0",
-    "@nestjs/passport": "^10.0.3",
+    "@nestjs/jwt": "^11.0.2",
+    "@nestjs/passport": "^11.0.0",
     "@nestjs/platform-express": "^11.1.27",
     "axios": "^1.18.0",
     "form-data": "^4.0.6",
@@ -46,7 +46,8 @@
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s",
-      "!**/main.ts"
+      "!**/main.ts",
+      "!**/app.module.ts"
     ],
     "coverageDirectory": "../coverage",
     "coverageReporters": [

@@ -21,6 +21,7 @@ export class Category {
   @Column({ nullable: true })
   icon: string;
 
+  /* istanbul ignore next -- lazy relation resolver, only invoked by a live TypeORM connection */
   @OneToMany(() => Post, post => post.category)
   posts: Post[];
 

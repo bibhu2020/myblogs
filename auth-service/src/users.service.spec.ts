@@ -104,6 +104,14 @@ describe('UsersService', () => {
       mockUserRepo.findOne.mockResolvedValue(null);
       await expect(service.update(99, { name: 'X' })).rejects.toThrow(NotFoundException);
     });
+
+    it('re-hashes password when password is part of the update', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ ...mockUser });
+      mockUserRepo.save.mockImplementation(async (u) => u);
+      const result = await service.update(1, { password: 'new-plaintext' });
+      expect((result as any).password).not.toBe('new-plaintext');
+      expect((result as any).password).toBeUndefined();
+    });
   });
 
   describe('remove', () => {

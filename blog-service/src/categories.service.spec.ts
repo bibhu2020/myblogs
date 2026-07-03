@@ -83,6 +83,14 @@ describe('CategoriesService', () => {
       mockCatRepo.findOne.mockResolvedValue(null);
       await expect(service.update(99, { name: 'X' })).rejects.toThrow(NotFoundException);
     });
+
+    it('leaves slug untouched when name is not part of the update', async () => {
+      mockCatRepo.findOne.mockResolvedValue({ ...mockCat });
+      mockCatRepo.save.mockImplementation(async (c) => c);
+      const result = await service.update(1, { description: 'New description' });
+      expect(result.slug).toBe('technology');
+      expect(result.description).toBe('New description');
+    });
   });
 
   describe('remove', () => {

@@ -148,6 +148,8 @@ def _parse_feed(source_name: str, feed_url: str, region: str) -> list[dict]:
 def fetch_region_news(region: str, _query: str = "", max_results: int = 10) -> list[dict]:
     """Aggregate articles from multiple direct RSS feeds for a region."""
     feeds = _REGION_FEEDS.get(region, [])
+    if not feeds:
+        return []
     all_articles: list[dict] = []
 
     # Fetch all feeds in parallel

@@ -13,13 +13,20 @@
     "start": "dotenv -e .env -- concurrently \"npm --prefix auth-service run start:dev\" \"npm --prefix blog-service run start:dev\" \"npm --prefix media-service run start:dev\" \"npm --prefix api-gateway run start:dev\" \"npm --prefix frontend run dev\"",
     "start:all": "npm start",
     "start:backend": "dotenv -e .env -- concurrently \"npm --prefix auth-service run start:dev\" \"npm --prefix blog-service run start:dev\" \"npm --prefix media-service run start:dev\" \"npm --prefix api-gateway run start:dev\"",
-    "seed": "npm --prefix blog-service run seed"
+    "seed": "npm --prefix blog-service run seed",
+    "sonar": "dotenv -e .env -- sh -c 'sonar-scanner -Dsonar.projectKey=\"$SONAR_PROJECT_KEY\" -Dsonar.scanner.socketTimeout=300 -Dsonar.scanner.responseTimeout=300'",
+    "sonar:gate": "dotenv -e .env -- sh scripts/sonar-quality-gate.sh",
+    "sonar:check": "npm run sonar && npm run sonar:gate",
+    "coverage:python": "python3 -m pytest --cov=meridian_agents --cov-report=xml:coverage-python.xml --cov-report=term",
+    "coverage:all": "npm run test:cov --prefix auth-service && npm run test:cov --prefix blog-service && npm run test:cov --prefix media-service && npm run test:cov --prefix api-gateway && npm run test:cov --prefix frontend && npm run coverage:python",
+    "sonar:full": "npm run coverage:all && npm run sonar:check"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@sonar/scan": "^4.3.8",
     "@types/ws": "^8.5.14",
     "concurrently": "^8.2.2",
     "dotenv-cli": "^11.0.0"

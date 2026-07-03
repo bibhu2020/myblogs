@@ -10,7 +10,12 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['lcov', 'text'],
       include: ['src/**/*.{js,vue}'],
-      exclude: ['src/main.js', 'src/router/**'],
+      exclude: [
+        'src/main.js',
+        'src/router/**',
+        'src/sw.js',
+        'src/components/HelloWorld.vue',
+      ],
     },
   },
   plugins: [

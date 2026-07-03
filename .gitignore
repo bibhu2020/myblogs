@@ -151,3 +151,12 @@ __pycache__/
 *.egg-info/
 .eggs/
 meridian_agents/story_agent/pending_stories.jsonl
+
+# Python test/coverage artifacts
+.pytest_cache/
+.coverage
+coverage-python.xml
+meridian_agents/post_agent/pending_posts.jsonl
+
+# SonarQube local scan working directory
+.scannerwork/

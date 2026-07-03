@@ -378,6 +378,14 @@ function getGallery() {
 }
 
 function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
+
+// Inline template expressions compile to `_ctx.navigator`/`_ctx.window` (Vue's
+// GLOBALS_ALLOWED list doesn't cover them), which is undefined on the
+// component instance — calling this from a bound method instead resolves
+// navigator/window as real globals.
+function copyLink() {
+  navigator.clipboard.writeText(window.location.href)
+}
 </script>
 
 <template>
@@ -457,7 +465,7 @@ function formatDate(d) { return format(new Date(d), 'MMMM d, yyyy') }
         <div class="flex gap-3">
           <button class="flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-medium transition-colors" :class="layout.variant === 'b' ? 'bg-slate-800 hover:bg-slate-700' : 'bg-gray-900 hover:bg-gray-700'">𝕏 Twitter</button>
           <button class="flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-medium transition-colors" :class="layout.variant === 'b' ? 'bg-violet-700 hover:bg-violet-800' : 'bg-primary-700 hover:bg-primary-800'">in LinkedIn</button>
-          <button @click="navigator.clipboard.writeText(window.location.href)" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors" :class="layout.variant === 'b' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'">🔗 Copy Link</button>
+          <button @click="copyLink" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors" :class="layout.variant === 'b' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'">🔗 Copy Link</button>
         </div>
       </div>
     </article>

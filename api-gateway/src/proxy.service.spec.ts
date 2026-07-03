@@ -69,4 +69,47 @@ describe('ProxyService', () => {
       }
     });
   });
+
+  describe('forwardWithFile', () => {
+    const mockFile = {
+      buffer: Buffer.from('fake-image-data'),
+      originalname: 'photo.jpg',
+      mimetype: 'image/jpeg',
+    } as Express.Multer.File;
+
+    it('posts the file as multipart form data to the media service', async () => {
+      (axios.post as jest.Mock).mockResolvedValue({ data: { id: 1, url: '/uploads/photo.jpg' } });
+      const result = await service.forwardWithFile('/api/media/upload', mockFile, {}, 'Bearer jwt');
+      expect(result).toEqual({ id: 1, url: '/uploads/photo.jpg' });
+      expect(axios.post).toHaveBeenCalledWith(
+        'http://localhost:3003/api/media/upload',
+        expect.anything(),
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer jwt' }) }),
+      );
+    });
+
+    it('includes alt text in the form when provided', async () => {
+      (axios.post as jest.Mock).mockResolvedValue({ data: {} });
+      await service.forwardWithFile('/api/media/upload', mockFile, { alt: 'A photo' }, 'Bearer jwt');
+      expect(axios.post).toHaveBeenCalled();
+    });
+
+    it('throws HttpException with upstream status on error', async () => {
+      (axios.post as jest.Mock).mockRejectedValue({ response: { status: 413, data: { message: 'Too large' } } });
+      await expect(
+        service.forwardWithFile('/api/media/upload', mockFile, {}, 'Bearer jwt'),
+      ).rejects.toThrow(HttpException);
+    });
+
+    it('throws 500 HttpException when upstream has no response', async () => {
+      (axios.post as jest.Mock).mockRejectedValue(new Error('Network Error'));
+      try {
+        await service.forwardWithFile('/api/media/upload', mockFile, {}, 'Bearer jwt');
+        fail('should have thrown');
+      } catch (e) {
+        expect(e).toBeInstanceOf(HttpException);
+        expect((e as HttpException).getStatus()).toBe(500);
+      }
+    });
+  });
 });
