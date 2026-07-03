@@ -38,7 +38,7 @@ maintenance = [
     "croniter>=2.0",
 ]
 rebranding = [
-    "openai-agents>=0.17.6",
+    "openai-agents>=0.17.7",
     "openai>=1.0",
     "python-dotenv>=1.2.2",
     "requests>=2.31",
@@ -56,7 +56,7 @@ story_agent = [
     "langchain-core>=1.4.7",
 ]
 news_agent = [
-    "openai-agents>=0.17.6",
+    "openai-agents>=0.17.7",
     "openai>=1.0",
     "feedparser>=6.0",
     "PyJWT>=2.8",
