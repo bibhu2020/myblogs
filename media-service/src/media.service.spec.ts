@@ -5,6 +5,16 @@ import { Media } from './media.entity';
 import { NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import * as fs from 'fs';
 
+// Node's built-in fs module exports non-configurable properties in this
+// runtime, which makes jest.spyOn(fs, ...) throw "Cannot redefine property".
+// Replacing the module with a mock factory sidesteps that entirely.
+jest.mock('fs', () => ({
+  ...jest.requireActual('fs'),
+  readFileSync: jest.fn(),
+  existsSync: jest.fn(),
+  unlinkSync: jest.fn(),
+}));
+
 const mockMediaRepo = {
   find: jest.fn(),
   findOne: jest.fn(),
@@ -46,11 +56,11 @@ describe('MediaService', () => {
     }).compile();
     service = module.get<MediaService>(MediaService);
     jest.clearAllMocks();
-    jest.spyOn(fs, 'readFileSync').mockReturnValue(Buffer.from('fake-image-data'));
-    jest.spyOn(fs, 'existsSync').mockReturnValue(false);
+    (fs.readFileSync as jest.Mock).mockReturnValue(Buffer.from('fake-image-data'));
+    (fs.existsSync as jest.Mock).mockReturnValue(false);
+    (fs.unlinkSync as jest.Mock).mockReset();
+    global.fetch = jest.fn();
   });
-
-  afterEach(() => jest.restoreAllMocks());
 
   describe('findAll', () => {
     it('returns all media ordered by date', async () => {
@@ -103,6 +113,39 @@ describe('MediaService', () => {
       const arg = mockMediaRepo.create.mock.calls[0][0];
       expect(arg.uploadedBy).toBe(42);
     });
+
+    it('uses the GitHub raw URL and deletes the local file when upload succeeds', async () => {
+      process.env.SECRET_TOKEN_GITHUB = 'gh-token';
+      (global.fetch as jest.Mock).mockResolvedValue({ ok: true });
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      mockMediaRepo.create.mockReturnValue(mockMedia);
+      mockMediaRepo.save.mockResolvedValue(mockMedia);
+      await service.save(mockFile, 1, 'alt');
+      const arg = mockMediaRepo.create.mock.calls[0][0];
+      expect(arg.url).toContain('raw.githubusercontent.com');
+      expect(fs.unlinkSync).toHaveBeenCalledWith(mockFile.path);
+    });
+
+    it('falls back to local URL when GitHub responds with an error status', async () => {
+      process.env.SECRET_TOKEN_GITHUB = 'gh-token';
+      (global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 500, text: async () => 'server error' });
+      mockMediaRepo.create.mockReturnValue(mockMedia);
+      mockMediaRepo.save.mockResolvedValue(mockMedia);
+      await service.save(mockFile, 1, 'alt');
+      const arg = mockMediaRepo.create.mock.calls[0][0];
+      expect(arg.url).toBe('/uploads/abc123.jpg');
+      expect(fs.unlinkSync).not.toHaveBeenCalled();
+    });
+
+    it('falls back to local URL when the GitHub request throws', async () => {
+      process.env.SECRET_TOKEN_GITHUB = 'gh-token';
+      (global.fetch as jest.Mock).mockRejectedValue(new Error('network down'));
+      mockMediaRepo.create.mockReturnValue(mockMedia);
+      mockMediaRepo.save.mockResolvedValue(mockMedia);
+      await service.save(mockFile, 1, 'alt');
+      const arg = mockMediaRepo.create.mock.calls[0][0];
+      expect(arg.url).toBe('/uploads/abc123.jpg');
+    });
   });
 
   describe('remove', () => {
@@ -115,6 +158,30 @@ describe('MediaService', () => {
       delete process.env.SECRET_TOKEN_GITHUB;
       mockMediaRepo.findOne.mockResolvedValue(mockMedia);
       await expect(service.remove(1)).rejects.toThrow(InternalServerErrorException);
+    });
+
+    it('deletes the GitHub file when it exists there, then removes the DB record', async () => {
+      process.env.SECRET_TOKEN_GITHUB = 'gh-token';
+      mockMediaRepo.findOne.mockResolvedValue(mockMedia);
+      mockMediaRepo.remove.mockResolvedValue(undefined);
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ sha: 'abc' }) }) // GET
+        .mockResolvedValueOnce({ ok: true }); // DELETE
+      const result = await service.remove(1);
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(mockMediaRepo.remove).toHaveBeenCalledWith(mockMedia);
+      expect(result).toEqual({ message: 'Media deleted' });
+    });
+
+    it('skips the GitHub delete call when the file is not found there', async () => {
+      process.env.SECRET_TOKEN_GITHUB = 'gh-token';
+      mockMediaRepo.findOne.mockResolvedValue(mockMedia);
+      mockMediaRepo.remove.mockResolvedValue(undefined);
+      (global.fetch as jest.Mock).mockResolvedValue({ ok: false });
+      const result = await service.remove(1);
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(mockMediaRepo.remove).toHaveBeenCalledWith(mockMedia);
+      expect(result).toEqual({ message: 'Media deleted' });
     });
   });
 });

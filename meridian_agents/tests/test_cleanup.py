@@ -1,0 +1,206 @@
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch, MagicMock
+
+from meridian_agents.cleanup import (
+    _admin_token,
+    _uploads_filename,
+    _delete_media_by_filename,
+    cleanup_old_posts,
+    cleanup_old_stories,
+)
+
+
+def _resp(json_data=None, raise_exc=None):
+    r = MagicMock()
+    r.json.return_value = json_data
+    if raise_exc:
+        r.raise_for_status.side_effect = raise_exc
+    else:
+        r.raise_for_status.return_value = None
+    return r
+
+
+class TestAdminToken:
+    def test_uses_env_token_when_set(self, monkeypatch):
+        monkeypatch.setenv("AGENT_JWT_TOKEN", "existing-token")
+        assert _admin_token("https://server") == "existing-token"
+
+    def test_logs_in_when_no_env_token(self, monkeypatch):
+        monkeypatch.delenv("AGENT_JWT_TOKEN", raising=False)
+        with patch("meridian_agents.cleanup.httpx.Client") as MockClient:
+            client = MockClient.return_value.__enter__.return_value
+            client.post.return_value = _resp({"access_token": "fresh-token"})
+            token = _admin_token("https://server")
+        assert token == "fresh-token"
+
+
+class TestUploadsFilename:
+    def test_returns_none_for_missing_url(self):
+        assert _uploads_filename(None) is None
+        assert _uploads_filename("") is None
+
+    def test_returns_none_when_no_uploads_segment(self):
+        assert _uploads_filename("https://unsplash.com/photo.jpg") is None
+
+    def test_extracts_filename_from_uploads_path(self):
+        assert _uploads_filename("/uploads/abc123.jpg") == "abc123.jpg"
+
+    def test_extracts_filename_ignoring_query_string(self):
+        assert _uploads_filename("/uploads/abc123.jpg?w=200") == "abc123.jpg"
+
+
+class TestDeleteMediaByFilename:
+    def test_deletes_when_found_by_filename(self):
+        client = MagicMock()
+        client.get.return_value = _resp([{"id": 1, "filename": "abc.jpg"}])
+        client.delete.return_value = _resp()
+        _delete_media_by_filename(client, "https://server", "Bearer t", "abc.jpg")
+        client.delete.assert_called_once_with(
+            "https://server/api/media/1", headers={"Authorization": "Bearer t"}, timeout=20,
+        )
+
+    def test_deletes_when_found_by_url_suffix(self):
+        client = MagicMock()
+        client.get.return_value = _resp([{"id": 2, "url": "/uploads/abc.jpg"}])
+        client.delete.return_value = _resp()
+        _delete_media_by_filename(client, "https://server", "Bearer t", "abc.jpg")
+        client.delete.assert_called_once()
+
+    def test_handles_dict_response_shape(self):
+        client = MagicMock()
+        client.get.return_value = _resp({"media": [{"id": 3, "filename": "abc.jpg"}]})
+        client.delete.return_value = _resp()
+        _delete_media_by_filename(client, "https://server", "Bearer t", "abc.jpg")
+        client.delete.assert_called_once()
+
+    def test_does_nothing_when_not_found(self):
+        client = MagicMock()
+        client.get.return_value = _resp([{"id": 1, "filename": "other.jpg"}])
+        _delete_media_by_filename(client, "https://server", "Bearer t", "abc.jpg")
+        client.delete.assert_not_called()
+
+    def test_swallows_errors(self):
+        client = MagicMock()
+        client.get.side_effect = Exception("network down")
+        _delete_media_by_filename(client, "https://server", "Bearer t", "abc.jpg")  # must not raise
+
+
+class TestCleanupOldPosts:
+    def test_returns_zero_when_auth_fails(self, monkeypatch):
+        monkeypatch.delenv("AGENT_JWT_TOKEN", raising=False)
+        with patch("meridian_agents.cleanup.httpx.Client") as MockClient:
+            client = MockClient.return_value.__enter__.return_value
+            client.post.side_effect = Exception("bad credentials")
+            assert cleanup_old_posts("https://server") == 0
+
+    def test_deletes_posts_older_than_cutoff(self, monkeypatch):
+        monkeypatch.setenv("AGENT_JWT_TOKEN", "t")
+        old_date = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+        recent_date = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        with patch("meridian_agents.cleanup.httpx.Client") as MockClient:
+            client = MockClient.return_value.__enter__.return_value
+            client.get.return_value = _resp({
+                "posts": [
+                    {"id": 1, "title": "Old post", "createdAt": old_date, "featuredImage": "/uploads/a.jpg"},
+                    {"id": 2, "title": "Recent post", "createdAt": recent_date},
+                ]
+            })
+            client.delete.return_value = _resp()
+            deleted = cleanup_old_posts("https://server", days=30)
+        assert deleted == 1
+        client.delete.assert_any_call(
+            "https://server/api/posts/1", headers={"Authorization": "Bearer t"}, timeout=20,
+        )
+
+    def test_dry_run_does_not_delete(self, monkeypatch):
+        monkeypatch.setenv("AGENT_JWT_TOKEN", "t")
+        old_date = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+        with patch("meridian_agents.cleanup.httpx.Client") as MockClient:
+            client = MockClient.return_value.__enter__.return_value
+            client.get.return_value = _resp({"posts": [{"id": 1, "title": "Old", "createdAt": old_date}]})
+            deleted = cleanup_old_posts("https://server", days=30, dry_run=True)
+        assert deleted == 0
+        client.delete.assert_not_called()
+
+    def test_skips_posts_with_missing_or_invalid_dates(self, monkeypatch):
+        monkeypatch.setenv("AGENT_JWT_TOKEN", "t")
+        with patch("meridian_agents.cleanup.httpx.Client") as MockClient:
+            client = MockClient.return_value.__enter__.return_value
+            client.get.return_value = _resp({"posts": [
+                {"id": 1, "title": "No date"},
+                {"id": 2, "title": "Bad date", "createdAt": "not-a-date"},
+            ]})
+            deleted = cleanup_old_posts("https://server", days=30)
+        assert deleted == 0
+
+    def test_continues_after_a_failed_delete(self, monkeypatch):
+        monkeypatch.setenv("AGENT_JWT_TOKEN", "t")
+        old_date = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+        with patch("meridian_agents.cleanup.httpx.Client") as MockClient:
+            client = MockClient.return_value.__enter__.return_value
+            client.get.return_value = _resp({"posts": [
+                {"id": 1, "title": "Old", "createdAt": old_date},
+                {"id": 2, "title": "Old2", "createdAt": old_date},
+            ]})
+            client.delete.side_effect = [Exception("boom"), _resp()]
+            deleted = cleanup_old_posts("https://server", days=30)
+        assert deleted == 1
+
+    def test_handles_list_response_shape(self, monkeypatch):
+        monkeypatch.setenv("AGENT_JWT_TOKEN", "t")
+        old_date = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+        with patch("meridian_agents.cleanup.httpx.Client") as MockClient:
+            client = MockClient.return_value.__enter__.return_value
+            client.get.return_value = _resp([{"id": 1, "title": "Old", "createdAt": old_date}])
+            client.delete.return_value = _resp()
+            deleted = cleanup_old_posts("https://server", days=30)
+        assert deleted == 1
+
+    def test_swallows_top_level_errors(self, monkeypatch):
+        monkeypatch.setenv("AGENT_JWT_TOKEN", "t")
+        with patch("meridian_agents.cleanup.httpx.Client") as MockClient:
+            client = MockClient.return_value.__enter__.return_value
+            client.get.side_effect = Exception("down")
+            assert cleanup_old_posts("https://server") == 0
+
+
+class TestCleanupOldStories:
+    def test_returns_zero_when_auth_fails(self, monkeypatch):
+        monkeypatch.delenv("AGENT_JWT_TOKEN", raising=False)
+        with patch("meridian_agents.cleanup.httpx.Client") as MockClient:
+            client = MockClient.return_value.__enter__.return_value
+            client.post.side_effect = Exception("bad credentials")
+            assert cleanup_old_stories("https://server") == 0
+
+    def test_only_deletes_published_stories_older_than_cutoff(self, monkeypatch):
+        monkeypatch.setenv("AGENT_JWT_TOKEN", "t")
+        old_date = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+        with patch("meridian_agents.cleanup.httpx.Client") as MockClient:
+            client = MockClient.return_value.__enter__.return_value
+            client.get.return_value = _resp({"stories": [
+                {"id": 1, "title": "Old", "status": "published", "createdAt": old_date, "featuredImage": "/uploads/b.jpg"},
+                {"id": 2, "title": "Draft", "status": "draft", "createdAt": old_date},
+            ]})
+            client.delete.return_value = _resp()
+            deleted = cleanup_old_stories("https://server", days=30)
+        assert deleted == 1
+        client.delete.assert_any_call(
+            "https://server/api/stories/1", headers={"Authorization": "Bearer t"}, timeout=20,
+        )
+
+    def test_dry_run_does_not_delete(self, monkeypatch):
+        monkeypatch.setenv("AGENT_JWT_TOKEN", "t")
+        old_date = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+        with patch("meridian_agents.cleanup.httpx.Client") as MockClient:
+            client = MockClient.return_value.__enter__.return_value
+            client.get.return_value = _resp({"stories": [{"id": 1, "status": "published", "createdAt": old_date}]})
+            deleted = cleanup_old_stories("https://server", days=30, dry_run=True)
+        assert deleted == 0
+        client.delete.assert_not_called()
+
+    def test_swallows_top_level_errors(self, monkeypatch):
+        monkeypatch.setenv("AGENT_JWT_TOKEN", "t")
+        with patch("meridian_agents.cleanup.httpx.Client") as MockClient:
+            client = MockClient.return_value.__enter__.return_value
+            client.get.side_effect = Exception("down")
+            assert cleanup_old_stories("https://server") == 0

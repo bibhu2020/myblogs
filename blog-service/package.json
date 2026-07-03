@@ -57,7 +57,8 @@
     "collectCoverageFrom": [
       "**/*.(t|j)s",
       "!**/main.ts",
-      "!**/seed.service.ts"
+      "!**/seed.service.ts",
+      "!**/app.module.ts"
     ],
     "coverageDirectory": "../coverage",
     "coverageReporters": [

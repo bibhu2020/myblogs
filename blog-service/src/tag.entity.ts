@@ -12,6 +12,7 @@ export class Tag {
   @Column({ unique: true })
   slug: string;
 
+  /* istanbul ignore next -- lazy relation resolver, only invoked by a live TypeORM connection */
   @ManyToMany(() => Post, post => post.tags)
   posts: Post[];
 }

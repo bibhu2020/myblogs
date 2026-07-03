@@ -47,9 +47,11 @@ export class Post {
   @Column({ default: 0 })
   views: number;
 
+  /* istanbul ignore next -- lazy relation resolver, only invoked by a live TypeORM connection */
   @ManyToOne(() => Category, cat => cat.posts, { nullable: true, eager: true })
   category: Category;
 
+  /* istanbul ignore next -- lazy relation resolver, only invoked by a live TypeORM connection */
   @ManyToMany(() => Tag, { eager: true, cascade: true })
   @JoinTable({
     name: 'blog_posts_tags_tags',
@@ -58,6 +60,7 @@ export class Post {
   })
   tags: Tag[];
 
+  /* istanbul ignore next -- lazy relation resolver, only invoked by a live TypeORM connection */
   @OneToMany(() => Comment, c => c.post)
   comments: Comment[];
 
