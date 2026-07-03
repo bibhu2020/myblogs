@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 from openai import AsyncOpenAI
-from agents import Agent, Runner, set_default_openai_client, set_default_openai_api
+from agents import Agent, Runner, set_default_openai_client, set_default_openai_api, set_tracing_disabled
 
 from .tools import fetch_region_news, save_news
 from .tracer import start_run, complete_run
@@ -90,8 +90,9 @@ def _build_agent() -> Agent:
     # set_default_openai_api("chat_completions") switches from Responses API
     # (which Gemini doesn't implement) to Chat Completions.
     gemini_client = AsyncOpenAI(api_key=gemini_key, base_url=_GEMINI_BASE)
-    set_default_openai_client(gemini_client)
+    set_default_openai_client(gemini_client, use_for_tracing=False)
     set_default_openai_api("chat_completions")
+    set_tracing_disabled(True)
 
     return Agent(
         name="MeridianNewsAgent",
