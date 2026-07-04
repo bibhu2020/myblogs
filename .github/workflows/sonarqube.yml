@@ -70,3 +70,20 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
           SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
         run: npm run sonar:gate
+
+  codeql-gate:
+    name: CodeQL Security Gate
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: read
+      checks: read
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Enforce CodeQL severity gate (0 critical, <= 2 high)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run codeql:gate
