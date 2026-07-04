@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a vulnerability privately
+    url: https://github.com/bibhu2020/myblogs/security/advisories/new
+    about: >-
+      For a genuinely exploitable security issue, please use private
+      reporting instead of a public issue — see the "Security finding /
+      vulnerability triage" template for what that distinction means here.

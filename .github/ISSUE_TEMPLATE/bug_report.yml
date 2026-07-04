@@ -1,0 +1,63 @@
+name: Bug report
+description: Something in the app or a workflow is broken.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Where is the bug?
+      options:
+        - frontend (Vue SPA, port 5173)
+        - api-gateway (port 3000)
+        - auth-service (port 3001)
+        - blog-service (port 3002)
+        - media-service (port 3003)
+        - CI / GitHub Actions (pr-check.yml or another workflow)
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Where did you see it?
+      placeholder: "Local dev (npm start) / HuggingFace Space (production) / a specific PR or Actions run URL"
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps, starting from a clean state if possible.
+      placeholder: |
+        1. Go to /admin/posts
+        2. Click "New Post"
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs. actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs, error messages, or screenshots
+      description: >-
+        Service logs, browser console output, or a GitHub Actions job log
+        link. Paste text as a code block rather than a screenshot where
+        possible — it's searchable and copy-pasteable for whoever picks
+        this up.
+      render: shell
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit / branch (if known)
+      placeholder: "e.g. a commit SHA on local, or a PR number"

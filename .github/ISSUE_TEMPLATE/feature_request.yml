@@ -1,0 +1,38 @@
+name: Feature request
+description: Propose something new — a feature, service, or workflow change.
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the gap or friction, not just the feature you have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Primary area affected
+      options:
+        - frontend
+        - api-gateway / auth-service / blog-service / media-service
+        - meridian_agents (post_agent, story_agent, news_agent, maintenance_agent, rebranding_agent)
+        - CI/CD (pr-check.yml or another workflow)
+        - Documentation (_docs/, CLAUDE.md)
+        - Not sure / spans multiple areas
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered (optional)
