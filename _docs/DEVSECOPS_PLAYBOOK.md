@@ -65,7 +65,13 @@ before copying files:
 - [ ] **Dependency graph** — required by Dependency Review (Step 5). Not
       always on by default even for public repos on some org configs —
       check it explicitly. If you skip this, Step 5's job fails with
-      *"Dependency review is not supported on this repository."*
+      *"Dependency review is not supported on this repository."* This
+      toggle doesn't run a scan itself — enabling it just tells GitHub to
+      start parsing whatever manifest/lockfile formats it recognizes
+      (`package.json`+lockfile, `pyproject.toml`, `go.mod`, etc.)
+      automatically on every push to a tracked branch. Nothing in this
+      playbook builds that graph; Dependabot alerts and Dependency Review
+      both just read it once it exists.
 - [ ] **Dependabot alerts** — the actual SCA lookup. Notifies on
       already-known-vulnerable dependencies, independent of any PR.
 - [ ] **Dependabot security updates** — auto-opens a PR to patch a
@@ -485,10 +491,62 @@ standalone file *and* a `needs:`-based gate expecting it to be local.
 
 ---
 
+## Step 8 — Harden what these checks alone don't enforce
+
+Every step above makes a check go red on failure. None of them, by
+themselves, stop a PR from being merged anyway — that gap is easy to miss
+because it doesn't show up until you actually try to merge a PR with a red
+check and discover nothing stopped you. Found the hard way while building
+this out originally; do these deliberately from the start instead:
+
+- [ ] **Required status checks.** Add a branch protection rule (or a
+      repository *ruleset* — GitHub's newer mechanism, check
+      **Settings → Rules → Rulesets** as well as the classic **Settings →
+      Branches**) naming the actual job names from Step 7 —
+      e.g. `SonarQube Scan`, `CodeQL Security Gate`,
+      `Dependency Review (SCA)`. Without this, "Blocks merge?" throughout
+      this playbook describes what each script does when it runs, not
+      what GitHub actually enforces. This is a real behavior change once
+      applied — future PRs get blocked on any red check, including causes
+      unrelated to the PR's own diff (a flaky self-hosted SonarQube server
+      returning a transient 502, for instance) — so decide the required
+      list deliberately rather than requiring everything by default.
+- [ ] **Secret scanning** (**Settings → Code security and analysis →
+      Secret scanning**) — free, zero-config, catches committed
+      credentials. Turn on **push protection** underneath it too if you
+      want secrets blocked before they land in git history at all, not
+      just flagged after.
+- [ ] **Private vulnerability reporting** (same Settings page) if this is
+      a public repo — gives outside reporters a private channel instead
+      of a public issue for anything genuinely exploitable.
+- [ ] **Container/base-image scanning**, if you build a Docker image.
+      Nothing in Steps 1–7 touches OS packages or base-image CVEs —
+      `aquasecurity/trivy-action` or Docker Scout (both have official
+      GitHub Actions) slot in as a sibling job scanning the built image
+      before it's pushed anywhere.
+- [ ] **A `docker` ecosystem entry in `dependabot.yml`** (Step 2), if you
+      have a Dockerfile — tracks the `FROM` line and opens a PR when a
+      newer base-image tag ships. Easy to forget since Step 2's npm/pip
+      entries don't remind you it exists.
+- [ ] **Repo-wide default `GITHUB_TOKEN` permission** (**Settings →
+      Actions → General → Workflow permissions**) — set it to read-only.
+      Every job template in this playbook already sets its own explicit,
+      least-privilege `permissions:` block, so this only matters for a
+      *future* job that omits one — read-only means that job fails closed
+      (has to explicitly request more) instead of silently inheriting
+      broad write access.
+
+---
+
 ## Verification checklist
 
 - [ ] Open a throwaway PR. Confirm every job in the table at the top of
       this doc appears as a check.
+- [ ] Confirm Step 8's required-status-checks rule actually exists (query
+      the ruleset/branch-protection API, don't just assume the Settings
+      click "took") — then push a deliberately failing change on that
+      throwaway PR and confirm the merge button is genuinely disabled, not
+      just the check going red.
 - [ ] `Build all services` (or your build-check job) passes on the
       unmodified branch.
 - [ ] `SonarQube Scan` uploads and `SonarQube Quality Gate check` reports a
@@ -532,3 +590,10 @@ standalone file *and* a `needs:`-based gate expecting it to be local.
   Security tab, loosen the filter in `scripts/zap-alerts-to-sarif.py`
   (`HIGH_RISKCODE` constant) — just expect header-hardening noise from a
   dev-mode server to show up there too.
+- **Copying Steps 1–7 does not, by itself, make any of this enforced.**
+  This repo ran the full pipeline for a while with every gate script
+  working correctly and zero required status checks on `main` — every PR
+  merged the moment someone clicked the button, regardless of check
+  outcome, until Step 8 was done separately. Treat Step 8 as part of the
+  setup, not an optional afterthought, even though it comes after
+  everything else in this doc.
