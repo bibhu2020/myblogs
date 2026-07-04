@@ -1,7 +1,9 @@
 """
-Meridian — SonarQube Integration doc generator.
-Produces _docs/codescan.pdf: what SonarQube is, how this repo wires it up
-(scan + gate, locally and in CI), and how code coverage feeds into it.
+Meridian — Code Scanning doc generator (SonarQube + CodeQL).
+Produces _docs/codescan.pdf: what SonarQube and CodeQL are, how this repo
+wires each up (scan + gate, locally and in CI), how code coverage feeds
+into SonarQube, and why CodeQL runs as extra jobs in the same PR-checks
+workflow instead of its own file.
 """
 import os
 
@@ -110,8 +112,8 @@ def build():
                              leftMargin=20 * mm, rightMargin=20 * mm)
     story = []
 
-    story.append(Paragraph('SonarQube Integration', title_style))
-    story.append(Paragraph('Static code analysis setup for the Meridian (myblogs) project', subtitle_style))
+    story.append(Paragraph('Code Scanning: SonarQube &amp; CodeQL', title_style))
+    story.append(Paragraph('Static code analysis and security scanning setup for the Meridian (myblogs) project', subtitle_style))
 
     # ── 1. What is SonarQube? ────────────────────────────────────────────────
     story.append(Paragraph('1. What is SonarQube?', h1_style))
@@ -228,16 +230,20 @@ def build():
     # ── 4. Triggering from the CI Pipeline ───────────────────────────────────
     story.append(Paragraph('4. Triggering from the CI Pipeline', h1_style))
     story.append(Paragraph(
-        'Defined in <font face="Courier">.github/workflows/sonarqube.yml</font>, as a job alongside the '
-        'existing build-check job that runs on every pull request into main. As of this document, the job '
-        'is present but <b>commented out</b> — it does not currently run or gate PRs.', body_style))
+        'Defined in <font face="Courier">.github/workflows/pr-check.yml</font> ("PR Checks"), as a job '
+        'alongside build-check and the CodeQL jobs (Section 7) — all in the same file, all triggered by the '
+        'same <font face="Courier">on: pull_request: branches: [main]</font> block, so one PR runs every '
+        'check this repo has.', body_style))
     story.append(code_block(
         'sonarqube:\n'
+        '&nbsp;&nbsp;permissions: {pull-requests: read}\n'
         '&nbsp;&nbsp;steps:\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;- actions/checkout@v4&nbsp;&nbsp;(fetch-depth: 0)\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;- actions/setup-node@v4\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- actions/setup-python@v5&nbsp;&nbsp;(3.11)\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- run: pip install -e ".[all]"&nbsp;&nbsp;&nbsp;# pytest + every agent extra\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;- run: npm ci --ignore-scripts\n'
-        '&nbsp;&nbsp;&nbsp;&nbsp;- run: npm run coverage:all&nbsp;&nbsp;&nbsp;# 5 services + Python\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- run: npm run coverage:all&nbsp;&nbsp;&nbsp;# 4 services + frontend + Python\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;- name: SonarQube Scan\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;env: {SONAR_TOKEN, SONAR_HOST_URL, SONAR_PROJECT_KEY}&nbsp;&nbsp;# from GitHub Secrets\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;run: npm run sonar\n'
@@ -245,11 +251,12 @@ def build():
         '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;env: {SONAR_TOKEN, SONAR_HOST_URL, SONAR_PROJECT_KEY}\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;run: npm run sonar:gate'))
     story.append(Paragraph(
-        'The pipeline calls the identical npm scripts used locally — nothing CI-specific is duplicated. To '
-        'enable it: uncomment the job, and add SONAR_TOKEN, SONAR_HOST_URL, and SONAR_PROJECT_KEY as '
-        'repository secrets in GitHub. Once enabled, this becomes the mechanism that can actually block a PR '
-        'merge on a failed gate (via a required status check), which running from a developer’s machine '
-        'or the IDE alone cannot enforce.', body_style))
+        'The pipeline calls the identical npm scripts used locally — nothing CI-specific is duplicated. This '
+        'job is what actually blocks a PR merge on a failed gate (via a required status check), which '
+        'running from a developer’s machine or the IDE alone cannot enforce. The Python setup step exists '
+        'because <font face="Courier">coverage:all</font> shells out to pytest for the meridian_agents suite '
+        '(Section 6.4) — without it, that step fails with “No module named pytest”, silently tolerated only '
+        'because it runs with <font face="Courier">continue-on-error: true</font>.', body_style))
 
     # ── 5. How the Quality Gate Check Works ──────────────────────────────────
     story.append(Paragraph('5. How the Quality Gate Check Works', h1_style))
@@ -391,6 +398,116 @@ def build():
         '<font face="Courier">npm run sonar:full</font> then runs '
         '<font face="Courier">coverage:all</font>, the scan, and the gate check in order — the one command '
         'that reproduces the full CI pipeline end-to-end from a clean checkout.', body_style))
+
+    # ── 7. CodeQL — Security-Focused Static Analysis ─────────────────────────
+    story.append(Paragraph('7. CodeQL — Security-Focused Static Analysis', h1_style))
+
+    story.append(Paragraph('7.1 Why CodeQL alongside SonarQube?', h2_style))
+    story.append(Paragraph(
+        'Both tools do static analysis and both report Vulnerabilities, but they are not substitutes for '
+        'each other — they differ in depth and mechanism, and this project runs both as complementary '
+        'layers rather than picking one.', body_style))
+    story.append(bullets([
+        'CodeQL treats the source as a queryable relational database and performs real interprocedural '
+        '<b>dataflow / taint-tracking</b> analysis across the whole codebase — it traces how a specific '
+        'piece of untrusted input actually flows into a dangerous sink (a SQL query, a shell exec, an HTML '
+        'response), rather than matching syntactic patterns. This makes it materially stronger at finding '
+        'real, exploitable injection / XSS / SSRF / insecure-deserialization vulnerabilities, with fewer '
+        'false positives on those specific bug classes.',
+        'SonarQube’s vulnerability detection (Section 1) is comparatively shallower — rule/pattern-based '
+        'rather than full dataflow — but it covers a much broader category set (bugs, code smells, '
+        'duplication, coverage-gated quality) that CodeQL does not attempt at all. Community Edition also '
+        'does not scan third-party dependencies for known CVEs (no SCA); CodeQL doesn’t either — both tools '
+        'only analyze this project’s own source.',
+        'CodeQL runs as native GitHub Code Scanning — free for public repositories (this repo is public), '
+        'with zero additional infrastructure: no server to host, no <font face="Courier">SONAR_HOST_URL</font>'
+        '-style secret to manage, unlike SonarQube’s self-hosted setup (Section 2.2).',
+        'Net effect: SonarQube stays the general quality gate; CodeQL adds a deeper, security-specific pass '
+        'using its <font face="Courier">security-extended</font> query pack (Section 7.3).',
+    ]))
+
+    story.append(Paragraph('7.2 Why it is not a separate workflow file', h2_style))
+    story.append(Paragraph(
+        'CodeQL analysis initially lived in its own <font face="Courier">.github/workflows/codeql.yml</font>'
+        ' — GitHub’s own default convention (the “Set up code scanning” button always generates a standalone '
+        'file). It was folded into <font face="Courier">.github/workflows/pr-check.yml</font> instead, for one '
+        'concrete reason: the custom severity gate (7.4) needs to know when CodeQL’s analysis has finished, '
+        'and jobs can only declare a native <font face="Courier">needs:</font> dependency on another job '
+        '<i>within the same workflow file</i> — not across two independent workflow runs. Keeping it separate '
+        'would have meant polling GitHub’s Checks API from the gate job to find out when a completely '
+        'different workflow’s run had completed, purely to work around the file boundary.', body_style))
+    story.append(note(
+        'Splitting workflows by concern is still a reasonable default elsewhere — GitHub’s Security tab '
+        'expects code-scanning results under a recognizably-named workflow, and a job’s '
+        '<font face="Courier">permissions:</font> block is scoped per-job regardless of which file it lives '
+        'in, so folding CodeQL in here did not widen any other job’s permissions. The one thing actually '
+        'given up by merging is CodeQL’s independent trigger set: as a standalone workflow it also ran on '
+        'every push to main and a weekly schedule, catching drift outside of PR activity. In one shared '
+        'file, every job uses the same trigger — CodeQL (and everything else in this file) now runs on '
+        '<font face="Courier">pull_request</font> only.'))
+
+    story.append(Paragraph('7.3 How it triggers', h2_style))
+    story.append(Paragraph(
+        'The single <font face="Courier">on: pull_request: branches: [main]</font> block at the top of '
+        '<font face="Courier">pr-check.yml</font> governs every job in the file — CodeQL runs whenever a PR '
+        'targets main, exactly like build-check and the SonarQube scan.', body_style))
+    story.append(code_block(
+        'codeql:\n'
+        '&nbsp;&nbsp;permissions: {security-events: write, actions: read, contents: read}\n'
+        '&nbsp;&nbsp;strategy:\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;matrix:\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;language: [javascript-typescript, python]\n'
+        '&nbsp;&nbsp;steps:\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- actions/checkout@v4\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- actions/setup-node@v4&nbsp;&nbsp;(js/ts leg only)\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- run: npm ci --ignore-scripts&nbsp;&nbsp;(js/ts leg only)\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- github/codeql-action/init@v3\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with: {languages: matrix.language,\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;config-file: .github/codeql/codeql-config.yml}\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- github/codeql-action/autobuild@v3\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- github/codeql-action/analyze@v3\n\n'
+        'codeql-gate:\n'
+        '&nbsp;&nbsp;needs: codeql&nbsp;&nbsp;&nbsp;&nbsp;# waits for both matrix legs to finish\n'
+        '&nbsp;&nbsp;permissions: {security-events: read, contents: read}\n'
+        '&nbsp;&nbsp;steps:\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- actions/checkout@v4\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- run: npm run codeql:gate'))
+    story.append(Paragraph(
+        'The matrix runs two independent legs in parallel, one per language. '
+        '<font face="Courier">github/codeql-action/init</font> loads '
+        '<font face="Courier">.github/codeql/codeql-config.yml</font>, which enables the '
+        '<font face="Courier">security-extended</font> query pack and excludes '
+        '<font face="Courier">node_modules/</font>, <font face="Courier">dist/</font>, '
+        '<font face="Courier">coverage/</font>, <font face="Courier">uploads/</font>, and DB/PDF files from '
+        'analysis — deliberately mirroring <font face="Courier">sonar.exclusions</font> (Section 2.1) so both '
+        'tools scan the same real source. The javascript-typescript leg installs dependencies first purely to '
+        'help CodeQL resolve TS/JS imports more precisely; neither language actually needs a compiled build '
+        'to be analyzed, so <font face="Courier">autobuild</font> is effectively a no-op for both.', body_style))
+
+    story.append(Paragraph('7.4 Custom severity gate — scripts/codeql-quality-gate.sh', h2_style))
+    story.append(Paragraph(
+        '<font face="Courier">codeql-action/analyze</font> always exits successfully regardless of what it '
+        'finds — GitHub Code Scanning has no built-in “fail the build on severity count” gate the way '
+        'SonarQube’s Quality Gate does natively. This script closes that gap, mirroring '
+        'scripts/sonar-quality-gate.sh’s approach (Section 5) rather than reusing SonarQube’s exact '
+        'thresholds:', body_style))
+    story.append(bullets([
+        '<b>FAIL</b> if any open alert has security severity <b>CRITICAL</b>.',
+        '<b>FAIL</b> if more than <b>2</b> open alerts have security severity <b>HIGH</b>.',
+        'otherwise <b>PASS</b>.',
+    ]))
+    story.append(Paragraph(
+        'Because <font face="Courier">codeql-gate</font> declares <font face="Courier">needs: codeql</font>, '
+        'it only starts once every matrix leg has completed — no polling required to know analysis is done. '
+        'The one remaining timing wrinkle: a finished <font face="Courier">analyze</font> step means the '
+        'SARIF upload was accepted, not that GitHub has finished turning it into queryable alerts yet, so the '
+        'script pauses briefly before querying '
+        '<font face="Courier">GET /repos/{owner}/{repo}/code-scanning/alerts?state=open</font> (paginated), '
+        'filtering each alert’s <font face="Courier">rule.security_severity_level</font>.', body_style))
+    story.append(note(
+        'An empty result from that query is genuinely ambiguous — zero open alerts, or alerts not finished '
+        'processing yet — so the script uses a fixed pause rather than retrying-until-nonempty, which would '
+        'silently treat “not ready yet” as “clean”.'))
 
     story.append(HRFlowable(width='100%', thickness=0.5, color=BORDER, spaceBefore=14, spaceAfter=8))
     story.append(Paragraph(
