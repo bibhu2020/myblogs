@@ -1,0 +1,209 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-check:
+    name: Build all services
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Build all services + frontend
+        run: npm run build:all
+
+  sonarqube:
+    name: SonarQube Scan
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install Python dependencies
+        run: pip install -e ".[all]" --quiet
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run tests with coverage
+        continue-on-error: true
+        run: npm run coverage:all
+
+      - name: SonarQube Scan
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+        run: npm run sonar
+
+      - name: SonarQube Quality Gate check
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+        run: npm run sonar:gate
+
+  codeql:
+    name: CodeQL Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, python]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Installing deps (not building) helps CodeQL resolve TS/JS imports more
+      # precisely. Not required for Python — CodeQL parses it directly.
+      - name: Set up Node.js 20
+        if: matrix.language == 'javascript-typescript'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: npm ci
+        if: matrix.language == 'javascript-typescript'
+        run: npm ci --ignore-scripts
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          config-file: ./.github/codeql/codeql-config.yml
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  codeql-gate:
+    name: CodeQL Security Gate
+    runs-on: ubuntu-latest
+    needs: codeql
+    permissions:
+      security-events: read
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Enforce CodeQL severity gate (0 critical, <= 2 high)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run codeql:gate
+
+  dependency-review:
+    name: Dependency Review (SCA)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # SCA, not SAST: flags known-vulnerable or license-problematic *new*
+      # dependencies introduced by this PR's diff to package.json/
+      # package-lock.json/pyproject.toml, via the same GitHub Advisory
+      # Database that powers Dependabot alerts (Security tab) — but scoped
+      # to this PR instead of the whole repo, and gated inline instead of
+      # informational-only. Complements, not replaces, Dependabot alerts,
+      # which continuously cover the whole dependency tree (not just PR
+      # diffs) and react to newly-published advisories with no PR needed.
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  dast:
+    name: OWASP ZAP Baseline Scan (DAST)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      # Raw services via `npm start`, not the production Docker image — DAST
+      # doesn't need the TTS/PyTorch/Kokoro build, and this boots in seconds
+      # instead of minutes. Backgrounded so it survives into the next step;
+      # GitHub-hosted Linux runners execute Docker-based actions (ZAP below)
+      # with host networking, so localhost is reachable from both.
+      - name: Start the app
+        run: |
+          npm start > /tmp/app.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:5173 >/dev/null 2>&1 && curl -sf http://localhost:3000/api/posts >/dev/null 2>&1; then
+              echo "App is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "App did not become ready in time"
+          cat /tmp/app.log
+          exit 1
+
+      # Passive-only: spiders the running frontend and inspects responses
+      # (headers, cookies, disclosed info) without sending attack payloads —
+      # safe against the real seeded data in blog.db/auth.db/media.db.
+      # fail_action stays false and allow_issue_writing stays false until a
+      # real baseline run establishes what this app's normal finding count
+      # looks like — turning on a hard gate blind would risk blocking every
+      # future PR on pre-existing findings unrelated to whatever it changes.
+      - name: ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          target: 'http://localhost:5173'
+          fail_action: false
+          allow_issue_writing: false
+          artifact_name: 'zap-baseline-report'
