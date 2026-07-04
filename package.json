@@ -79,7 +79,7 @@
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.11.1",
     "class-transformer": "^0.5.1",
-    "class-validator": "^0.14.1",
+    "class-validator": "^0.15.1",
     "date-fns": "^4.4.0",
     "dotenv": "^17.4.2",
     "form-data": "^4.0.6",
