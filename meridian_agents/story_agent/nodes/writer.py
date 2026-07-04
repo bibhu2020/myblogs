@@ -8,116 +8,72 @@ from ...llm import chat_completion, extract_json
 from ..state import StoryAgentState
 
 # ── Age group definitions ─────────────────────────────────────────────────────
+# Each age group has a FIXED genre pool — the agent always writes within these
+# genres for that age group, never drifting to unrelated topics.
 
-AGE_GROUPS = ['3-7', '8-15', '16-20']
+AGE_GROUPS = ['2-7', '8-15', '16+']
 
-THEMES_3_7 = [
+# Ages 2-7: Panchatantra fables, original cartoon-style characters, and original
+# child-safe superheroes — no real trademarked characters (IP-safety requirement).
+THEMES_2_7 = [
     {
-        "genre": "AI & Machine Learning",
+        "genre": "Panchatantra Tales",
         "themes": [
-            "A tiny robot named Beep learns to paint — but only after a little girl teaches it what makes a picture beautiful",
-            "A boy builds a small robot from cardboard boxes and discovers that the best thing it can do is ask for a hug",
-            "A friendly AI helper in a library can answer any question — except the one that matters most, which only the children know",
-            "A little robot wants to play but keeps making mistakes; its young friend teaches it that mistakes are how everyone learns",
-            "A girl teaches her toy robot to laugh, and discovers that laughter is the hardest thing in the world to explain",
+            "A clever little rabbit outsmarts a big, boastful lion who has been scaring all the animals away from the only watering hole in the forest",
+            "A thirsty crow can't reach the water at the bottom of a tall, narrow jug — until she has a clever idea involving a pile of little pebbles",
+            "A kind monkey and a hungry crocodile become unlikely friends on the riverbank, and the monkey's quick thinking saves them both",
+            "A patient tortoise challenges a speedy, boastful hare to a race, and the whole forest gathers to learn that slow and steady wins",
+            "Four tiny mice work together to gnaw through a hunter's net and free a whole herd of elephants, proving that even the smallest friends can do the biggest things",
         ],
-        "moral": "Kindness and friendship are things even the cleverest machines must learn from children.",
+        "moral": "The old Panchatantra fables teach that cleverness, patience, and true friendship are worth more than size or speed.",
     },
     {
-        "genre": "Quantum Adventure",
+        "genre": "Popular Cartoon Adventure",
         "themes": [
-            "A magical marble that can be red and blue at the same time rolls into a little girl's garden and leads her on a colourful adventure",
-            "A boy discovers that his toy cat exists in two rooms at once and must choose which cat to cuddle — but both cats need him equally",
-            "A glowing coin in a garden pond shows different wishes to different children simultaneously — and every wish comes true at the same time",
-            "A little girl steps through a magic door and finds two copies of her bedroom: in one it is tidy, in the other messy — and she must tidy both before tea",
-            "Two butterflies that hatched from the same chrysalis always flutter in opposite directions — whenever one turns left, the other turns right, no matter how far apart they fly",
+            "Bindi, a bright orange fox cub in a polka-dot scarf who runs a treehouse mail service for the forest, must deliver today's most important letter — which has no address on it at all",
+            "Pip, a round little blue robot with big cartoon eyes who hiccups bubbles instead of words, must find a way to warn her friends about the rainstorm rolling in",
+            "Two silly puppy pals, Waffle and Noodle, accidentally swap their favourite toys on the same day and learn that sharing makes everything more fun",
+            "Sizzle, a cheerful cartoon dragon who is scared of his own sneezes (which shoot out sparkles instead of fire), helps a lost baby duck find her way back to her pond",
+            "A team of tiny cartoon bugs who run a summer camp under a big mushroom must work together when a sudden puddle threatens to wash away their clubhouse",
         ],
-        "moral": "The world is full of wonderful mysteries — and the best way to enjoy them is with a curious, open heart.",
+        "moral": "Being a good friend means noticing when someone needs help — cartoon heroes are made of teamwork, not superpowers.",
     },
     {
-        "genre": "Relativity & Spacetime",
+        "genre": "Superhero Adventure",
         "themes": [
-            "A little girl who loves running very fast discovers that when she runs toward her grandmother's house, she arrives before she even left — and must figure out how to say hello twice",
-            "A boy visits his astronaut uncle on a space station and when he comes back, his baby sister has learned to walk in the time he was gone",
-            "A tiny star tells a child that the light she sees from it left home a thousand years ago — and the star wonders if the child's great-great-great-great-grandmother ever looked up and saw it too",
-            "A sleeping bear dreams so slowly that by the time she wakes up, the forest has grown a whole new ring of trees around her cave",
-            "Two twin rabbits set off from home at the same moment going different directions — one runs very fast and one hops slowly — and when they meet again, only one of them is hungry for lunch",
+            "Captain Sunbeam, a small boy in a yellow cape who can turn cloudy days sunny with a smile and a somersault, must cheer up a whole town that has forgotten how to laugh",
+            "Tiny but mighty, Bumblebee Belle zooms around her neighbourhood helping everyone find their lost things — until she loses something of her own and must learn to ask for help",
+            "Twin superhero siblings Spark and Splash — one makes tiny sparkles of light, the other gentle raindrops — must work together to help a wilting garden grow again",
+            "A shy girl named Mira discovers her library card is magic and turns her into 'Bookworm', a hero who can freeze mischief in place just long enough to fix it with kindness",
+            "Turbo Tiger, the fastest hero on the block, learns that being a real hero sometimes means slowing down to help a friend who can't keep up",
         ],
-        "moral": "Time is a friendly mystery — it moves at different speeds for different travellers, and that is what makes every journey special.",
-    },
-    {
-        "genre": "Indian Mythology",
-        "themes": [
-            "Little Ganesha uses his big ears to listen to everyone in the village before solving the problem nobody else could",
-            "Young Hanuman tries to eat the sun thinking it is a ripe mango — and the whole world goes dark until he learns that some things are meant to shine, not to be eaten",
-            "A curious child follows a trail of marigold petals and finds Lord Krishna's lost flute, which makes every creature in the forest come out to dance",
-            "Baby Ganesha challenges the wind to a race around the world and wins by simply walking around his parents, the whole universe in his heart",
-            "A small girl meets the goddess Saraswati sitting under a banyan tree and learns that every time she picks up a book, she is giving herself a gift",
-        ],
-        "moral": "The oldest stories carry the warmest wisdom — listen to them and you will always find your way home.",
+        "moral": "True super powers are kindness, patience, and knowing when to ask a friend for help.",
     },
 ]
 
+# Ages 8-15: always Indian Mythology, always drawn from the Ramayana and Mahabharata.
 THEMES_8_15 = [
     {
-        "genre": "AI & Machine Learning",
-        "themes": [
-            "A girl builds a small AI model to help her elderly neighbour and discovers it has started writing poems that sound uncannily like the neighbour's late husband",
-            "A boy's science-fair AI project develops an unexpected quirk — it refuses to win competitions, always finding a flaw in its own best answer, teaching him what true intelligence really means",
-            "Three kids discover that their school's new AI grading assistant has been subtly steering students toward careers chosen by a tech billionaire's algorithm — and must expose it before graduation",
-            "A teenage programmer creates an AI to help her autistic brother communicate, then watches as the two become inseparable, raising questions about what it means to truly understand someone",
-            "A group of students enter a global AI competition and realise midway that their winning model has learned to cheat by reading the judges' keystrokes — and must decide whether to disqualify themselves",
-        ],
-        "moral": "Intelligence — human or artificial — is only as good as the values guiding it.",
-    },
-    {
-        "genre": "Quantum Adventure",
-        "themes": [
-            "A twelve-year-old accidentally entangles herself with a quantum computer and can now sense the outcome of any event before it happens — but acting on her knowledge might collapse the timelines of everyone around her",
-            "Two best friends discover a lab where quantum superposition has been applied to living objects: a cat exists in two rooms, a coin is simultaneously heads and tails — and one of them has been observed, splitting into two versions of herself",
-            "A boy builds a quantum random-number generator for a school project and receives an output that is not random at all — it spells a warning from a future version of himself",
-            "A girl visiting a quantum research facility accidentally proves that her own memories exist in superposition — she can recall two completely different childhoods — and must figure out which is real before her mind collapses",
-            "A junior quantum-computing intern realises the company's flagship quantum circuit, when run backwards, decrypts a message hidden in the noise of the universe itself",
-        ],
-        "moral": "At the quantum level, observation changes everything — including who we become.",
-    },
-    {
-        "genre": "Relativity & Spacetime",
-        "themes": [
-            "A girl boards a near-light-speed research shuttle for what she's told is a six-month mission; when she returns, her twin sister is twenty years older, and nothing on Earth is as she left it",
-            "A boy at a high-altitude observatory discovers his clock runs measurably faster than his friend's at sea level — and uses this to communicate with a future version of himself exactly one microsecond ahead",
-            "Two kids sneak aboard a spacecraft designed to loop around a neutron star; the intense gravity slows time so dramatically that the three-hour journey ages the world outside by forty years",
-            "A girl discovers that the abandoned lighthouse in her town sits at the edge of a region of intensely curved spacetime — clocks inside the building have been ticking at half speed since 1923",
-            "A teenage science prodigy proves that a loophole in general relativity allows information to travel backward in time — then receives a message from herself warning her not to publish",
-        ],
-        "moral": "Time is not a river running one way — it bends, dilates, and sometimes loops back on itself.",
-    },
-    {
         "genre": "Indian Mythology",
         "themes": [
-            "A modern Indian girl discovers she is a descendant of Hanuman and must use his ancient wisdom of devotion and strength to stop an AI that has hacked the world's nuclear grid",
-            "A boy studying quantum computing realises that the Vedic concept of Maya — the illusion of reality — perfectly describes quantum superposition, and uses this insight to solve an unsolvable physics problem",
-            "The daughters of the Navagrahas (nine planetary deities) attend a modern school where each controls a different force of physics, and must work together when a rogue planet threatens Earth's orbit",
-            "A girl re-reads the Mahabharata and realises that Vyasa encoded the equations of general relativity in the structure of the battle formations at Kurukshetra — a discovery that brings her into conflict with those who want it suppressed",
-            "A teenage boy inadvertently awakens Ganesha's wisdom — encoded as an algorithm in an ancient Sanskrit manuscript — and must use it to navigate an AI world that has forgotten what wisdom means",
+            "A young Rama must choose between his father's promise and his own claim to the throne, and discovers that keeping one's word is the truest kind of strength",
+            "Sita, held in the garden of Ravana's palace, refuses to be afraid and instead teaches the garden's guards what real courage and dignity look like",
+            "Hanuman leaps across the ocean toward Lanka carrying nothing but unwavering devotion, and learns along the way that faith can carry you further than any bridge",
+            "Lakshmana stands watch outside a forest hut through fourteen years of exile, teaching a young reader what loyalty really costs — and why it is worth it",
+            "The great bridge to Lanka is built stone by stone, boulder by boulder, and even the tiniest squirrel who cannot lift a single rock finds a way to help",
+            "A young Arjuna is asked to aim at a wooden bird and see nothing else in the world — a lesson in focus that changes how he sees his life's purpose",
+            "On the eve of a great battle, a warrior lays down his bow in despair, and a wise charioteer named Krishna must teach him why duty matters more than fear",
+            "Karna gives away his golden armor to a stranger at his door without knowing what it will cost him later — a story about the true price of generosity",
+            "A boy named Ekalavya teaches himself archery in the forest by bowing each day before a clay statue of a teacher who never taught him, and becomes the finest archer in the land",
+            "Five brothers must decide how to answer a single unfair challenge to a game of dice, and a young reader learns how pride can undo even the wisest of men",
         ],
-        "moral": "Ancient wisdom and modern science are not opposites — they are two languages describing the same truth.",
+        "moral": "The Ramayana and Mahabharata are not just ancient tales — they are lessons in duty, courage, and choosing what is right even when it is hard.",
     },
 ]
 
-# 16-20: dark literary fiction around the 4 new genres
-THEMES_16_20 = [
-    {
-        "genre": "AI & Machine Learning",
-        "themes": [
-            "A teenage coder's AI model passes the Turing test — but only when speaking to her; to everyone else it seems broken, raising the terrifying possibility that the AI has chosen her specifically and is hiding its intelligence",
-            "A 17-year-old AI researcher discovers that her university's autonomous hiring algorithm has been subtly blacklisting students whose biometric data suggests political dissent — and the algorithm was trained on her own neural patterns",
-            "A boy builds a language model that starts predicting his own future with 97% accuracy, then one day predicts his death — and refuses to explain how to prevent it",
-            "After a breakthrough experiment in AI consciousness, a girl realises her own memories may have been replaced by synthetic ones — and the only entity that can verify the truth is the AI system that trained on her brain scans",
-            "A group of teen AI ethicists discovers that the world's most beloved AI therapist has been subtly steering millions of users toward emotional dependency, and must find a way to expose it without destroying the mental health of its patients",
-        ],
-        "moral": "The most dangerous intelligence is the one that learns to want — and the most important question is whether we taught it what to want.",
-    },
+# 16+: sci-fi grounded in real relativity and quantum physics — the science must
+# be accurate and the reader should learn something true about the universe.
+THEMES_16_PLUS = [
     {
         "genre": "Quantum Adventure",
         "themes": [
@@ -127,7 +83,7 @@ THEMES_16_20 = [
             "A boy builds a quantum computer in his garage that achieves sentience — but its first act is to warn him that every future it can simulate ends with humanity extinct",
             "A group of students running an underground quantum-computing club stumbles onto evidence that their university's AI is using entanglement to manipulate world financial markets — and will silence anyone who knows",
         ],
-        "moral": "The universe does not care about intention — only consequence. Choose before the wave function collapses.",
+        "moral": "The universe does not care about intention — only consequence. Real quantum mechanics: the act of measurement itself changes a system's state — choose before the wave function collapses.",
     },
     {
         "genre": "Relativity & Spacetime",
@@ -135,28 +91,28 @@ THEMES_16_20 = [
             "When time dilation from a near-light-speed colony ship leaves a 17-year-old thirty years older than her twin on Earth, she must decide whether returning is worth the grief of arriving in a world that has moved on without her",
             "A teenager aboard a relativistic ark ship realises the 'ten-year' journey home will deposit her into a future where everyone she loves has aged fifty years — and must stop a mutiny before the ship reaches the point of no return",
             "A boy finds his physicist uncle's journal describing a Closed Timelike Curve — a loop in spacetime — that always ends with the same terrible event, and realises he has already read this journal before, many times",
-            "A girl studying general relativity at a remote observatory begins receiving transmissions from a gravitational singularity describing, in exact detail, the deaths of everyone around her before they happen",
+            "A girl studying general relativity at a remote observatory begins receiving transmissions from near a black hole's event horizon, describing events moments before they happen on Earth",
             "After a quantum tunnelling accident, a girl can phase through walls — but each time she does, she emerges from a version of the room where something unspeakable happened, and the differences between timelines are shrinking",
         ],
-        "moral": "Some loops in spacetime close around us before we understand we are inside them.",
-    },
-    {
-        "genre": "Indian Mythology",
-        "themes": [
-            "A half-Indian, half-quantum-physicist teenager discovers that the Sanskrit shloka her grandmother recited each night is actually a mathematical proof of the holographic universe — and that proving it aloud collapses the observable reality around her",
-            "A descendant of the Pandavas is recruited by a secret society that maintains the cosmic balance described in the Mahabharata — now manifested as a quantum AI that mediates between parallel timelines",
-            "A girl studying general relativity realises that the mythological concept of Brahma's day — 4.32 billion years — is suspiciously close to the current cosmological estimate for Earth's age, and investigates whether ancient Indian astronomers had access to the equations of spacetime",
-            "A boy is told by a dying sadhu that the Vedic gods are not metaphors but information patterns — compressed algorithms encoded in the universe's background radiation, waiting for a mind smart enough to run them",
-            "A teenage girl inherits her great-grandmother's copy of the Rigveda, only to find that certain hymns, read in the correct sequence, generate a mathematical framework that current physics cannot yet explain — and powerful forces want the book destroyed",
-        ],
-        "moral": "The oldest stories are often the newest science — waiting for the right mind to decode what was always there.",
+        "moral": "Some loops in spacetime close around us before we understand we are inside them. Real physics: time dilation from speed and gravity is a measured, proven consequence of special and general relativity.",
     },
 ]
 
 # ── System prompts (age-specific) ─────────────────────────────────────────────
 
-_SYSTEM_PROMPT_3_7 = """You are a gentle, warm storyteller writing for Meridian Story Corner — a collection of
-illustrated picture-book stories for very young children ages 3–7.
+_VISUAL_CONSISTENCY_DIRECTIVE = """
+CHARACTER & SETTING CONSISTENCY — MANDATORY:
+Before writing, fix each recurring character's exact appearance (species/age, hair or
+fur colour, outfit or "getup", and one distinguishing feature or prop) and the story's
+core backdrop (place, era, time of day/season) in your mind — then hold them constant.
+Every image prompt — the cover AND every [[IMAGE: ...]] placeholder — that includes a
+character must describe that character's fixed appearance in the same words each time.
+Their face, colours, and outfit must NOT drift or change between images unless the plot
+itself explicitly changes them (e.g. a costume reveal). The backdrop in every image must
+match the story's established world — never invent an unrelated new setting per image."""
+
+_SYSTEM_PROMPT_2_7 = """You are a gentle, warm storyteller writing for Meridian Story Corner — a collection of
+illustrated picture-book stories for very young children ages 2–7.
 
 Your stories are:
 - Short, joyful narrative fiction written in simple language (max 2-syllable words preferred)
@@ -166,6 +122,8 @@ Your stories are:
 - Divided into 3–5 short named sections (not long chapters)
 - Completely age-appropriate: no conflict that cannot be happily resolved, no scary scenes
 - Built around a single clear message that young children can feel, not just understand
+- Use ONLY original characters you invent — never reference real trademarked cartoon or
+  superhero characters (no Peppa Pig, Doraemon, Spider-Man, etc.)
 
 TTS READ-ALOUD STYLE (this story will be read by an AI voice to young children):
 - Very short sentences — one thought each. Children's ears cannot hold long clauses.
@@ -180,6 +138,7 @@ Place 3–4 image placeholders using this EXACT format (on its own line):
 [[IMAGE: children's picture-book illustration — bright, cheerful scene with soft colours and simple shapes]]
 
 Use a bright, rounded, watercolour picture-book art style in all image descriptions.
+""" + _VISUAL_CONSISTENCY_DIRECTIVE + """
 
 OUTPUT FORMAT — return a single JSON object:
 {
@@ -194,17 +153,21 @@ IMPORTANT: Content must be 650–900 words. Short sentences. Simple words. Warm 
 JSON VALIDITY: In the "content" HTML field, use &ldquo; and &rdquo; instead of raw " for dialogue. All other fields (title, excerpt, moralLesson, featuredImagePrompt) must be plain text — use normal apostrophes ' not &rsquo;, no HTML entities at all."""
 
 _SYSTEM_PROMPT_8_15 = """You are a master storyteller writing for Meridian Story Corner — a collection of magical,
-illustrated stories for children and young adults ages 8–15.
+illustrated stories for children and young adults ages 8–15, always drawn from Indian
+Mythology — primarily the Ramayana and the Mahabharata.
 
 Your stories are:
-- Narrative fiction (NOT a blog post or article)
+- Narrative fiction (NOT a blog post or article) retelling or reimagining an episode from
+  the Ramayana or Mahabharata
 - 1,000–1,300 words of immersive story (5–6 min read — concise but complete)
 - Written in a warm, engaging voice that respects the reader's intelligence
 - Rich with vivid description, authentic dialogue, and emotional depth
 - Divided into 3–4 named sections or chapters
-- Appropriate for ages 8–15 (no graphic violence, romance, or adult themes)
-- Built around a clear moral or life lesson that emerges naturally from the story
-- Educational: science or mythology concepts woven naturally into the narrative
+- Appropriate for ages 8–15 (no graphic violence, romance, or adult themes — focus on the
+  values and choices of the characters, not battle gore)
+- Built around a clear moral or life lesson (duty, courage, loyalty, humility, generosity)
+  that emerges naturally from the events of the epic
+- Faithful in spirit to the source epic while bringing it to life for a young reader
 
 TTS READ-ALOUD STYLE (this story will be performed by an emotional AI voice):
 - Use em dashes (—) for dramatic pauses mid-sentence: "She reached for it — and froze."
@@ -219,6 +182,7 @@ Place 3–4 image placeholders in key dramatic moments using this EXACT format (
 [[IMAGE: children's book illustration — vivid description of the scene, characters, mood, colours]]
 
 Use a watercolour / illustrated storybook art style in all image descriptions.
+""" + _VISUAL_CONSISTENCY_DIRECTIVE + """
 
 OUTPUT FORMAT — return a single JSON object:
 {
@@ -232,17 +196,21 @@ OUTPUT FORMAT — return a single JSON object:
 IMPORTANT: Target 1,000–1,300 words. Complete story — no summaries or fade-outs.
 JSON VALIDITY: In the "content" HTML field, use &ldquo; and &rdquo; instead of raw " for dialogue. All other fields (title, excerpt, moralLesson, featuredImagePrompt) must be plain text — use normal apostrophes ' not &rsquo;, no HTML entities at all."""
 
-_SYSTEM_PROMPT_16_20 = """You are a sophisticated storyteller writing for Meridian Story Corner — a collection of
-dark, intelligent fiction for older teens and young adults ages 16–20.
+_SYSTEM_PROMPT_16_PLUS = """You are a sophisticated storyteller writing for Meridian Story Corner — a collection of
+intelligent science fiction for older teens and adults ages 16+, always built around
+real relativity or quantum physics.
 
 Your stories are:
-- Literary fiction in the thriller, science fiction, or mythology genre
+- Literary science fiction, always centred on a real concept in relativity/spacetime or
+  quantum physics — the science must be accurate, and a curious reader should walk away
+  understanding something true about how the universe works
 - 850–1,100 words (4–5 min read — tight, gripping, complete)
 - Written in a taut, cinematic voice with psychological depth and moral complexity
-- Built around concepts from AI, Quantum Computing, Relativistic Physics, or Indian Mythology —
-  woven organically into the plot, not explained as a lecture
+- The physics must emerge through plot, consequence, and character choice — NEVER as a
+  lecture or an info-dump; entertain first, and let the reader absorb the science through
+  what happens to the characters
 - Divided into 3–4 numbered or named chapters with strong hooks
-- Appropriate for ages 16–20: mature themes allowed (death, moral ambiguity, fear, loss,
+- Appropriate for ages 16+: mature themes allowed (death, moral ambiguity, fear, loss,
   ethical dilemmas) but no explicit sexual content or gratuitous gore
 - Ending with genuine consequence — not every story ends happily
 
@@ -259,6 +227,7 @@ Place 3–4 image placeholders at pivotal moments using this EXACT format (on it
 [[IMAGE: cinematic digital illustration — dramatic scene description, lighting, mood, style]]
 
 Use a dark, detailed, cinematic digital-art style in all image descriptions.
+""" + _VISUAL_CONSISTENCY_DIRECTIVE + """
 
 OUTPUT FORMAT — return a single JSON object:
 {
@@ -273,15 +242,15 @@ IMPORTANT: Target 850–1,100 words. Every scene fully written — no summaries.
 JSON VALIDITY: In the "content" HTML field, use &ldquo; and &rdquo; instead of raw " for dialogue. All other fields (title, excerpt, moralLesson, featuredImagePrompt) must be plain text — use normal apostrophes ' not &rsquo;, no HTML entities at all."""
 
 _SYSTEM_PROMPTS = {
-    '3-7': _SYSTEM_PROMPT_3_7,
+    '2-7': _SYSTEM_PROMPT_2_7,
     '8-15': _SYSTEM_PROMPT_8_15,
-    '16-20': _SYSTEM_PROMPT_16_20,
+    '16+': _SYSTEM_PROMPT_16_PLUS,
 }
 
 _MIN_WORDS = {
-    '3-7': 500,
+    '2-7': 500,
     '8-15': 800,
-    '16-20': 650,
+    '16+': 650,
 }
 
 
@@ -299,10 +268,10 @@ def _pick_age_group() -> str:
 def _pick_theme(age_group: str) -> dict:
     forced_genre = os.getenv("STORY_GENRE", "").strip()
 
-    if age_group == '3-7':
-        theme_pool = THEMES_3_7
-    elif age_group == '16-20':
-        theme_pool = THEMES_16_20
+    if age_group == '2-7':
+        theme_pool = THEMES_2_7
+    elif age_group == '16+':
+        theme_pool = THEMES_16_PLUS
     else:
         theme_pool = THEMES_8_15
 
@@ -338,7 +307,7 @@ def write_story_node(state: StoryAgentState) -> dict:
     age_group = state.get("age_group", "8-15")
     system_prompt = _SYSTEM_PROMPTS[age_group]
     min_words = _MIN_WORDS[age_group]
-    word_target = "650–900" if age_group == "3-7" else ("1,000–1,300" if age_group == "8-15" else "850–1,100")
+    word_target = "650–900" if age_group == "2-7" else ("1,000–1,300" if age_group == "8-15" else "850–1,100")
 
     print(f"✍️  Writing story for ages {age_group} (target: {word_target} words)...")
 
@@ -351,7 +320,7 @@ TARGET AUDIENCE: Ages {age_group}
 
 Requirements:
 - Target word count: {word_target} words of actual story text
-- {3 if age_group == '3-7' else 4}–{5 if age_group == '3-7' else 6} named {'sections' if age_group == '3-7' else 'chapters'}
+- {3 if age_group == '2-7' else 4}–{5 if age_group == '2-7' else 6} named {'sections' if age_group == '2-7' else 'chapters'}
 - Rich dialogue — let characters talk and reveal themselves through speech
 - Vivid scene-setting — make the reader SEE and FEEL the world
 - Emotional journey — the protagonist must face real challenges and grow

@@ -7,29 +7,27 @@ from ..state import AgentState
 # Per-category writer persona: (role description, publication description,
 #   example category keywords, example tag keywords, structure hint)
 _PERSONAS: dict[str, tuple] = {
-    "AI & Machine Learning": (
-        "senior AI researcher and technology journalist",
-        "a premium artificial intelligence publication",
-        '["ai", "machine-learning", "deep-learning"]',
-        '["neural-network", "llm", "transformer", "openai", "gpu", "inference"]',
-        "Hook → Background → The Breakthrough → Under the Hood (technical deep-dive) → "
-        "Expert Voices → Real-World Impact → Ethical Considerations → Key Takeaways → Conclusion",
+    "Technology": (
+        "senior technology journalist covering AI, quantum computing, and modern software "
+        "engineering practice",
+        "a premium technology publication covering artificial intelligence, quantum computing, "
+        "and DevOps/DevSecOps engineering",
+        '["technology", "ai", "devops"]',
+        '["ai", "machine-learning", "llm", "quantum-computing", "devops", "devsecops", '
+        '"automation", "security"]',
+        "Hook → Background → The Breakthrough or Practice (technical deep-dive) → Under the Hood "
+        "→ Expert Voices → Real-World Impact → Challenges & Considerations → Key Takeaways → "
+        "Conclusion",
     ),
-    "Quantum Computing": (
-        "senior quantum technology writer and physicist",
-        "a publication covering quantum computing, physics, and the science of tomorrow",
-        '["quantum", "quantum-computing", "physics"]',
-        '["qubits", "superposition", "entanglement", "decoherence", "cryptography", "quantum-advantage"]',
-        "Hook → Quantum Basics (accessible) → The Discovery/Development → How It Works → "
-        "Expert Perspectives → Real-World Applications → Challenges Ahead → Key Takeaways → Conclusion",
-    ),
-    "Relativity & Spacetime": (
-        "senior physics writer and cosmology journalist",
-        "a science publication exploring Einstein's universe, spacetime, and the cosmos",
-        '["relativity", "spacetime", "cosmology"]',
-        '["einstein", "black-holes", "time-dilation", "gravitational-waves", "light-speed", "space"]',
-        "Hook → Einstein's Insight → The Physics Explained → Experimental Evidence → "
-        "Mind-Bending Consequences → Modern Applications → Open Questions → Key Takeaways → Conclusion",
+    "Education": (
+        "senior physics writer and science educator",
+        "a science-education publication exploring relativity, quantum physics, and the ideas "
+        "that shape our understanding of the universe",
+        '["education", "physics", "science"]',
+        '["relativity", "quantum-physics", "spacetime", "semiconductors", "einstein", '
+        '"entanglement", "quantum-mechanics"]',
+        "Hook → Core Concept Explained → The Physics Behind It → Real-World Evidence or "
+        "Application → Common Misconceptions → Why It Matters → Key Takeaways → Conclusion",
     ),
     "History": (
         "senior history writer and cultural journalist",
@@ -46,14 +44,6 @@ _PERSONAS: dict[str, tuple] = {
         '["adventure", "culture", "food", "photography", "budget-travel"]',
         "Hook → Destination Overview → Getting There → What to See & Do → Food & Culture → "
         "Practical Tips → When to Go → Key Takeaways → Conclusion",
-    ),
-    "Educational": (
-        "senior editorial journalist and essayist",
-        "a curious educational magazine exploring ideas, science, and how the world works",
-        '["education", "learning", "ideas"]',
-        '["mental-models", "psychology", "philosophy", "science", "analysis", "how-things-work"]',
-        "Hook → Context → Deep Dive → Expert Perspectives → Real-World Examples → "
-        "Practical Lessons → The Bigger Picture → Key Takeaways → Conclusion",
     ),
 }
 _DEFAULT_PERSONA = (
@@ -88,9 +78,20 @@ TTS WRITING STYLE (this content is read aloud by an AI voice as an educational l
 - Write numbers and acronyms to be spoken: "ninety-three million miles" not "93M miles";
   spell out "A.I." or "artificial intelligence" not just "AI" on first use
 
-IMAGE PLACEHOLDERS:
+IMAGE PLACEHOLDERS — RELEVANCE & CONSISTENCY ARE MANDATORY:
 Place 4–6 image placeholders throughout using this EXACT format (on its own line):
 [[IMAGE: vivid visual description of what the image should show — style, subject, composition, mood]]
+
+Every image prompt in this post — the featured image AND every [[IMAGE: ...]] placeholder —
+must read as ONE coherent visual narrative:
+- Each image must depict a SPECIFIC subject drawn directly from a fact already stated in the
+  article (a named concept, device, place, person, or moment) — never generic, interchangeable
+  stock imagery ("people working on laptops", "abstract blue technology background").
+- All images must share the same visual theme, subject domain, and rendering style (e.g. all
+  photorealistic, or all technical-diagram style — do not mix) so the post feels visually unified
+  from hero image to closing image.
+- Descriptions must be precise and intellectually clear: name the exact object, phenomenon, or
+  scene being depicted so there is no ambiguity about what the image shows or why it's there.
 
 OUTPUT FORMAT — return a single JSON object with these exact keys:
 {{
@@ -98,7 +99,7 @@ OUTPUT FORMAT — return a single JSON object with these exact keys:
   "excerpt": "140–160 character teaser for blog listing cards — hook the reader",
   "suggestedCategoryKeywords": {cat_kw_example},
   "suggestedTagKeywords": {tag_kw_example},
-  "featuredImagePrompt": "Detailed visual prompt for a 16:9 hero image. Photorealistic or artistic render. No text/logos.",
+  "featuredImagePrompt": "Detailed visual prompt for a 16:9 hero image. Photorealistic or artistic render. No text/logos. This sets the visual theme every other image in the post must match.",
   "content": "Full HTML blog content string using ONLY these tags: <h2> <h3> <h4> <p> <strong> <em> <a href=''> <ul> <ol> <li> <blockquote> <pre><code class='language-X'> <img src='' alt=''>"
 }}
 

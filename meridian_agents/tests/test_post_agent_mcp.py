@@ -140,21 +140,58 @@ class TestPickTaxonomyNode:
         {"id": 12, "name": "Technology News", "slug": "technology-news"},
     ]
 
-    def test_matches_category_and_tags_by_keyword(self):
+    def test_matches_category_exactly_by_name_and_tags_by_keyword(self):
         state = {
             "post_category_keywords": ["technology"],
             "post_tag_keywords": ["ai", "machine-learning"],
-            "category_name": "AI & Machine Learning",
+            "category_name": "Technology",
         }
-        with patch.object(mcp_mod, "mcp_call", side_effect=[self.CATEGORIES, self.TAGS]):
+        with patch.object(mcp_mod, "mcp_call", side_effect=[list(self.CATEGORIES), self.TAGS]):
             result = pick_taxonomy_node(state)
         assert result["category_id"] == 1
         assert 10 in result["tag_ids"]
         assert 11 in result["tag_ids"]
 
-    def test_defaults_to_first_category_when_nothing_matches(self):
-        state = {"post_category_keywords": ["nonexistent"], "post_tag_keywords": [], "category_name": "Nope"}
-        with patch.object(mcp_mod, "mcp_call", side_effect=[self.CATEGORIES, []]):
+    def test_matches_category_case_insensitively(self):
+        state = {
+            "post_category_keywords": [],
+            "post_tag_keywords": [],
+            "category_name": "technology",
+        }
+        with patch.object(mcp_mod, "mcp_call", side_effect=[list(self.CATEGORIES), []]):
+            result = pick_taxonomy_node(state)
+        assert result["category_id"] == 1
+
+    def test_creates_category_when_no_exact_match_exists(self):
+        state = {
+            "post_category_keywords": [],
+            "post_tag_keywords": [],
+            "category_name": "Education",
+            "server_base": "https://server",
+        }
+        created = {"id": 3, "name": "Education", "slug": "education"}
+        with patch.object(mcp_mod, "mcp_call", side_effect=[list(self.CATEGORIES), []]), \
+             patch.object(mcp_mod, "_create_category", return_value=created) as mock_create:
+            result = pick_taxonomy_node(state)
+        mock_create.assert_called_once_with("https://server", "Education")
+        assert result["category_id"] == 3
+
+    def test_falls_back_to_keyword_match_when_category_creation_fails(self):
+        state = {
+            "post_category_keywords": ["history"],
+            "post_tag_keywords": [],
+            "category_name": "Education",
+            "server_base": "https://server",
+        }
+        with patch.object(mcp_mod, "mcp_call", side_effect=[list(self.CATEGORIES), []]), \
+             patch.object(mcp_mod, "_create_category", return_value=None):
+            result = pick_taxonomy_node(state)
+        # No exact/created match — falls back to keyword-matching "history"
+        assert result["category_id"] == 2
+
+    def test_defaults_to_first_category_when_nothing_matches_and_no_category_name(self):
+        state = {"post_category_keywords": ["nonexistent"], "post_tag_keywords": [], "category_name": ""}
+        with patch.object(mcp_mod, "mcp_call", side_effect=[list(self.CATEGORIES), []]):
             result = pick_taxonomy_node(state)
         assert result["category_id"] == 1
         assert result["tag_ids"] == []
@@ -172,12 +209,38 @@ class TestPickTaxonomyNode:
             "post_tag_keywords": ["ai"],
             "category_name": "Technology",
         }
-        with patch.object(mcp_mod, "mcp_call", side_effect=[self.CATEGORIES, self.TAGS]):
+        with patch.object(mcp_mod, "mcp_call", side_effect=[list(self.CATEGORIES), self.TAGS]):
             result = pick_taxonomy_node(state)
         # "ai" matches tag 10 directly; padding should pull in tag 12 ("Technology News")
         # since it relates to the matched "Technology" category.
         assert 10 in result["tag_ids"]
         assert len(result["tag_ids"]) >= 2
+
+
+class TestCreateCategory:
+    def test_creates_and_returns_category_on_success(self):
+        resp = MagicMock()
+        resp.raise_for_status.return_value = None
+        resp.json.return_value = {"id": 9, "name": "Education", "slug": "education"}
+        with patch.object(mcp_mod, "make_agent_jwt", return_value="jwt-token"), \
+             patch("meridian_agents.post_agent.nodes.mcp.httpx.Client") as MockClient:
+            client = MockClient.return_value.__enter__.return_value
+            client.post.return_value = resp
+            result = mcp_mod._create_category("https://server", "Education")
+        assert result == {"id": 9, "name": "Education", "slug": "education"}
+        client.post.assert_called_once_with(
+            "https://server/api/categories",
+            json={"name": "Education"},
+            headers={"Authorization": "Bearer jwt-token"},
+        )
+
+    def test_returns_none_and_swallows_errors(self):
+        with patch.object(mcp_mod, "make_agent_jwt", return_value="jwt-token"), \
+             patch("meridian_agents.post_agent.nodes.mcp.httpx.Client") as MockClient:
+            client = MockClient.return_value.__enter__.return_value
+            client.post.side_effect = Exception("network down")
+            result = mcp_mod._create_category("https://server", "Education")
+        assert result is None
 
 
 class TestSavePendingNode:

@@ -2,20 +2,23 @@ name: Run Story Agent
 
 on:
   schedule:
-    - cron: '0 6 * * *'  # Daily at 06:00 UTC
+    # Alternate-day cadence anchored on Saturday: Sat, Mon, Wed, Fri at 04:00 UTC.
+    - cron: '0 4 * * 6,1,3,5'
   workflow_dispatch:
     inputs:
       genre:
-        description: 'Force a specific story genre (leave blank for random)'
+        description: 'Force a specific story genre (leave blank for random within the chosen age group)'
         required: false
         default: ''
         type: choice
         options:
           - ''
-          - AI & Machine Learning
+          - Panchatantra Tales
+          - Popular Cartoon Adventure
+          - Superhero Adventure
+          - Indian Mythology
           - Quantum Adventure
           - Relativity & Spacetime
-          - Indian Mythology
       age_group:
         description: 'Target age group (leave blank for random)'
         required: false
@@ -23,9 +26,9 @@ on:
         type: choice
         options:
           - ''
-          - '3-7'
+          - '2-7'
           - '8-15'
-          - '16-20'
+          - '16+'
 
 jobs:
   story-agent:
@@ -45,7 +48,7 @@ jobs:
       - name: Install Python dependencies
         run: pip install -e ".[story_agent]" --quiet
 
-      - name: Generate daily story
+      - name: Generate story
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}

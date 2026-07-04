@@ -47,6 +47,10 @@ export class Post {
   @Column({ default: 0 })
   views: number;
 
+  // When true, the 30-day retention cleanup agent will never delete this post.
+  @Column({ default: false })
+  doNotDelete: boolean;
+
   /* istanbul ignore next -- lazy relation resolver, only invoked by a live TypeORM connection */
   @ManyToOne(() => Category, cat => cat.posts, { nullable: true, eager: true })
   category: Category;

@@ -111,11 +111,15 @@ class TestRunAgent:
             "pending_post_id": 42, "pending_post_slug": "my-post", "post_title": "My Post",
         }
         with patch.object(main_mod, "cleanup_old_posts") as mock_cleanup, \
+             patch.object(main_mod, "cleanup_empty_categories") as mock_cat_cleanup, \
+             patch.object(main_mod, "cleanup_orphaned_media") as mock_media_cleanup, \
              patch.object(main_mod, "start_run", return_value="run-1") as mock_start, \
              patch.object(main_mod, "build_graph", return_value=fake_graph), \
              patch.object(main_mod, "complete_run") as mock_complete:
             result = run_agent()
         mock_cleanup.assert_called_once()
+        mock_cat_cleanup.assert_called_once()
+        mock_media_cleanup.assert_called_once()
         mock_start.assert_called_once()
         assert result["pending_post_id"] == 42
         mock_complete.assert_called_once()
@@ -127,6 +131,8 @@ class TestRunAgent:
         fake_graph = MagicMock()
         fake_graph.invoke.side_effect = RuntimeError("graph exploded")
         with patch.object(main_mod, "cleanup_old_posts"), \
+             patch.object(main_mod, "cleanup_empty_categories"), \
+             patch.object(main_mod, "cleanup_orphaned_media"), \
              patch.object(main_mod, "start_run", return_value="run-1"), \
              patch.object(main_mod, "build_graph", return_value=fake_graph), \
              patch.object(main_mod, "complete_run") as mock_complete:

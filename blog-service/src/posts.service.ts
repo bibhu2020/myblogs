@@ -48,12 +48,13 @@ export class PostsService {
   }
 
   async findAllAdmin(query: any = {}) {
-    const { page = 1, limit = 10, status, search } = query;
+    const { page = 1, limit = 10, status, search, category } = query;
     const qb = this.postRepo.createQueryBuilder('post')
       .leftJoinAndSelect('post.category', 'category')
       .leftJoinAndSelect('post.tags', 'tags')
       .orderBy('post.createdAt', 'DESC');
     if (status) qb.andWhere('post.status = :status', { status });
+    if (category) qb.andWhere('category.slug = :category', { category });
     if (search) qb.andWhere('post.title LIKE :search', { search: `%${search}%` });
     const total = await qb.getCount();
     qb.skip((page - 1) * limit).take(+limit);

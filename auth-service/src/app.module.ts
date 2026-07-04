@@ -1,3 +1,4 @@
+import { join } from 'path';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
@@ -12,6 +13,10 @@ import { LocalStrategy } from './local.strategy';
 
 const DB_URL = process.env.DATABASE_URL;
 
+// __dirname-relative so this always resolves to auth-service/auth.db regardless
+// of process.cwd() — needed since `nest start` in monorepo mode runs with cwd
+// at the repo root, not this service's own directory (production's supervisord
+// sets cwd explicitly, but local dev via the root npm scripts does not).
 const dbConfig: any = DB_URL
   ? {
       type: 'postgres',
@@ -20,7 +25,7 @@ const dbConfig: any = DB_URL
     }
   : {
       type: 'better-sqlite3',
-      database: 'auth.db',
+      database: join(__dirname, '..', 'auth.db'),
     };
 
 @Module({

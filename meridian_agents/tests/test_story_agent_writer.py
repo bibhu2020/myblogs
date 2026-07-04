@@ -3,9 +3,9 @@ from unittest.mock import patch
 
 from meridian_agents.story_agent.nodes.writer import (
     AGE_GROUPS,
-    THEMES_3_7,
+    THEMES_2_7,
     THEMES_8_15,
-    THEMES_16_20,
+    THEMES_16_PLUS,
     _word_count,
     _pick_age_group,
     _pick_theme,
@@ -24,9 +24,9 @@ FAKE_STORY_JSON = json.dumps({
 
 STATE = {
     "age_group": "8-15",
-    "genre": "AI & Machine Learning",
-    "premise": "A robot learns to paint",
-    "moral_lesson": "Kindness matters",
+    "genre": "Indian Mythology",
+    "premise": "A young Rama must choose between his father's promise and his own claim to the throne",
+    "moral_lesson": "Duty and courage matter",
     "story_title": "Old Title",
     "story_excerpt": "Old excerpt",
     "story_content": "<p>Old content</p>",
@@ -42,8 +42,8 @@ class TestWordCount:
 
 class TestPickAgeGroup:
     def test_uses_forced_age_group_when_valid(self, monkeypatch):
-        monkeypatch.setenv("STORY_AGE_GROUP", "16-20")
-        assert _pick_age_group() == "16-20"
+        monkeypatch.setenv("STORY_AGE_GROUP", "16+")
+        assert _pick_age_group() == "16+"
 
     def test_ignores_invalid_forced_age_group(self, monkeypatch):
         monkeypatch.setenv("STORY_AGE_GROUP", "99-100")
@@ -54,26 +54,37 @@ class TestPickAgeGroup:
 
     def test_picks_randomly_when_unset(self, monkeypatch):
         monkeypatch.delenv("STORY_AGE_GROUP", raising=False)
-        with patch("meridian_agents.story_agent.nodes.writer.random.choice", return_value="3-7"):
-            assert _pick_age_group() == "3-7"
+        with patch("meridian_agents.story_agent.nodes.writer.random.choice", return_value="2-7"):
+            assert _pick_age_group() == "2-7"
 
 
 class TestPickTheme:
-    def test_uses_the_3_7_pool_for_that_age_group(self):
-        theme = _pick_theme("3-7")
-        assert any(t["genre"] == theme["genre"] for t in THEMES_3_7)
+    def test_uses_the_2_7_pool_for_that_age_group(self):
+        theme = _pick_theme("2-7")
+        assert any(t["genre"] == theme["genre"] for t in THEMES_2_7)
 
-    def test_uses_the_16_20_pool_for_that_age_group(self):
-        theme = _pick_theme("16-20")
-        assert any(t["genre"] == theme["genre"] for t in THEMES_16_20)
+    def test_uses_the_16_plus_pool_for_that_age_group(self):
+        theme = _pick_theme("16+")
+        assert any(t["genre"] == theme["genre"] for t in THEMES_16_PLUS)
 
     def test_defaults_to_8_15_pool_for_other_age_groups(self):
         theme = _pick_theme("8-15")
         assert any(t["genre"] == theme["genre"] for t in THEMES_8_15)
 
+    def test_8_15_pool_is_always_indian_mythology(self):
+        assert [t["genre"] for t in THEMES_8_15] == ["Indian Mythology"]
+
+    def test_2_7_pool_is_exactly_panchatantra_cartoon_and_superhero(self):
+        names = {t["genre"] for t in THEMES_2_7}
+        assert names == {"Panchatantra Tales", "Popular Cartoon Adventure", "Superhero Adventure"}
+
+    def test_16_plus_pool_is_exactly_quantum_and_relativity(self):
+        names = {t["genre"] for t in THEMES_16_PLUS}
+        assert names == {"Quantum Adventure", "Relativity & Spacetime"}
+
     def test_forced_genre_matches_case_insensitively(self, monkeypatch):
         monkeypatch.setenv("STORY_GENRE", "quantum adventure")
-        theme = _pick_theme("8-15")
+        theme = _pick_theme("16+")
         assert theme["genre"] == "Quantum Adventure"
 
     def test_falls_back_to_random_when_forced_genre_unknown(self, monkeypatch):

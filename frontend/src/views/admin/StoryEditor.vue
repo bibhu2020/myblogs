@@ -14,11 +14,14 @@ const route = useRoute()
 const router = useRouter()
 const isEdit = computed(() => !!route.params.id)
 
-const GENRES = ['AI & Machine Learning', 'Quantum Adventure', 'Relativity & Spacetime', 'Indian Mythology']
+const GENRES = [
+  'Panchatantra Tales', 'Popular Cartoon Adventure', 'Superhero Adventure',
+  'Indian Mythology', 'Quantum Adventure', 'Relativity & Spacetime',
+]
 
 const form = ref({
   title: '', excerpt: '', content: '', featuredImage: '', status: 'draft',
-  genre: 'AI & Machine Learning', ageGroup: '8-15', moralLesson: '',
+  genre: 'Indian Mythology', ageGroup: '8-15', moralLesson: '',
 })
 
 const saving = ref(false)

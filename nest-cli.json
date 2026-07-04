@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "monorepo": true,
+  "root": "auth-service",
+  "compilerOptions": {
+    "deleteOutDir": true,
+    "tsConfigPath": "auth-service/tsconfig.json"
+  },
+  "sourceRoot": "auth-service/src",
+  "entryFile": "main",
+  "projects": {
+    "auth-service": {
+      "type": "application",
+      "root": "auth-service",
+      "entryFile": "main",
+      "sourceRoot": "auth-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "auth-service/tsconfig.json"
+      }
+    },
+    "blog-service": {
+      "type": "application",
+      "root": "blog-service",
+      "entryFile": "main",
+      "sourceRoot": "blog-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "blog-service/tsconfig.json"
+      }
+    },
+    "media-service": {
+      "type": "application",
+      "root": "media-service",
+      "entryFile": "main",
+      "sourceRoot": "media-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "media-service/tsconfig.json"
+      }
+    },
+    "api-gateway": {
+      "type": "application",
+      "root": "api-gateway",
+      "entryFile": "main",
+      "sourceRoot": "api-gateway/src",
+      "compilerOptions": {
+        "tsConfigPath": "api-gateway/tsconfig.json"
+      }
+    }
+  }
+}

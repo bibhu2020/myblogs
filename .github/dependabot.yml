@@ -1,44 +1,12 @@
 version: 2
 
 updates:
-  # ── npm: each NestJS service + Vue frontend ────────────────────────────────
+  # ── npm: single root package.json covering all services + the Vue frontend ─
   # Individual PRs (no groups) so the maintenance agent can parse the
   # "Bump X from A to B" title and decide whether to merge or close.
 
   - package-ecosystem: npm
-    directory: /api-gateway
-    schedule:
-      interval: weekly
-      day: monday
-      time: "06:00"
-    open-pull-requests-limit: 10
-
-  - package-ecosystem: npm
-    directory: /auth-service
-    schedule:
-      interval: weekly
-      day: monday
-      time: "06:00"
-    open-pull-requests-limit: 10
-
-  - package-ecosystem: npm
-    directory: /blog-service
-    schedule:
-      interval: weekly
-      day: monday
-      time: "06:00"
-    open-pull-requests-limit: 10
-
-  - package-ecosystem: npm
-    directory: /media-service
-    schedule:
-      interval: weekly
-      day: monday
-      time: "06:00"
-    open-pull-requests-limit: 10
-
-  - package-ecosystem: npm
-    directory: /frontend
+    directory: /
     schedule:
       interval: weekly
       day: monday

@@ -22,15 +22,15 @@ def _frontend(ctx: RunContextWrapper[RebrandCtx]) -> Path:
 
 @function_tool
 def verify_build(ctx: RunContextWrapper[RebrandCtx]) -> str:
-    """Run `npm run build` in frontend/ to confirm all patched files compile with Vite.
+    """Run `npm run build:frontend` to confirm all patched files compile with Vite.
 
     Returns 'BUILD PASSED' or 'BUILD FAILED: <error excerpt>'.
     """
-    frontend_dir = str(_frontend(ctx))
-    print("[tester] Running npm run build...")
+    repo_root = str(ctx.context.repo_root)
+    print("[tester] Running npm run build:frontend...")
     t0 = time.time()
     try:
-        result = run(["npm", "run", "build"], cwd=frontend_dir, timeout=300)
+        result = run(["npm", "run", "build:frontend"], cwd=repo_root, timeout=300)
     except subprocess.TimeoutExpired:
         return "BUILD FAILED: timed out after 300s"
 

@@ -12,14 +12,16 @@ import { MediaService } from './media.service';
 import { JwtStrategy } from './jwt.strategy';
 import * as fs from 'fs';
 
-const uploadDir = join(process.cwd(), 'uploads');
+// __dirname-relative so these always resolve under media-service/ regardless of
+// process.cwd() — see auth-service/src/app.module.ts for why.
+const uploadDir = join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
 const DB_URL = process.env.DATABASE_URL;
 
 const dbConfig: any = DB_URL
   ? { type: 'postgres', url: DB_URL, ssl: { rejectUnauthorized: false } }
-  : { type: 'better-sqlite3', database: 'media.db' };
+  : { type: 'better-sqlite3', database: join(__dirname, '..', 'media.db') };
 
 @Module({
   imports: [
