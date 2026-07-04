@@ -8,7 +8,7 @@ class StoryAgentState(TypedDict):
     author_name: str
 
     # Age group + theme selected by pick_theme step
-    age_group: str              # '3-7', '8-15', or '16-20'
+    age_group: str              # '2-7', '8-15', or '16+'
     theme: str
     genre: str
     premise: str

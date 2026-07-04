@@ -4,6 +4,7 @@ import re
 
 import httpx
 
+from ...auth import make_agent_jwt
 from ..state import AgentState
 
 MCP_URL = os.getenv("MCP_URL", "https://mishrabp-meridian.hf.space/api/mcp")
@@ -93,6 +94,26 @@ def ensure_author_node(state: AgentState) -> dict:
     return {}
 
 
+def _create_category(server_base: str, name: str) -> dict | None:
+    """Create a missing fixed category (Technology/Education/Travel/History) via a direct
+    REST call, self-signing an admin JWT — no MCP tool exists for category creation."""
+    try:
+        jwt = make_agent_jwt()
+        with httpx.Client(timeout=15.0) as client:
+            res = client.post(
+                f"{server_base}/api/categories",
+                json={"name": name},
+                headers={"Authorization": f"Bearer {jwt}"},
+            )
+            res.raise_for_status()
+            cat = res.json()
+            print(f"🆕 Created missing category: {name} (ID: {cat.get('id')})")
+            return cat
+    except Exception as exc:
+        print(f"⚠️  Could not create category '{name}': {exc}")
+        return None
+
+
 def pick_taxonomy_node(state: AgentState) -> dict:
     raw_cats = mcp_call("list_categories", {})
     raw_tags = mcp_call("list_tags", {})
@@ -101,19 +122,38 @@ def pick_taxonomy_node(state: AgentState) -> dict:
     tags = _parse_mcp_items(raw_tags)
 
     # ── Category matching ─────────────────────────────────────────────────────
+    # category_name is one of the 4 fixed categories (Technology/Education/Travel/
+    # History) — match it exactly first, creating it if it doesn't exist yet, rather
+    # than fuzzy-matching keywords against whatever happens to be in the DB.
     category_id = None
     matched_cat = None
-    if categories:
+    category_name = state.get("category_name", "")
+
+    if category_name:
+        matched_cat = next(
+            (c for c in categories if c["name"].lower() == category_name.lower()),
+            None,
+        )
+        if not matched_cat:
+            created = _create_category(state.get("server_base", ""), category_name)
+            if created:
+                matched_cat = created
+                categories.append(created)
+
+    if not matched_cat and categories:
         kws = [k.lower() for k in state["post_category_keywords"]]
-        # Also include the category_name itself as a keyword so it always matches
-        cat_name_kw = state.get("category_name", "").lower()
+        cat_name_kw = category_name.lower()
         all_kws = list({cat_name_kw} | set(kws)) if cat_name_kw else kws
         matched_cat = next(
             (c for c in categories
              if any(k in c["name"].lower() or k in c["slug"].lower() for k in all_kws)),
             None,
         )
-        category_id = (matched_cat or categories[0])["id"]
+
+    if matched_cat:
+        category_id = matched_cat["id"]
+    elif categories:
+        category_id = categories[0]["id"]
 
     # ── Tag matching ──────────────────────────────────────────────────────────
     tag_ids: list[int] = []

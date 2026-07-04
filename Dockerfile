@@ -4,40 +4,21 @@ FROM node:20-slim AS builder
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ && rm -rf /var/lib/apt/lists/*
 
-# auth-service
-WORKDIR /app/auth-service
-COPY auth-service/package.json ./
-RUN npm install --legacy-peer-deps
-COPY auth-service/ ./
-RUN npm run build && npm prune --production --legacy-peer-deps
+WORKDIR /app
 
-# blog-service
-WORKDIR /app/blog-service
-COPY blog-service/package.json ./
-RUN npm install --legacy-peer-deps
-COPY blog-service/ ./
-RUN npm run build && npm prune --production --legacy-peer-deps
+# One shared install for every service + the frontend — single package.json/
+# package-lock.json/nest-cli.json at the repo root, no per-service manifests.
+COPY package.json package-lock.json nest-cli.json ./
+RUN npm ci --legacy-peer-deps
 
-# media-service
-WORKDIR /app/media-service
-COPY media-service/package.json ./
-RUN npm install --legacy-peer-deps
-COPY media-service/ ./
-RUN npm run build && npm prune --production --legacy-peer-deps
+COPY auth-service/  ./auth-service/
+COPY blog-service/  ./blog-service/
+COPY media-service/ ./media-service/
+COPY api-gateway/   ./api-gateway/
+COPY frontend/      ./frontend/
 
-# api-gateway
-WORKDIR /app/api-gateway
-COPY api-gateway/package.json ./
-RUN npm install --legacy-peer-deps
-COPY api-gateway/ ./
-RUN npm run build && npm prune --production --legacy-peer-deps
-
-# frontend — build static assets only
-WORKDIR /app/frontend
-COPY frontend/package.json ./
-RUN npm install --legacy-peer-deps
-COPY frontend/ ./
-RUN npm run build
+RUN npm run build:all
+RUN npm prune --production --legacy-peer-deps
 
 # ── Production ────────────────────────────────────────────────────────────────
 FROM node:20-slim
@@ -75,28 +56,24 @@ COPY tts-service/app.py   /app/tts-service/app.py
 COPY tts-service/start.sh /app/tts-service/start.sh
 RUN chmod +x /app/tts-service/start.sh
 
+# One shared, production-pruned node_modules — every service's `node dist/main.js`
+# resolves into this via Node's normal upward node_modules lookup.
+COPY --from=builder /app/node_modules /app/node_modules
+
 # auth-service
-COPY --from=builder /app/auth-service/dist         /app/auth-service/dist
-COPY --from=builder /app/auth-service/node_modules /app/auth-service/node_modules
-COPY auth-service/package.json                     /app/auth-service/
+COPY --from=builder /app/auth-service/dist /app/auth-service/dist
 
 # blog-service
-COPY --from=builder /app/blog-service/dist         /app/blog-service/dist
-COPY --from=builder /app/blog-service/node_modules /app/blog-service/node_modules
-COPY blog-service/package.json                     /app/blog-service/
+COPY --from=builder /app/blog-service/dist /app/blog-service/dist
 
 # media-service
-COPY --from=builder /app/media-service/dist         /app/media-service/dist
-COPY --from=builder /app/media-service/node_modules /app/media-service/node_modules
-COPY media-service/package.json                     /app/media-service/
+COPY --from=builder /app/media-service/dist /app/media-service/dist
 RUN mkdir -p /app/media-service/uploads
 
 # api-gateway
-COPY --from=builder /app/api-gateway/dist         /app/api-gateway/dist
-COPY --from=builder /app/api-gateway/node_modules /app/api-gateway/node_modules
-COPY api-gateway/package.json                     /app/api-gateway/
+COPY --from=builder /app/api-gateway/dist /app/api-gateway/dist
 
-# Frontend static files (node_modules not needed — already compiled)
+# Frontend static files (already compiled)
 COPY --from=builder /app/frontend/dist /app/frontend/dist
 
 # nginx: remove Debian defaults, install our config

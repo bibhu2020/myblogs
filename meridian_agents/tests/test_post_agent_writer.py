@@ -10,7 +10,7 @@ from meridian_agents.post_agent.nodes.writer import (
 )
 
 STATE = {
-    "category_name": "AI & Machine Learning",
+    "category_name": "Technology",
     "trend": "LLMs are getting bigger",
     "technical": "Scaling laws",
     "reactions": "Researchers are excited",
@@ -36,8 +36,8 @@ FAKE_POST_JSON = json.dumps({
 
 class TestSystemPrompt:
     def test_uses_the_matching_persona(self):
-        prompt = _system_prompt("AI & Machine Learning")
-        assert "senior AI researcher" in prompt
+        prompt = _system_prompt("Technology")
+        assert "senior technology journalist" in prompt
 
     def test_falls_back_to_default_persona_for_unknown_category(self):
         prompt = _system_prompt("Nonexistent Category")
@@ -48,6 +48,11 @@ class TestSystemPrompt:
         other_prompt = _system_prompt("History")
         assert "unsplashSearchQuery" in travel_prompt
         assert "unsplashSearchQuery" not in other_prompt
+
+    def test_includes_image_consistency_directive_for_every_category(self):
+        for category in ("Technology", "Education", "Travel", "History"):
+            prompt = _system_prompt(category)
+            assert "coherent visual narrative" in prompt
 
 
 class TestWordCount:
@@ -61,7 +66,7 @@ class TestWordCount:
 class TestUserPrompt:
     def test_includes_category_and_research_sections(self):
         prompt = _user_prompt(STATE)
-        assert "AI & Machine Learning" in prompt
+        assert "Technology" in prompt
         assert "LLMs are getting bigger" in prompt
         assert "Scaling laws" in prompt
         assert "Researchers are excited" in prompt

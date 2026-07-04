@@ -84,6 +84,12 @@ async function toggleStatus(post) {
   post.status = newStatus
 }
 
+async function togglePin(post) {
+  const next = !post.doNotDelete
+  await api.put(`/posts/${post.id}`, { doNotDelete: next })
+  post.doNotDelete = next
+}
+
 const pendingCount = computed(() => stats.value.pending || 0)
 </script>
 
@@ -180,7 +186,10 @@ const pendingCount = computed(() => stats.value.pending || 0)
                   </div>
                 </div>
                 <div class="min-w-0">
-                  <div class="font-medium text-gray-900 text-sm truncate max-w-xs">{{ post.title }}</div>
+                  <div class="font-medium text-gray-900 text-sm truncate max-w-xs flex items-center gap-1">
+                    <span v-if="post.doNotDelete" title="Kept from 30-day cleanup">📌</span>
+                    {{ post.title }}
+                  </div>
                   <div class="text-xs text-gray-400">{{ post.authorName }}</div>
                 </div>
               </div>
@@ -223,6 +232,12 @@ const pendingCount = computed(() => stats.value.pending || 0)
               <div v-else class="flex items-center gap-2">
                 <RouterLink :to="`/admin/posts/${post.id}/edit`" class="text-xs text-primary-600 hover:underline font-medium">Edit</RouterLink>
                 <RouterLink :to="`/blog/${post.slug}`" target="_blank" class="text-xs text-gray-400 hover:text-gray-600">View</RouterLink>
+                <button @click="togglePin(post)"
+                  :title="post.doNotDelete ? 'Kept from 30-day cleanup — click to allow deletion' : 'Keep this post — exempt it from the 30-day auto-cleanup'"
+                  class="text-xs hover:opacity-70"
+                  :class="post.doNotDelete ? 'text-amber-600' : 'text-gray-400'">
+                  {{ post.doNotDelete ? '📌 Kept' : '📌 Keep' }}
+                </button>
                 <button @click="deletePost(post.id)" class="text-xs text-red-500 hover:text-red-700">Delete</button>
               </div>
             </td>

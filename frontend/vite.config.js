@@ -1,9 +1,16 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// Absolute, not relative: a relative `root` resolves against process.cwd(), not
+// this config file's location, so `vite --config frontend/vite.config.js` run
+// from the repo root would otherwise treat the repo root as the project root.
+const frontendDir = fileURLToPath(new URL('.', import.meta.url))
+
 export default defineConfig({
+  root: frontendDir,
   test: {
     environment: 'happy-dom',
     coverage: {

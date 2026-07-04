@@ -16,21 +16,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: npm
 
-      - name: npm ci + build — auth-service
-        run: npm ci --prefix auth-service && npm --prefix auth-service run build
+      - name: npm ci
+        run: npm ci
 
-      - name: npm ci + build — blog-service
-        run: npm ci --prefix blog-service && npm --prefix blog-service run build
-
-      - name: npm ci + build — media-service
-        run: npm ci --prefix media-service && npm --prefix media-service run build
-
-      - name: npm ci + build — api-gateway
-        run: npm ci --prefix api-gateway --ignore-scripts && npm --prefix api-gateway run build
-
-      - name: npm ci + build — frontend
-        run: npm ci --prefix frontend && npm --prefix frontend run build
+      - name: Build all services + frontend
+        run: npm run build:all
 
   sonarqube:
     name: SonarQube Scan

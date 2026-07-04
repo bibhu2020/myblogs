@@ -15,20 +15,25 @@ npm start
 npm run start:backend
 
 # Individual services
-npm --prefix auth-service run start:dev    # port 3001
-npm --prefix blog-service run start:dev    # port 3002
-npm --prefix media-service run start:dev   # port 3003
-npm --prefix api-gateway run start:dev     # port 3000
-npm --prefix frontend run dev              # port 5173
+npm run start:auth-service     # port 3001
+npm run start:blog-service     # port 3002
+npm run start:media-service    # port 3003
+npm run start:api-gateway      # port 3000
+npm run dev:frontend           # port 5173
 
 # Build frontend
-npm --prefix frontend run build
+npm run build:frontend
+
+# Build everything (all 4 services + frontend)
+npm run build:all
 
 # Re-seed blog database (only works on empty DB — wipes and re-seeds)
 npm run seed
 ```
 
-No test suite exists. There are no lint scripts defined.
+Test suites exist per service (`npm run test:<service>` / `test:cov:<service>`, plus
+`npm run coverage:python` for the agents) — see `npm run coverage:all`. There are no
+lint scripts defined.
 
 ## Architecture
 
@@ -57,6 +62,23 @@ API Gateway (3000)
 | `frontend` | 5173 | — | Vue 3 SPA |
 
 All four NestJS services share the same JWT secret: `myblogs-secret-key-2024`. Each service runs its own `JwtStrategy` and `PassportModule` — there is no shared auth library.
+
+### Single root package.json (no per-service manifests)
+
+There is exactly one `package.json`/`package-lock.json` for the whole repo (root) — no
+service has its own. The 4 NestJS services are wired together via one root
+`nest-cli.json` in [monorepo mode](https://docs.nestjs.com/cli/monorepo) (`"projects"`
+map, each pointing at that service's existing `src/`); the frontend is built via `vite
+--config frontend/vite.config.js` (its `root` is set to an absolute path derived from
+`import.meta.url` inside the config file itself — a *relative* `root` resolves against
+`process.cwd()`, not the config file's location, despite older Vite docs). Each service
+still has its own `tsconfig.json` (with `rootDir`/`outDir` pointing at itself) and
+`jest.config.js` (not a `package.json`, so it's allowed) — only the installable-package
+manifests were consolidated. Run any service with `npm run start:<service>` /
+`build:<service>` / `test:<service>` from the repo root; `npm run build:all` builds
+everything. The production `Dockerfile` does one `npm ci` + `npm run build:all`, then
+copies a single shared `node_modules` into the final image — Node's `require()`
+resolution walks up from each service's `dist/main.js` to find it.
 
 ### API Gateway pattern
 

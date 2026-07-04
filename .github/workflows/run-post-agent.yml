@@ -2,24 +2,21 @@ name: Run Post Agent
 
 on:
   schedule:
-    - cron: '0 3 * * 6'  # Saturday 03:00 UTC — ai_trending
-    - cron: '0 3 * * 0'  # Sunday   03:00 UTC — random_general
+    # Alternate-day cadence anchored on Sunday: Sun, Tue, Thu, Sat at 03:00 UTC.
+    - cron: '0 3 * * 0,2,4,6'
   workflow_dispatch:
     inputs:
       topic_mode:
-        description: 'Topic mode override'
+        description: 'Force a specific category (or "random" for the weighted priority pick)'
         required: false
-        default: 'random_general'
+        default: 'random'
         type: choice
         options:
-          - random_general
-          - ai_trending
-          - AI & Machine Learning
-          - Quantum Computing
-          - Relativity & Spacetime
-          - History
+          - random
+          - Technology
+          - Education
           - Travel
-          - Educational
+          - History
 
 jobs:
   post-agent:
@@ -39,15 +36,9 @@ jobs:
       - name: Install Python dependencies
         run: pip install -e ".[post_agent]" --quiet
 
-      - name: Resolve topic mode from schedule or manual input
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "TOPIC_MODE=${{ inputs.topic_mode }}" >> "$GITHUB_ENV"
-          elif [ "${{ github.event.schedule }}" = "0 3 * * 6" ]; then
-            echo "TOPIC_MODE=ai_trending" >> "$GITHUB_ENV"
-          else
-            echo "TOPIC_MODE=random_general" >> "$GITHUB_ENV"
-          fi
+      - name: Resolve topic mode for manual dispatch
+        if: github.event_name == 'workflow_dispatch' && inputs.topic_mode != 'random'
+        run: echo "TOPIC_MODE=${{ inputs.topic_mode }}" >> "$GITHUB_ENV"
 
       - name: Generate and publish blog post
         env:
@@ -58,5 +49,6 @@ jobs:
           UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
           SERVER_BASE: ${{ vars.HF_SPACE_URL }}
           MCP_URL: ${{ vars.HF_SPACE_URL }}/api/mcp
-          # TOPIC_MODE set by "Resolve topic mode" step above
+          # TOPIC_MODE set by "Resolve topic mode" step above for manual dispatch;
+          # unset on scheduled runs so the weighted priority pick applies.
         run: python3 -m meridian_agents.post_agent

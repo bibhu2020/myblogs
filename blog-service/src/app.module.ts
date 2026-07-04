@@ -1,3 +1,4 @@
+import { join } from 'path';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
@@ -31,9 +32,11 @@ import { SeedService } from './seed.service';
 
 const DB_URL = process.env.DATABASE_URL;
 
+// __dirname-relative so this always resolves to blog-service/blog.db regardless
+// of process.cwd() — see auth-service/src/app.module.ts for why.
 const dbConfig: any = DB_URL
   ? { type: 'postgres', url: DB_URL, ssl: { rejectUnauthorized: false } }
-  : { type: 'better-sqlite3', database: 'blog.db' };
+  : { type: 'better-sqlite3', database: join(__dirname, '..', 'blog.db') };
 
 @Module({
   imports: [

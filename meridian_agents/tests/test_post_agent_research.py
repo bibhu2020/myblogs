@@ -4,6 +4,7 @@ import pytest
 
 from meridian_agents.post_agent.nodes.research import (
     CATEGORIES,
+    _CATEGORY_WEIGHTS,
     _pick_category,
     _web_search_gemini,
     _web_search_openai,
@@ -12,44 +13,46 @@ from meridian_agents.post_agent.nodes.research import (
     deep_research_node,
 )
 
-AI_STATE = {
-    "category_name": "AI & Machine Learning",
-    "category_research_style": "artificial intelligence and machine learning",
+TECH_STATE = {
+    "category_name": "Technology",
+    "category_research_style": "artificial intelligence, quantum computing, and modern "
+                                "DevOps/DevSecOps engineering",
     "trend": "Some trend " * 30,
 }
 
 
 class TestPickCategory:
-    def test_picks_randomly_when_no_mode_set(self, monkeypatch):
+    def test_uses_weighted_random_when_no_mode_set(self, monkeypatch):
         monkeypatch.delenv("TOPIC_MODE", raising=False)
-        with patch("meridian_agents.post_agent.nodes.research.random.choice") as mock_choice:
-            mock_choice.return_value = CATEGORIES[0]
+        with patch("meridian_agents.post_agent.nodes.research.random.choices") as mock_choices:
+            mock_choices.return_value = [CATEGORIES[0]]
             result = _pick_category()
-        mock_choice.assert_called_once_with(CATEGORIES)
+        mock_choices.assert_called_once_with(CATEGORIES, weights=_CATEGORY_WEIGHTS, k=1)
         assert result == CATEGORIES[0]
-
-    def test_ai_trending_mode_returns_the_ai_category(self, monkeypatch):
-        monkeypatch.setenv("TOPIC_MODE", "ai_trending")
-        result = _pick_category()
-        assert result["pool"] == "ai"
-
-    def test_random_general_mode_picks_from_general_pool(self, monkeypatch):
-        monkeypatch.setenv("TOPIC_MODE", "random_general")
-        result = _pick_category()
-        assert result["pool"] == "general"
 
     def test_matches_a_category_by_name_case_insensitively(self, monkeypatch):
         monkeypatch.setenv("TOPIC_MODE", "history")
         result = _pick_category()
         assert result["name"] == "History"
 
-    def test_falls_back_to_random_for_unknown_mode(self, monkeypatch):
+    def test_falls_back_to_weighted_random_for_unknown_mode(self, monkeypatch):
         monkeypatch.setenv("TOPIC_MODE", "not-a-real-mode")
-        with patch("meridian_agents.post_agent.nodes.research.random.choice") as mock_choice:
-            mock_choice.return_value = CATEGORIES[1]
+        with patch("meridian_agents.post_agent.nodes.research.random.choices") as mock_choices:
+            mock_choices.return_value = [CATEGORIES[1]]
             result = _pick_category()
-        mock_choice.assert_called_once_with(CATEGORIES)
+        mock_choices.assert_called_once_with(CATEGORIES, weights=_CATEGORY_WEIGHTS, k=1)
         assert result == CATEGORIES[1]
+
+    def test_exactly_four_categories_in_priority_order(self):
+        names = [c["name"] for c in CATEGORIES]
+        assert names == ["Technology", "Education", "Travel", "History"]
+
+    def test_technology_and_education_carry_subtopic_pools(self):
+        by_name = {c["name"]: c for c in CATEGORIES}
+        assert len(by_name["Technology"]["subtopics"]) == 6
+        assert len(by_name["Education"]["subtopics"]) == 3
+        assert "subtopics" not in by_name["Travel"]
+        assert "subtopics" not in by_name["History"]
 
 
 class TestWebSearchGemini:
@@ -134,13 +137,22 @@ class TestWebSearch:
 
 
 class TestDiscoverTrendNode:
-    def test_returns_category_metadata_and_trend(self, monkeypatch):
+    def test_returns_category_metadata_and_trend_for_a_category_with_subtopics(self, monkeypatch):
         monkeypatch.delenv("TOPIC_MODE", raising=False)
         with patch("meridian_agents.post_agent.nodes.research._pick_category", return_value=CATEGORIES[0]), \
              patch("meridian_agents.post_agent.nodes.research._web_search", return_value="Discovered trend text"):
             result = discover_trend_node({})
-        assert result["category_name"] == CATEGORIES[0]["name"]
+        assert result["category_name"] == CATEGORIES[0]["name"] == "Technology"
         assert result["trend"] == "Discovered trend text"
+
+    def test_returns_category_metadata_and_trend_for_a_category_without_subtopics(self, monkeypatch):
+        monkeypatch.delenv("TOPIC_MODE", raising=False)
+        travel = next(c for c in CATEGORIES if c["name"] == "Travel")
+        with patch("meridian_agents.post_agent.nodes.research._pick_category", return_value=travel), \
+             patch("meridian_agents.post_agent.nodes.research._web_search", return_value="Travel trend text"):
+            result = discover_trend_node({})
+        assert result["category_name"] == "Travel"
+        assert result["trend"] == "Travel trend text"
 
 
 class TestDeepResearchNode:
@@ -155,7 +167,7 @@ class TestDeepResearchNode:
             return "unexpected"
 
         with patch("meridian_agents.post_agent.nodes.research._web_search", side_effect=fake_search):
-            result = deep_research_node(AI_STATE)
+            result = deep_research_node(TECH_STATE)
 
         assert result["technical"] == "technical details"
         assert result["reactions"] == "community reactions"

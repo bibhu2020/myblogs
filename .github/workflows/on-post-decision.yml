@@ -68,7 +68,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add meridian_agents/post_agent/pending_posts.jsonl
+          git add meridian_agents/post_agent/pending_posts.jsonl || true
           if [ "${{ steps.vars.outputs.action }}" = "reject" ]; then
             git add media-service/uploads/ media-service/media.db || true
           fi

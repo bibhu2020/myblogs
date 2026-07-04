@@ -66,8 +66,8 @@ def _remove_pending(story_id: int) -> None:
 
 def run_agent() -> dict:
     print("\n╔═══════════════════════════════════════════════╗")
-    print("║   Meridian Story Agent — Daily Story Run      ║")
-    print("║   Ages 3-7 / 8-15 / 16-20 (random pick)      ║")
+    print("║   Meridian Story Agent — Story Run            ║")
+    print("║   Ages 2-7 / 8-15 / 16+ (random pick)         ║")
     print("╚═══════════════════════════════════════════════╝\n")
 
     if not os.getenv("OPENAI_API_KEY"):
