@@ -370,7 +370,7 @@ adapt the "start the app" step to however your project actually boots.
 
 ```yaml
 dast:
-  permissions: { contents: read }
+  permissions: { contents: read, security-events: write }   # write only needed for the SARIF upload below
   steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4          # swap for whatever your stack needs
@@ -394,7 +394,21 @@ dast:
         fail_action: false        # flip to true only after seeing a real baseline run's results
         allow_issue_writing: false  # avoid needing issues: write permission
         artifact_name: 'zap-baseline-report'
+        cmd_options: '-J zap-report.json'   # native JSON report, for the SARIF step below
+
+    # Optional: get High-risk ZAP findings onto the Security tab. zap-baseline.py
+    # doesn't expose ZAP's own SARIF report template, so this repo hand-converts
+    # instead — same "own script over relying on tool internals" pattern as the
+    # SonarQube/CodeQL gates in Steps 3-4. See scripts/zap-alerts-to-sarif.py.
+    - run: python3 scripts/zap-alerts-to-sarif.py zap-report.json zap-high.sarif
+    - uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: zap-high.sarif
+        category: zap-baseline   # keep separate from CodeQL's own SARIF categories
 ```
+This step needs `security-events: write` added to the job's `permissions:` block
+(alongside `contents: read`) — the SARIF upload is the only reason this job
+needs write access to anything.
 
 Notes that generalize regardless of stack:
 - **Use the fastest boot path that serves real, crawlable HTML** — not
@@ -417,6 +431,17 @@ Notes that generalize regardless of stack:
   what this is, under the hood) with host networking, so `localhost`
   inside ZAP's container reaches your app on the same runner. This does
   not necessarily hold on other runner OSes.
+- **The SARIF conversion only forwards High-risk alerts.** ZAP's risk
+  scale is Informational/Low/Medium/High — there's no "Critical" tier
+  above High the way CodeQL has one above High, so "high or critical"
+  for ZAP just means High. Everything else (commonly the missing-header
+  findings a dev-mode server produces) stays out of the Security tab —
+  still visible in the artifact/log, just not made permanent there. If
+  your project's `zap-baseline.py`/action version ever ships native SARIF
+  output directly, you can drop the custom converter script entirely; as
+  of writing, `zaproxy/action-baseline` doesn't expose that template, so
+  this repo hand-builds a minimal SARIF file from ZAP's own JSON report
+  instead (`scripts/zap-alerts-to-sarif.py`).
 
 ---
 
@@ -469,7 +494,9 @@ standalone file *and* a `needs:`-based gate expecting it to be local.
       package version to a manifest in the test PR to confirm it actually
       fails when it should, then revert.
 - [ ] `OWASP ZAP Baseline Scan` completes and uploads its artifact; check
-      the job log for the `WARN-NEW`/`FAIL-NEW` summary line.
+      the job log for the `WARN-NEW`/`FAIL-NEW` summary line. If any alert
+      is High risk, confirm it also lands on **Security → Code scanning
+      alerts** under the `zap-baseline` category within a few minutes.
 - [ ] Repo **Security → Dependabot alerts** shows 0 (or your known/
       accepted baseline) — confirms Step 1's toggles are really on.
 - [ ] Wait for (or manually trigger) a Dependabot version-update PR;
@@ -489,8 +516,13 @@ standalone file *and* a `needs:`-based gate expecting it to be local.
   universal recommendation.
 - **`sonar.exclusions` / CodeQL `paths-ignore`** need to match your actual
   project layout (build output dirs, vendored code, generated files).
-- **SARIF only reaches GitHub's Security tab for CodeQL** in this setup —
-  SonarQube findings live on its own server UI, and ZAP's don't reach the
-  Security tab at all unless you add an extra SARIF-conversion + `upload-
-  sarif` step (not included here; see `devsecops.pdf` Section 4 if you want
-  to build that).
+- **SonarQube findings never reach GitHub's Security tab in this setup** —
+  they live only on its own server UI, SARIF or not; that's a separate
+  system by design, not a gap to close.
+- **ZAP's Security-tab coverage is High-risk-only, by choice, not by tool
+  limitation.** Step 6 already includes the SARIF-conversion + `upload-
+  sarif` step — but only High-risk alerts get converted. Medium/Low/Info
+  findings stay artifact/log-only. If you want everything ZAP finds on the
+  Security tab, loosen the filter in `scripts/zap-alerts-to-sarif.py`
+  (`HIGH_RISKCODE` constant) — just expect header-hardening noise from a
+  dev-mode server to show up there too.

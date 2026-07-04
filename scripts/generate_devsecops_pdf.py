@@ -691,7 +691,7 @@ def build():
         body_style))
     story.append(code_block(
         'dast:\n'
-        '&nbsp;&nbsp;permissions: {contents: read}\n'
+        '&nbsp;&nbsp;permissions: {contents: read, security-events: write}\n'
         '&nbsp;&nbsp;steps:\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;- actions/checkout@v4\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;- actions/setup-node@v4\n'
@@ -702,7 +702,11 @@ def build():
         '&nbsp;&nbsp;&nbsp;&nbsp;- zaproxy/action-baseline@v0.15.0\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with: {target: http://localhost:5173,\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fail_action: false, allow_issue_writing: false,\n'
-        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;artifact_name: zap-baseline-report}'))
+        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;artifact_name: zap-baseline-report,\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cmd_options: "-J zap-report.json"}\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- run: python3 scripts/zap-alerts-to-sarif.py zap-report.json zap-high.sarif\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- github/codeql-action/upload-sarif@v3\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with: {sarif_file: zap-high.sarif, category: zap-baseline}'))
 
     story.append(Paragraph(
         '<b>How it’s done here.</b> The app is booted via <font face="Courier">npm start</font> directly on '
@@ -720,15 +724,28 @@ def build():
         'runner’s own localhost where npm start is listening — this only holds on Linux runners, which is '
         'what this workflow uses throughout.'))
     story.append(Paragraph(
-        'This job has no gate — <font face="Courier">fail_action: false</font> means it cannot fail the PR '
-        'no matter what it finds, and <font face="Courier">allow_issue_writing: false</font> stops it from '
-        'filing a GitHub issue every run (its default behavior, which would otherwise need '
-        '<font face="Courier">issues: write</font> permission this job deliberately doesn’t have). This is '
-        'intentional for now: no baseline run has happened yet to know what this app’s normal finding count '
-        'even looks like. Turning on a hard gate blind — the way SonarQube’s and CodeQL’s gates only were, '
-        'after seeing real results (Sections 1.2, 1.3) — would risk blocking every future PR on pre-existing '
-        'findings unrelated to whatever it actually changes. Results are only visible today via the '
-        '<font face="Courier">zap-baseline-report</font> build artifact and the job’s own log.', body_style))
+        'This job still has no merge gate — <font face="Courier">fail_action: false</font> means it cannot '
+        'fail the PR no matter what it finds, and <font face="Courier">allow_issue_writing: false</font> '
+        'stops it from filing a GitHub issue every run (its default behavior, which would otherwise need a '
+        'broader <font face="Courier">issues: write</font> permission). That stays intentional: no baseline '
+        'run had happened yet, at the time this job was added, to know what this app’s normal finding count '
+        'even looks like. Turning on a hard <i>merge-blocking</i> gate blind — the way SonarQube’s and '
+        'CodeQL’s gates only were, after seeing real results (Sections 1.2, 1.3) — would risk blocking every '
+        'future PR on pre-existing findings unrelated to whatever it actually changes.', body_style))
+    story.append(Paragraph(
+        'What <i>did</i> change once a real baseline run existed: '
+        '<font face="Courier">cmd_options: "-J zap-report.json"</font> asks '
+        '<font face="Courier">zap-baseline.py</font> (which the action wraps) for its native JSON report, '
+        'in addition to the HTML report the artifact upload already captured. '
+        '<font face="Courier">scripts/zap-alerts-to-sarif.py</font> reads that JSON and converts only the '
+        'High-risk alerts — ZAP’s risk scale tops out at High, there is no tier above it — into a minimal '
+        'SARIF 2.1.0 file, which <font face="Courier">codeql-action/upload-sarif</font> then pushes to the '
+        'Security tab under its own <font face="Courier">zap-baseline</font> category (kept separate from '
+        'CodeQL’s own categories so the two don’t collide). Medium/Low/Informational alerts — the '
+        'missing-security-header findings a dev-mode server commonly produces — are deliberately left out of '
+        'that conversion: they still show up in the job log and the full HTML artifact, just not as '
+        'permanent, cross-linkable Security-tab entries. This is a visibility change only, not a gate '
+        'change — the job still cannot fail a PR on its own.', body_style))
 
     # ══════════════════════════════════════════════════════════════════════
     # 4. SARIF — what actually reaches the Security tab
@@ -742,26 +759,38 @@ def build():
         'is fundamentally a SARIF viewer: anything that gets a SARIF file to '
         '<font face="Courier">github/codeql-action/upload-sarif</font> (or an equivalent upload call) shows '
         'up there, and nothing else does.', body_style))
-    story.append(Paragraph('Of every tool in this document, only one currently does that:', body_style))
+    story.append(Paragraph('Of every tool in this document, two now do that — one automatically, one via a small custom converter:', body_style))
     story.append(metrics_table(
         [['Tool', 'Generates SARIF?', 'Reaches the Security tab?'],
          ['CodeQL', 'Yes — built into\ncodeql-action/analyze', 'Yes — automatically, same step\n(Code scanning alerts)'],
          ['SonarQube', 'No', 'No — findings live on the separate,\nself-hosted SonarQube server UI'],
          ['Dependabot alerts', 'No', 'Yes — but via GitHub’s own advisory-\nmatching, a different pipeline entirely\n(Dependabot alerts, not Code scanning)'],
          ['Dependency Review', 'No', 'No — inline PR annotation only,\nnot a persistent Security-tab entry'],
-         ['OWASP ZAP', 'Can, but not\nconfigured here', 'Not currently — see below']],
+         ['OWASP ZAP', 'Natively, via its own\nreport-generation add-on\n(not what action-baseline\nuses by default)', 'High-risk alerts only — see below.\nMedium/Low/Info stay artifact-only.']],
         col_widths=[32 * mm, 52 * mm, 84 * mm]))
     story.append(Spacer(1, 6))
     story.append(note(
-        'ZAP can emit a SARIF-format report (there are documented options/community actions for this), which '
-        'could then be pushed to the Security tab with an additional github/codeql-action/upload-sarif step '
-        '— exactly the mechanism CodeQL uses internally. That extra step isn’t wired up in this repo yet '
-        '(Section 3.2); today ZAP’s results are only visible via its build artifact and the job log. Worth '
-        'revisiting once the DAST job has a calibrated gate (Section 3.2) and is trusted enough to make its '
-        'findings persistent alongside CodeQL’s.'))
+        'ZAP itself can natively emit a SARIF report (its report-generation add-on ships a sarif-json '
+        'template) — but zaproxy/action-baseline wraps the older zap-baseline.py script, which doesn’t '
+        'expose that template directly. Rather than depend on that, this repo takes the same "write a small '
+        'script" approach already used for the SonarQube and CodeQL gates (Sections 1.2, 1.3): '
+        'cmd_options requests zap-baseline.py’s own native JSON report, and '
+        'scripts/zap-alerts-to-sarif.py (a script this repo owns, not a third-party converter) reads it and '
+        'hand-builds a minimal, schema-valid SARIF file containing only the High-risk alerts, which '
+        'codeql-action/upload-sarif then pushes up — exactly the mechanism CodeQL uses internally, just '
+        'invoked as a separate step instead of being bundled into the scan action itself.'))
+    story.append(Paragraph(
+        'Why only High, and not everything ZAP finds: ZAP’s risk scale is Informational/Low/Medium/High — '
+        'there is no “Critical” tier above High the way CodeQL has one above High. Publishing every finding '
+        '(the 8 WARN-level missing-security-header alerts a dev-mode Vite server normally produces — see the '
+        'gate discussion above) would clutter the one place people check for “what’s actually exploitable” '
+        'with findings that may not even reflect the real production nginx config. Restricting the SARIF '
+        'conversion to High keeps that view meaningful while the DAST job itself still has no merge gate.',
+        body_style))
     story.append(Paragraph(
         'Two consequences worth being explicit about: first, “check GitHub’s Security tab” does not mean '
-        '“check everything” — SonarQube and (for now) ZAP both require checking their own separate places. '
+        '“check everything” — SonarQube still requires checking its own separate server UI, and even ZAP’s '
+        'Medium/Low/Informational findings only ever show up in its job log and HTML artifact, never here. '
         'Second, Dependabot alerts and Code scanning alerts are two different sub-tabs fed by two entirely '
         'different pipelines that happen to live under the same Security tab umbrella, not one unified feed.',
         body_style))
