@@ -483,6 +483,18 @@ def build():
         '<b>Dependabot</b> — continuous, whole-dependency-tree coverage, independent of any PR.',
         '<b>Dependency Review</b> — scoped to exactly what a single PR’s diff introduces, with an inline gate.',
     ]))
+    story.append(note(
+        '<b>“Dependency graph” is not a third tool or a third pipeline — it’s the data both of the above '
+        'read.</b> It’s GitHub’s own parsed inventory of this repo’s manifests/lockfiles (which package '
+        'depends on which, at what version); it does no scanning itself and produces no findings on its '
+        'own, so it never shows up as a job with a pass/fail. It only appears as a Settings toggle '
+        '(<b>Settings → Code security and analysis → Dependency graph</b>) because it’s the prerequisite '
+        'substrate: Dependabot alerts (2.2.1) cross-reference it against the advisory database, and '
+        'Dependency Review (2.3) reads the exact same graph, scoped to a PR’s diff. Neither can produce a '
+        'single finding without it — which is exactly why Dependency Review failed outright '
+        '(“Dependency review is not supported on this repository…”) on this repo until Dependency graph was '
+        'explicitly turned on, even though Dependabot alerts were already active and reading that same '
+        'graph fine.'))
 
     # ── 2.2 Dependabot ────────────────────────────────────────────────────
     story.append(Paragraph('2.2 Dependabot', h2_style))
