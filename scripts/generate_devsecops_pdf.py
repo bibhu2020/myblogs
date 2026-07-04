@@ -130,8 +130,10 @@ def build():
     story.append(Paragraph(
         'Each category is covered by more than one tool — not for redundancy, but because each tool catches '
         'a different slice of the problem, explained in its own section below. Section 4 explains SARIF, the '
-        'file format that gets some (not all) of these tools’ results onto GitHub’s Security tab, and Section '
-        '5 is a short reference table if you just want the at-a-glance version.', body_style))
+        'file format that gets some (not all) of these tools’ results onto GitHub’s Security tab; Section 5 '
+        'is a short reference table if you just want the at-a-glance version; and Section 6 is an honest '
+        'list of what this pipeline still doesn’t cover, verified against this repo’s actual live '
+        'configuration rather than assumed.', body_style))
 
     # ══════════════════════════════════════════════════════════════════════
     # 1. SAST — Static Application Security Testing
@@ -691,7 +693,7 @@ def build():
         body_style))
     story.append(code_block(
         'dast:\n'
-        '&nbsp;&nbsp;permissions: {contents: read}\n'
+        '&nbsp;&nbsp;permissions: {contents: read, security-events: write}\n'
         '&nbsp;&nbsp;steps:\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;- actions/checkout@v4\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;- actions/setup-node@v4\n'
@@ -702,7 +704,10 @@ def build():
         '&nbsp;&nbsp;&nbsp;&nbsp;- zaproxy/action-baseline@v0.15.0\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with: {target: http://localhost:5173,\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fail_action: false, allow_issue_writing: false,\n'
-        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;artifact_name: zap-baseline-report}'))
+        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;artifact_name: zap-baseline-report}\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- run: python3 scripts/zap-alerts-to-sarif.py report_json.json zap-high.sarif\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- github/codeql-action/upload-sarif@v3\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with: {sarif_file: zap-high.sarif, category: zap-baseline}'))
 
     story.append(Paragraph(
         '<b>How it’s done here.</b> The app is booted via <font face="Courier">npm start</font> directly on '
@@ -720,15 +725,36 @@ def build():
         'runner’s own localhost where npm start is listening — this only holds on Linux runners, which is '
         'what this workflow uses throughout.'))
     story.append(Paragraph(
-        'This job has no gate — <font face="Courier">fail_action: false</font> means it cannot fail the PR '
-        'no matter what it finds, and <font face="Courier">allow_issue_writing: false</font> stops it from '
-        'filing a GitHub issue every run (its default behavior, which would otherwise need '
-        '<font face="Courier">issues: write</font> permission this job deliberately doesn’t have). This is '
-        'intentional for now: no baseline run has happened yet to know what this app’s normal finding count '
-        'even looks like. Turning on a hard gate blind — the way SonarQube’s and CodeQL’s gates only were, '
-        'after seeing real results (Sections 1.2, 1.3) — would risk blocking every future PR on pre-existing '
-        'findings unrelated to whatever it actually changes. Results are only visible today via the '
-        '<font face="Courier">zap-baseline-report</font> build artifact and the job’s own log.', body_style))
+        'This job still has no merge gate — <font face="Courier">fail_action: false</font> means it cannot '
+        'fail the PR no matter what it finds, and <font face="Courier">allow_issue_writing: false</font> '
+        'stops it from filing a GitHub issue every run (its default behavior, which would otherwise need a '
+        'broader <font face="Courier">issues: write</font> permission). That stays intentional: no baseline '
+        'run had happened yet, at the time this job was added, to know what this app’s normal finding count '
+        'even looks like. Turning on a hard <i>merge-blocking</i> gate blind — the way SonarQube’s and '
+        'CodeQL’s gates only were, after seeing real results (Sections 1.2, 1.3) — would risk blocking every '
+        'future PR on pre-existing findings unrelated to whatever it actually changes.', body_style))
+    story.append(note(
+        'A first attempt at this asked zap-baseline.py for a differently-named JSON report via '
+        '<font face="Courier">cmd_options: "-J zap-report.json"</font>. That broke the job outright: '
+        '<font face="Courier">report_json.json</font> is action-baseline’s own default JSON report path — '
+        'it writes that file itself, unprompted — and its own post-processing step expects to find the '
+        'report there and fails with “File report_json.json does not exist” if zap-baseline.py was told, '
+        'via an extra <font face="Courier">-J</font>, to write somewhere else instead. Fixed by dropping the '
+        '<font face="Courier">cmd_options</font> override entirely and reading the action’s existing default '
+        'output.'))
+    story.append(Paragraph(
+        'What <i>did</i> change once a real baseline run existed: '
+        '<font face="Courier">scripts/zap-alerts-to-sarif.py</font> reads '
+        '<font face="Courier">report_json.json</font> — the JSON report action-baseline already produces by '
+        'default, alongside the HTML report the artifact upload captures — and converts only the '
+        'High-risk alerts — ZAP’s risk scale tops out at High, there is no tier above it — into a minimal '
+        'SARIF 2.1.0 file, which <font face="Courier">codeql-action/upload-sarif</font> then pushes to the '
+        'Security tab under its own <font face="Courier">zap-baseline</font> category (kept separate from '
+        'CodeQL’s own categories so the two don’t collide). Medium/Low/Informational alerts — the '
+        'missing-security-header findings a dev-mode server commonly produces — are deliberately left out of '
+        'that conversion: they still show up in the job log and the full HTML artifact, just not as '
+        'permanent, cross-linkable Security-tab entries. This is a visibility change only, not a gate '
+        'change — the job still cannot fail a PR on its own.', body_style))
 
     # ══════════════════════════════════════════════════════════════════════
     # 4. SARIF — what actually reaches the Security tab
@@ -742,26 +768,38 @@ def build():
         'is fundamentally a SARIF viewer: anything that gets a SARIF file to '
         '<font face="Courier">github/codeql-action/upload-sarif</font> (or an equivalent upload call) shows '
         'up there, and nothing else does.', body_style))
-    story.append(Paragraph('Of every tool in this document, only one currently does that:', body_style))
+    story.append(Paragraph('Of every tool in this document, two now do that — one automatically, one via a small custom converter:', body_style))
     story.append(metrics_table(
         [['Tool', 'Generates SARIF?', 'Reaches the Security tab?'],
          ['CodeQL', 'Yes — built into\ncodeql-action/analyze', 'Yes — automatically, same step\n(Code scanning alerts)'],
          ['SonarQube', 'No', 'No — findings live on the separate,\nself-hosted SonarQube server UI'],
          ['Dependabot alerts', 'No', 'Yes — but via GitHub’s own advisory-\nmatching, a different pipeline entirely\n(Dependabot alerts, not Code scanning)'],
          ['Dependency Review', 'No', 'No — inline PR annotation only,\nnot a persistent Security-tab entry'],
-         ['OWASP ZAP', 'Can, but not\nconfigured here', 'Not currently — see below']],
+         ['OWASP ZAP', 'Natively, via its own\nreport-generation add-on\n(not what action-baseline\nuses by default)', 'High-risk alerts only — see below.\nMedium/Low/Info stay artifact-only.']],
         col_widths=[32 * mm, 52 * mm, 84 * mm]))
     story.append(Spacer(1, 6))
     story.append(note(
-        'ZAP can emit a SARIF-format report (there are documented options/community actions for this), which '
-        'could then be pushed to the Security tab with an additional github/codeql-action/upload-sarif step '
-        '— exactly the mechanism CodeQL uses internally. That extra step isn’t wired up in this repo yet '
-        '(Section 3.2); today ZAP’s results are only visible via its build artifact and the job log. Worth '
-        'revisiting once the DAST job has a calibrated gate (Section 3.2) and is trusted enough to make its '
-        'findings persistent alongside CodeQL’s.'))
+        'ZAP itself can natively emit a SARIF report (its report-generation add-on ships a sarif-json '
+        'template) — but zaproxy/action-baseline wraps the older zap-baseline.py script, which doesn’t '
+        'expose that template directly. Rather than depend on that, this repo takes the same "write a small '
+        'script" approach already used for the SonarQube and CodeQL gates (Sections 1.2, 1.3): '
+        'scripts/zap-alerts-to-sarif.py (a script this repo owns, not a third-party converter) reads the '
+        'JSON report zap-baseline.py already writes by default (report_json.json) and hand-builds a '
+        'minimal, schema-valid SARIF file containing only the High-risk alerts, which '
+        'codeql-action/upload-sarif then pushes up — exactly the mechanism CodeQL uses internally, just '
+        'invoked as a separate step instead of being bundled into the scan action itself.'))
+    story.append(Paragraph(
+        'Why only High, and not everything ZAP finds: ZAP’s risk scale is Informational/Low/Medium/High — '
+        'there is no “Critical” tier above High the way CodeQL has one above High. Publishing every finding '
+        '(the 8 WARN-level missing-security-header alerts a dev-mode Vite server normally produces — see the '
+        'gate discussion above) would clutter the one place people check for “what’s actually exploitable” '
+        'with findings that may not even reflect the real production nginx config. Restricting the SARIF '
+        'conversion to High keeps that view meaningful while the DAST job itself still has no merge gate.',
+        body_style))
     story.append(Paragraph(
         'Two consequences worth being explicit about: first, “check GitHub’s Security tab” does not mean '
-        '“check everything” — SonarQube and (for now) ZAP both require checking their own separate places. '
+        '“check everything” — SonarQube still requires checking its own separate server UI, and even ZAP’s '
+        'Medium/Low/Informational findings only ever show up in its job log and HTML artifact, never here. '
         'Second, Dependabot alerts and Code scanning alerts are two different sub-tabs fed by two entirely '
         'different pipelines that happen to live under the same Security tab umbrella, not one unified feed.',
         body_style))
@@ -770,8 +808,24 @@ def build():
     # 5. Summary
     # ══════════════════════════════════════════════════════════════════════
     story.append(Paragraph('5. Summary', h1_style))
+    story.append(Paragraph(
+        'One row here doesn’t fit the “Tool” framing the rest of this table uses: Dependency graph. Section '
+        '2.1 already covers what it <i>is</i> (data, not a pipeline) — worth being equally explicit about '
+        'how it actually gets <i>created</i>, since nothing in this pipeline builds it. GitHub itself parses '
+        'whatever manifest/lockfile formats it recognizes for a repo’s ecosystems — for this repo, '
+        '<font face="Courier">package.json</font> + <font face="Courier">package-lock.json</font> for npm, '
+        '<font face="Courier">pyproject.toml</font> for pip — automatically, in the background, whenever '
+        'one of those files changes on a tracked branch. There is no job, workflow, or Action that runs '
+        'this: it’s a platform-level feature GitHub performs on its own once <b>Dependency graph</b> is '
+        'switched on (Section 2.1), and it’s the lockfile specifically that lets it resolve <i>transitive</i> '
+        'dependencies, not just the direct ones listed in the manifest. It’s the same graph whether it’s '
+        'Dependabot alerts reading the repo’s current default-branch state (continuously) or Dependency '
+        'Review reading a PR’s proposed diff against it (per PR) — both cases below.', body_style))
     story.append(metrics_table(
         [['Tool', 'Category', 'Scope', 'Trigger', 'Blocks merge?'],
+         ['Dependency graph', 'substrate\n(not a tool/pipeline)', 'Every recognized manifest/\nlockfile in the repo',
+          'Automatic — GitHub parses on\nevery push to a tracked branch',
+          'N/A — produces no findings;\nDependabot &amp; Dependency\nReview both read it'],
          ['SonarQube', 'SAST', 'Whole repo\n(gate: new/changed code)', 'pull_request\n(pr-check.yml)',
           'Yes — sonar:gate'],
          ['CodeQL', 'SAST', 'Whole repo\n(JS/TS + Python matrix)', 'pull_request\n(pr-check.yml)',
@@ -787,6 +841,90 @@ def build():
          ['OWASP ZAP', 'DAST', 'Running app,\npassive spider', 'pull_request\n(pr-check.yml)',
           'No — fail_action: false\n(pending baseline data)']],
         col_widths=[32 * mm, 24 * mm, 36 * mm, 36 * mm, 40 * mm]))
+    story.append(Spacer(1, 6))
+    story.append(note(
+        'Read the “Blocks merge?” column as “fails its own check” — see Section 6’s first gap. As of '
+        'writing, none of these are wired as required status checks on main, so a red check here does not '
+        'currently stop GitHub from allowing the merge itself.'))
+
+    # ══════════════════════════════════════════════════════════════════════
+    # 6. Known Gaps — what this pipeline doesn't cover yet
+    # ══════════════════════════════════════════════════════════════════════
+    story.append(Paragraph('6. Known Gaps — What This Pipeline Doesn’t Cover Yet', h1_style))
+    story.append(Paragraph(
+        'Verified directly against this repo’s live GitHub configuration (API, not assumption), ranked by '
+        'severity. Documenting a gap here is not a recommendation to silently fix it — several of these are '
+        'real workflow/policy decisions, not just missing YAML, and are called out for a deliberate choice, '
+        'not a silent patch.', body_style))
+
+    story.append(Paragraph('6.1 No required status checks on main (High)', h2_style))
+    story.append(Paragraph(
+        'This repo’s branch protection is a modern <b>ruleset</b> (Settings → Rules → Rulesets), not classic '
+        'branch protection — which is why the legacy '
+        '<font face="Courier">/branches/main/protection</font> API returns 404 even though protection '
+        'exists. The active ruleset enforces exactly three things: no direct deletion of '
+        'main, no non-fast-forward (force) pushes, and a pull-request requirement with '
+        '<font face="Courier">required_approving_review_count: 0</font>. There is no '
+        '<font face="Courier">required_status_checks</font> rule at all.', body_style))
+    story.append(Paragraph(
+        'Practical effect: every gate described in Sections 1–3 — SonarQube’s, CodeQL’s, Dependency '
+        'Review’s, even a future calibrated ZAP gate — makes its own check go red on failure, but nothing '
+        'stops the PR’s merge button from being clicked anyway. “Blocks merge” throughout this document '
+        'describes what each script/action does when invoked, not what GitHub itself currently enforces. '
+        '<b>Fix:</b> add a <font face="Courier">required_status_checks</font> rule to the ruleset (or a '
+        'branch protection rule) naming the job names from this document — e.g. '
+        '<font face="Courier">SonarQube Scan</font>, <font face="Courier">CodeQL Security Gate</font>, '
+        '<font face="Courier">Dependency Review (SCA)</font> — plus <font face="Courier">strict: true</font> '
+        'if you also want the branch to be up to date before merging.', body_style))
+    story.append(note(
+        'This is a real behavior change once applied, not a documentation fix: any future PR would be '
+        'blocked from merging while a check is red — including for causes unrelated to the PR’s own change, '
+        'like the transient SonarQube-server 502 hit while building this pipeline out. Decide the required '
+        'check list deliberately rather than requiring everything by default.'))
+
+    story.append(Paragraph('6.2 Secret scanning is disabled (High)', h2_style))
+    story.append(Paragraph(
+        'A distinct, free, native GitHub feature — not part of SAST/SCA/DAST as covered above, and not '
+        'gated behind anything this repo would need to build. It scans commit content itself for '
+        'recognizable credential patterns (API keys, tokens, private keys) and, with <b>push protection</b> '
+        'enabled, can block the push before a secret ever lands in git history at all — a meaningfully '
+        'stronger guarantee than catching it after the fact. Currently, every related toggle on this repo — '
+        '<font face="Courier">secret_scanning</font>, <font face="Courier">'
+        'secret_scanning_push_protection</font>, and <font face="Courier">'
+        'secret_scanning_validity_checks</font> (which checks a detected secret against the issuing '
+        'provider to see if it’s still live) — reads <font face="Courier">disabled</font>. <b>Fix:</b> '
+        'Settings → Code security and analysis → Secret scanning (and push protection underneath it).',
+        body_style))
+
+    story.append(Paragraph('6.3 No container/base-image scanning (Medium)', h2_style))
+    story.append(Paragraph(
+        'The production <font face="Courier">Dockerfile</font> builds from <font face="Courier">'
+        'node:20-slim</font> — SAST covers this project’s own source, SCA covers its npm/pip dependencies, '
+        'but neither touches the base image’s OS packages or any CVEs specific to the image itself. A '
+        'dedicated container-scanning step (e.g. <font face="Courier">aquasecurity/trivy-action</font> or '
+        'Docker Scout, both with official GitHub Actions) closes this gap and would slot in as a sibling job '
+        'to the ones in Section 1, scanning the built image before it’s ever pushed anywhere.', body_style))
+
+    story.append(Paragraph('6.4 Dependabot doesn’t track the base image (Medium)', h2_style))
+    story.append(Paragraph(
+        '<font face="Courier">.github/dependabot.yml</font> (Section 2.2.3) has entries for '
+        '<font face="Courier">npm</font> and <font face="Courier">pip</font> only. Dependabot also supports '
+        'a <font face="Courier">docker</font> ecosystem specifically for tracking a Dockerfile’s '
+        '<font face="Courier">FROM</font> line and opening a PR when a newer tag is available — currently '
+        'absent, so <font face="Courier">node:20-slim</font> only ever changes when someone remembers to '
+        'bump it by hand.', body_style))
+
+    story.append(Paragraph('6.5 Repo-level default GITHUB_TOKEN permission is write (Low)', h2_style))
+    story.append(Paragraph(
+        'Every job inside <font face="Courier">pr-check.yml</font> already sets its own explicit, '
+        'least-privilege <font face="Courier">permissions:</font> block — that part is done correctly '
+        'throughout this document. The gap is the repo-wide <i>default</i> '
+        '(<b>Settings → Actions → General → Workflow permissions</b>), which reads '
+        '<font face="Courier">write</font>. That default only matters for a workflow that <i>omits</i> its '
+        'own <font face="Courier">permissions:</font> block — none in this repo currently do — but as a '
+        'defense-in-depth measure, setting the repo default to read-only means any future job added without '
+        'thinking about permissions fails closed (needs explicit write access requested) instead of failing '
+        'open (silently getting it).', body_style))
 
     story.append(HRFlowable(width='100%', thickness=0.5, color=BORDER, spaceBefore=14, spaceAfter=8))
     story.append(Paragraph(

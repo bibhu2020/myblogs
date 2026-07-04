@@ -1,0 +1,71 @@
+name: Agent run problem
+description: One of the scheduled content/maintenance agents did something wrong.
+title: "[Agent] "
+labels: ["agent"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        For the automated agents in `meridian_agents/` and their GitHub
+        Actions workflows — not for a bug in the web app itself (use "Bug
+        report" for that).
+
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Which agent or workflow?
+      options:
+        - post_agent (run-post-agent.yml) — auto-generates blog posts
+        - story_agent (run-story-agent.yml) — auto-generates children's stories
+        - news_agent (run-news-agent.yml)
+        - maintenance_agent (run-maintenance-agent.yml) — reviews Dependabot PRs, repo upkeep
+        - rebranding_agent (run-rebranding-agent.yml)
+        - Media cleanup (cleanup-media.yml) — orphaned-file sweep
+        - Approve/reject flow (on-post-decision.yml) — the human-in-the-loop resume step
+        - close-dependabot-prs.yml
+        - Not sure which one
+    validations:
+      required: true
+
+  - type: dropdown
+    id: problem_type
+    attributes:
+      label: What went wrong?
+      options:
+        - Wrong category/taxonomy (post_agent's 4 fixed categories, or story_agent's age groups)
+        - Image mismatch or irrelevant featured image
+        - Content quality issue (factual error, tone, length, etc.) in a specific post/story
+        - Ran on the wrong day/cadence, or didn't run at all
+        - Cleanup deleted something it shouldn't have (check doNotDelete first)
+        - Cleanup left orphaned media/DB rows behind
+        - Approve/reject decision didn't take effect
+        - Agent crashed / workflow run failed
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: run_link
+    attributes:
+      label: GitHub Actions run URL, or the affected post/story's admin AgentRuns entry
+      placeholder: "https://github.com/bibhu2020/myblogs/actions/runs/..."
+    validations:
+      required: true
+
+  - type: input
+    id: affected_content
+    attributes:
+      label: Affected post/story ID or slug (if applicable)
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should have happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      render: shell

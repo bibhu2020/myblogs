@@ -65,7 +65,13 @@ before copying files:
 - [ ] **Dependency graph** — required by Dependency Review (Step 5). Not
       always on by default even for public repos on some org configs —
       check it explicitly. If you skip this, Step 5's job fails with
-      *"Dependency review is not supported on this repository."*
+      *"Dependency review is not supported on this repository."* This
+      toggle doesn't run a scan itself — enabling it just tells GitHub to
+      start parsing whatever manifest/lockfile formats it recognizes
+      (`package.json`+lockfile, `pyproject.toml`, `go.mod`, etc.)
+      automatically on every push to a tracked branch. Nothing in this
+      playbook builds that graph; Dependabot alerts and Dependency Review
+      both just read it once it exists.
 - [ ] **Dependabot alerts** — the actual SCA lookup. Notifies on
       already-known-vulnerable dependencies, independent of any PR.
 - [ ] **Dependabot security updates** — auto-opens a PR to patch a
@@ -370,7 +376,7 @@ adapt the "start the app" step to however your project actually boots.
 
 ```yaml
 dast:
-  permissions: { contents: read }
+  permissions: { contents: read, security-events: write }   # write only needed for the SARIF upload below
   steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4          # swap for whatever your stack needs
@@ -394,7 +400,27 @@ dast:
         fail_action: false        # flip to true only after seeing a real baseline run's results
         allow_issue_writing: false  # avoid needing issues: write permission
         artifact_name: 'zap-baseline-report'
+
+    # Optional: get High-risk ZAP findings onto the Security tab. zap-baseline.py
+    # doesn't expose ZAP's own SARIF report template, so this repo hand-converts
+    # instead — same "own script over relying on tool internals" pattern as the
+    # SonarQube/CodeQL gates in Steps 3-4. See scripts/zap-alerts-to-sarif.py.
+    #
+    # report_json.json is action-baseline's own default JSON report path — it
+    # writes this file itself, unprompted. Don't try to redirect it via
+    # cmd_options' -J flag: the action's own post-processing step expects the
+    # report at exactly that filename and fails outright if zap-baseline.py
+    # was told (via an extra -J) to write somewhere else instead — a real
+    # mistake made (and fixed) while building this out.
+    - run: python3 scripts/zap-alerts-to-sarif.py report_json.json zap-high.sarif
+    - uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: zap-high.sarif
+        category: zap-baseline   # keep separate from CodeQL's own SARIF categories
 ```
+This step needs `security-events: write` added to the job's `permissions:` block
+(alongside `contents: read`) — the SARIF upload is the only reason this job
+needs write access to anything.
 
 Notes that generalize regardless of stack:
 - **Use the fastest boot path that serves real, crawlable HTML** — not
@@ -417,6 +443,17 @@ Notes that generalize regardless of stack:
   what this is, under the hood) with host networking, so `localhost`
   inside ZAP's container reaches your app on the same runner. This does
   not necessarily hold on other runner OSes.
+- **The SARIF conversion only forwards High-risk alerts.** ZAP's risk
+  scale is Informational/Low/Medium/High — there's no "Critical" tier
+  above High the way CodeQL has one above High, so "high or critical"
+  for ZAP just means High. Everything else (commonly the missing-header
+  findings a dev-mode server produces) stays out of the Security tab —
+  still visible in the artifact/log, just not made permanent there. If
+  your project's `zap-baseline.py`/action version ever ships native SARIF
+  output directly, you can drop the custom converter script entirely; as
+  of writing, `zaproxy/action-baseline` doesn't expose that template, so
+  this repo hand-builds a minimal SARIF file from ZAP's own JSON report
+  instead (`scripts/zap-alerts-to-sarif.py`).
 
 ---
 
@@ -454,10 +491,62 @@ standalone file *and* a `needs:`-based gate expecting it to be local.
 
 ---
 
+## Step 8 — Harden what these checks alone don't enforce
+
+Every step above makes a check go red on failure. None of them, by
+themselves, stop a PR from being merged anyway — that gap is easy to miss
+because it doesn't show up until you actually try to merge a PR with a red
+check and discover nothing stopped you. Found the hard way while building
+this out originally; do these deliberately from the start instead:
+
+- [ ] **Required status checks.** Add a branch protection rule (or a
+      repository *ruleset* — GitHub's newer mechanism, check
+      **Settings → Rules → Rulesets** as well as the classic **Settings →
+      Branches**) naming the actual job names from Step 7 —
+      e.g. `SonarQube Scan`, `CodeQL Security Gate`,
+      `Dependency Review (SCA)`. Without this, "Blocks merge?" throughout
+      this playbook describes what each script does when it runs, not
+      what GitHub actually enforces. This is a real behavior change once
+      applied — future PRs get blocked on any red check, including causes
+      unrelated to the PR's own diff (a flaky self-hosted SonarQube server
+      returning a transient 502, for instance) — so decide the required
+      list deliberately rather than requiring everything by default.
+- [ ] **Secret scanning** (**Settings → Code security and analysis →
+      Secret scanning**) — free, zero-config, catches committed
+      credentials. Turn on **push protection** underneath it too if you
+      want secrets blocked before they land in git history at all, not
+      just flagged after.
+- [ ] **Private vulnerability reporting** (same Settings page) if this is
+      a public repo — gives outside reporters a private channel instead
+      of a public issue for anything genuinely exploitable.
+- [ ] **Container/base-image scanning**, if you build a Docker image.
+      Nothing in Steps 1–7 touches OS packages or base-image CVEs —
+      `aquasecurity/trivy-action` or Docker Scout (both have official
+      GitHub Actions) slot in as a sibling job scanning the built image
+      before it's pushed anywhere.
+- [ ] **A `docker` ecosystem entry in `dependabot.yml`** (Step 2), if you
+      have a Dockerfile — tracks the `FROM` line and opens a PR when a
+      newer base-image tag ships. Easy to forget since Step 2's npm/pip
+      entries don't remind you it exists.
+- [ ] **Repo-wide default `GITHUB_TOKEN` permission** (**Settings →
+      Actions → General → Workflow permissions**) — set it to read-only.
+      Every job template in this playbook already sets its own explicit,
+      least-privilege `permissions:` block, so this only matters for a
+      *future* job that omits one — read-only means that job fails closed
+      (has to explicitly request more) instead of silently inheriting
+      broad write access.
+
+---
+
 ## Verification checklist
 
 - [ ] Open a throwaway PR. Confirm every job in the table at the top of
       this doc appears as a check.
+- [ ] Confirm Step 8's required-status-checks rule actually exists (query
+      the ruleset/branch-protection API, don't just assume the Settings
+      click "took") — then push a deliberately failing change on that
+      throwaway PR and confirm the merge button is genuinely disabled, not
+      just the check going red.
 - [ ] `Build all services` (or your build-check job) passes on the
       unmodified branch.
 - [ ] `SonarQube Scan` uploads and `SonarQube Quality Gate check` reports a
@@ -469,7 +558,9 @@ standalone file *and* a `needs:`-based gate expecting it to be local.
       package version to a manifest in the test PR to confirm it actually
       fails when it should, then revert.
 - [ ] `OWASP ZAP Baseline Scan` completes and uploads its artifact; check
-      the job log for the `WARN-NEW`/`FAIL-NEW` summary line.
+      the job log for the `WARN-NEW`/`FAIL-NEW` summary line. If any alert
+      is High risk, confirm it also lands on **Security → Code scanning
+      alerts** under the `zap-baseline` category within a few minutes.
 - [ ] Repo **Security → Dependabot alerts** shows 0 (or your known/
       accepted baseline) — confirms Step 1's toggles are really on.
 - [ ] Wait for (or manually trigger) a Dependabot version-update PR;
@@ -489,8 +580,20 @@ standalone file *and* a `needs:`-based gate expecting it to be local.
   universal recommendation.
 - **`sonar.exclusions` / CodeQL `paths-ignore`** need to match your actual
   project layout (build output dirs, vendored code, generated files).
-- **SARIF only reaches GitHub's Security tab for CodeQL** in this setup —
-  SonarQube findings live on its own server UI, and ZAP's don't reach the
-  Security tab at all unless you add an extra SARIF-conversion + `upload-
-  sarif` step (not included here; see `devsecops.pdf` Section 4 if you want
-  to build that).
+- **SonarQube findings never reach GitHub's Security tab in this setup** —
+  they live only on its own server UI, SARIF or not; that's a separate
+  system by design, not a gap to close.
+- **ZAP's Security-tab coverage is High-risk-only, by choice, not by tool
+  limitation.** Step 6 already includes the SARIF-conversion + `upload-
+  sarif` step — but only High-risk alerts get converted. Medium/Low/Info
+  findings stay artifact/log-only. If you want everything ZAP finds on the
+  Security tab, loosen the filter in `scripts/zap-alerts-to-sarif.py`
+  (`HIGH_RISKCODE` constant) — just expect header-hardening noise from a
+  dev-mode server to show up there too.
+- **Copying Steps 1–7 does not, by itself, make any of this enforced.**
+  This repo ran the full pipeline for a while with every gate script
+  working correctly and zero required status checks on `main` — every PR
+  merged the moment someone clicked the button, regardless of check
+  outcome, until Step 8 was done separately. Treat Step 8 as part of the
+  setup, not an optional afterthought, even though it comes after
+  everything else in this doc.

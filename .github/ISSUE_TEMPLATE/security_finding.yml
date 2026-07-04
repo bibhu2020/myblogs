@@ -1,0 +1,81 @@
+name: Security finding / vulnerability triage
+description: Triage a finding already surfaced by CodeQL, SonarQube, ZAP, or Dependabot.
+title: "[Security] "
+labels: ["security"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        **If this is a genuinely exploitable vulnerability you're
+        reporting for the first time — not something already sitting on
+        this repo's Security tab — please use [private vulnerability
+        reporting](https://github.com/bibhu2020/myblogs/security/advisories/new)
+        instead of a public issue.** This template is for tracking and
+        triaging findings the pipeline (`pr-check.yml`) has already made
+        visible, where there's nothing left to keep confidential.
+
+  - type: dropdown
+    id: source
+    attributes:
+      label: Which tool surfaced this?
+      options:
+        - CodeQL (Security → Code scanning alerts)
+        - SonarQube (self-hosted server dashboard, not GitHub)
+        - OWASP ZAP baseline scan (Security tab for High-risk, else the job's HTML artifact)
+        - Dependabot alert (Security → Dependabot alerts)
+        - Manual review / other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity as reported by the tool
+      options:
+        - Critical
+        - High
+        - Medium
+        - Low
+        - Not rated / unsure
+    validations:
+      required: true
+
+  - type: input
+    id: link
+    attributes:
+      label: Link to the alert/finding
+      placeholder: "https://github.com/bibhu2020/myblogs/security/code-scanning/..."
+    validations:
+      required: true
+
+  - type: input
+    id: component
+    attributes:
+      label: Affected file/package/endpoint
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What is it, and why does it matter here?
+      description: >-
+        Summarize the finding in your own words — don't just paste the
+        raw tool output.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: action
+    attributes:
+      label: Proposed next step
+      options:
+        - Fix now
+        - Accept risk / mark as won't-fix (say why below)
+        - False positive (say why below)
+        - Needs more investigation
+    validations:
+      required: true
+
+  - type: textarea
+    id: reasoning
+    attributes:
+      label: Reasoning for the proposed next step
