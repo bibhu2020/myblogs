@@ -130,8 +130,10 @@ def build():
     story.append(Paragraph(
         'Each category is covered by more than one tool — not for redundancy, but because each tool catches '
         'a different slice of the problem, explained in its own section below. Section 4 explains SARIF, the '
-        'file format that gets some (not all) of these tools’ results onto GitHub’s Security tab, and Section '
-        '5 is a short reference table if you just want the at-a-glance version.', body_style))
+        'file format that gets some (not all) of these tools’ results onto GitHub’s Security tab; Section 5 '
+        'is a short reference table if you just want the at-a-glance version; and Section 6 is an honest '
+        'list of what this pipeline still doesn’t cover, verified against this repo’s actual live '
+        'configuration rather than assumed.', body_style))
 
     # ══════════════════════════════════════════════════════════════════════
     # 1. SAST — Static Application Security Testing
@@ -806,8 +808,24 @@ def build():
     # 5. Summary
     # ══════════════════════════════════════════════════════════════════════
     story.append(Paragraph('5. Summary', h1_style))
+    story.append(Paragraph(
+        'One row here doesn’t fit the “Tool” framing the rest of this table uses: Dependency graph. Section '
+        '2.1 already covers what it <i>is</i> (data, not a pipeline) — worth being equally explicit about '
+        'how it actually gets <i>created</i>, since nothing in this pipeline builds it. GitHub itself parses '
+        'whatever manifest/lockfile formats it recognizes for a repo’s ecosystems — for this repo, '
+        '<font face="Courier">package.json</font> + <font face="Courier">package-lock.json</font> for npm, '
+        '<font face="Courier">pyproject.toml</font> for pip — automatically, in the background, whenever '
+        'one of those files changes on a tracked branch. There is no job, workflow, or Action that runs '
+        'this: it’s a platform-level feature GitHub performs on its own once <b>Dependency graph</b> is '
+        'switched on (Section 2.1), and it’s the lockfile specifically that lets it resolve <i>transitive</i> '
+        'dependencies, not just the direct ones listed in the manifest. It’s the same graph whether it’s '
+        'Dependabot alerts reading the repo’s current default-branch state (continuously) or Dependency '
+        'Review reading a PR’s proposed diff against it (per PR) — both cases below.', body_style))
     story.append(metrics_table(
         [['Tool', 'Category', 'Scope', 'Trigger', 'Blocks merge?'],
+         ['Dependency graph', 'substrate\n(not a tool/pipeline)', 'Every recognized manifest/\nlockfile in the repo',
+          'Automatic — GitHub parses on\nevery push to a tracked branch',
+          'N/A — produces no findings;\nDependabot &amp; Dependency\nReview both read it'],
          ['SonarQube', 'SAST', 'Whole repo\n(gate: new/changed code)', 'pull_request\n(pr-check.yml)',
           'Yes — sonar:gate'],
          ['CodeQL', 'SAST', 'Whole repo\n(JS/TS + Python matrix)', 'pull_request\n(pr-check.yml)',
@@ -823,6 +841,90 @@ def build():
          ['OWASP ZAP', 'DAST', 'Running app,\npassive spider', 'pull_request\n(pr-check.yml)',
           'No — fail_action: false\n(pending baseline data)']],
         col_widths=[32 * mm, 24 * mm, 36 * mm, 36 * mm, 40 * mm]))
+    story.append(Spacer(1, 6))
+    story.append(note(
+        'Read the “Blocks merge?” column as “fails its own check” — see Section 6’s first gap. As of '
+        'writing, none of these are wired as required status checks on main, so a red check here does not '
+        'currently stop GitHub from allowing the merge itself.'))
+
+    # ══════════════════════════════════════════════════════════════════════
+    # 6. Known Gaps — what this pipeline doesn't cover yet
+    # ══════════════════════════════════════════════════════════════════════
+    story.append(Paragraph('6. Known Gaps — What This Pipeline Doesn’t Cover Yet', h1_style))
+    story.append(Paragraph(
+        'Verified directly against this repo’s live GitHub configuration (API, not assumption), ranked by '
+        'severity. Documenting a gap here is not a recommendation to silently fix it — several of these are '
+        'real workflow/policy decisions, not just missing YAML, and are called out for a deliberate choice, '
+        'not a silent patch.', body_style))
+
+    story.append(Paragraph('6.1 No required status checks on main (High)', h2_style))
+    story.append(Paragraph(
+        'This repo’s branch protection is a modern <b>ruleset</b> (Settings → Rules → Rulesets), not classic '
+        'branch protection — which is why the legacy '
+        '<font face="Courier">/branches/main/protection</font> API returns 404 even though protection '
+        'exists. The active ruleset enforces exactly three things: no direct deletion of '
+        'main, no non-fast-forward (force) pushes, and a pull-request requirement with '
+        '<font face="Courier">required_approving_review_count: 0</font>. There is no '
+        '<font face="Courier">required_status_checks</font> rule at all.', body_style))
+    story.append(Paragraph(
+        'Practical effect: every gate described in Sections 1–3 — SonarQube’s, CodeQL’s, Dependency '
+        'Review’s, even a future calibrated ZAP gate — makes its own check go red on failure, but nothing '
+        'stops the PR’s merge button from being clicked anyway. “Blocks merge” throughout this document '
+        'describes what each script/action does when invoked, not what GitHub itself currently enforces. '
+        '<b>Fix:</b> add a <font face="Courier">required_status_checks</font> rule to the ruleset (or a '
+        'branch protection rule) naming the job names from this document — e.g. '
+        '<font face="Courier">SonarQube Scan</font>, <font face="Courier">CodeQL Security Gate</font>, '
+        '<font face="Courier">Dependency Review (SCA)</font> — plus <font face="Courier">strict: true</font> '
+        'if you also want the branch to be up to date before merging.', body_style))
+    story.append(note(
+        'This is a real behavior change once applied, not a documentation fix: any future PR would be '
+        'blocked from merging while a check is red — including for causes unrelated to the PR’s own change, '
+        'like the transient SonarQube-server 502 hit while building this pipeline out. Decide the required '
+        'check list deliberately rather than requiring everything by default.'))
+
+    story.append(Paragraph('6.2 Secret scanning is disabled (High)', h2_style))
+    story.append(Paragraph(
+        'A distinct, free, native GitHub feature — not part of SAST/SCA/DAST as covered above, and not '
+        'gated behind anything this repo would need to build. It scans commit content itself for '
+        'recognizable credential patterns (API keys, tokens, private keys) and, with <b>push protection</b> '
+        'enabled, can block the push before a secret ever lands in git history at all — a meaningfully '
+        'stronger guarantee than catching it after the fact. Currently, every related toggle on this repo — '
+        '<font face="Courier">secret_scanning</font>, <font face="Courier">'
+        'secret_scanning_push_protection</font>, and <font face="Courier">'
+        'secret_scanning_validity_checks</font> (which checks a detected secret against the issuing '
+        'provider to see if it’s still live) — reads <font face="Courier">disabled</font>. <b>Fix:</b> '
+        'Settings → Code security and analysis → Secret scanning (and push protection underneath it).',
+        body_style))
+
+    story.append(Paragraph('6.3 No container/base-image scanning (Medium)', h2_style))
+    story.append(Paragraph(
+        'The production <font face="Courier">Dockerfile</font> builds from <font face="Courier">'
+        'node:20-slim</font> — SAST covers this project’s own source, SCA covers its npm/pip dependencies, '
+        'but neither touches the base image’s OS packages or any CVEs specific to the image itself. A '
+        'dedicated container-scanning step (e.g. <font face="Courier">aquasecurity/trivy-action</font> or '
+        'Docker Scout, both with official GitHub Actions) closes this gap and would slot in as a sibling job '
+        'to the ones in Section 1, scanning the built image before it’s ever pushed anywhere.', body_style))
+
+    story.append(Paragraph('6.4 Dependabot doesn’t track the base image (Medium)', h2_style))
+    story.append(Paragraph(
+        '<font face="Courier">.github/dependabot.yml</font> (Section 2.2.3) has entries for '
+        '<font face="Courier">npm</font> and <font face="Courier">pip</font> only. Dependabot also supports '
+        'a <font face="Courier">docker</font> ecosystem specifically for tracking a Dockerfile’s '
+        '<font face="Courier">FROM</font> line and opening a PR when a newer tag is available — currently '
+        'absent, so <font face="Courier">node:20-slim</font> only ever changes when someone remembers to '
+        'bump it by hand.', body_style))
+
+    story.append(Paragraph('6.5 Repo-level default GITHUB_TOKEN permission is write (Low)', h2_style))
+    story.append(Paragraph(
+        'Every job inside <font face="Courier">pr-check.yml</font> already sets its own explicit, '
+        'least-privilege <font face="Courier">permissions:</font> block — that part is done correctly '
+        'throughout this document. The gap is the repo-wide <i>default</i> '
+        '(<b>Settings → Actions → General → Workflow permissions</b>), which reads '
+        '<font face="Courier">write</font>. That default only matters for a workflow that <i>omits</i> its '
+        'own <font face="Courier">permissions:</font> block — none in this repo currently do — but as a '
+        'defense-in-depth measure, setting the repo default to read-only means any future job added without '
+        'thinking about permissions fails closed (needs explicit write access requested) instead of failing '
+        'open (silently getting it).', body_style))
 
     story.append(HRFlowable(width='100%', thickness=0.5, color=BORDER, spaceBefore=14, spaceAfter=8))
     story.append(Paragraph(
