@@ -154,3 +154,56 @@ jobs:
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
+
+  dast:
+    name: OWASP ZAP Baseline Scan (DAST)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      # Raw services via `npm start`, not the production Docker image — DAST
+      # doesn't need the TTS/PyTorch/Kokoro build, and this boots in seconds
+      # instead of minutes. Backgrounded so it survives into the next step;
+      # GitHub-hosted Linux runners execute Docker-based actions (ZAP below)
+      # with host networking, so localhost is reachable from both.
+      - name: Start the app
+        run: |
+          npm start > /tmp/app.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:5173 >/dev/null 2>&1 && curl -sf http://localhost:3000/api/posts >/dev/null 2>&1; then
+              echo "App is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "App did not become ready in time"
+          cat /tmp/app.log
+          exit 1
+
+      # Passive-only: spiders the running frontend and inspects responses
+      # (headers, cookies, disclosed info) without sending attack payloads —
+      # safe against the real seeded data in blog.db/auth.db/media.db.
+      # fail_action stays false and allow_issue_writing stays false until a
+      # real baseline run establishes what this app's normal finding count
+      # looks like — turning on a hard gate blind would risk blocking every
+      # future PR on pre-existing findings unrelated to whatever it changes.
+      - name: ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          target: 'http://localhost:5173'
+          fail_action: false
+          allow_issue_writing: false
+          artifact_name: 'zap-baseline-report'
