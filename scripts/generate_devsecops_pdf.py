@@ -112,17 +112,26 @@ def build():
                              leftMargin=20 * mm, rightMargin=20 * mm)
     story = []
 
-    story.append(Paragraph('DevSecOps: SAST &amp; SCA Scanning', title_style))
+    story.append(Paragraph('DevSecOps: SAST, SCA &amp; DAST Scanning', title_style))
     story.append(Paragraph('A user guide to automated security scanning for the Meridian (myblogs) project', subtitle_style))
 
     story.append(Paragraph(
-        'Every pull request into main runs two categories of automated security scanning, defined in '
+        'Every pull request into main runs three categories of automated security scanning, defined in '
         '<font face="Courier">.github/workflows/pr-check.yml</font> ("PR Checks") alongside the ordinary '
-        'build/test jobs: <b>SAST</b>, which analyzes this project’s own source code, and <b>SCA</b>, which '
-        'inspects the third-party packages it depends on. Each category is covered by more than one tool — '
-        'not for redundancy, but because each tool catches a different slice of the problem, as explained in '
-        'its own section below. A short reference table is at the very end (Section 3) if you just want the '
-        'at-a-glance version.', body_style))
+        'build/test jobs:', body_style))
+    story.append(bullets([
+        '<b>SAST</b> (Static Application Security Testing) — analyzes this project’s own source code, '
+        'without running it (Section 1).',
+        '<b>SCA</b> (Software Composition Analysis) — inspects the third-party packages it depends on, not '
+        'its own code (Section 2).',
+        '<b>DAST</b> (Dynamic Application Security Testing) — tests the application while it’s actually '
+        'running, by interacting with it like a black-box attacker would (Section 3).',
+    ]))
+    story.append(Paragraph(
+        'Each category is covered by more than one tool — not for redundancy, but because each tool catches '
+        'a different slice of the problem, explained in its own section below. Section 4 explains SARIF, the '
+        'file format that gets some (not all) of these tools’ results onto GitHub’s Security tab, and Section '
+        '5 is a short reference table if you just want the at-a-glance version.', body_style))
 
     # ══════════════════════════════════════════════════════════════════════
     # 1. SAST — Static Application Security Testing
@@ -203,8 +212,9 @@ def build():
         'npm run sonar:full&nbsp;&nbsp;&nbsp;&nbsp;# coverage:all + sonar:check — the whole CI pipeline, locally'))
     story.append(Paragraph(
         'In CI, defined in <font face="Courier">.github/workflows/pr-check.yml</font> ("PR Checks") as a job '
-        'alongside build-check, CodeQL, and Dependency Review (Sections 1.3, 2.3) — all in the same file, all '
-        'triggered by the same <font face="Courier">on: pull_request: branches: [main]</font> block, so one '
+        'alongside build-check, CodeQL, Dependency Review, and OWASP ZAP (Sections 1.3, 2.3, 3.2) — all in '
+        'the same file, all triggered by the same '
+        '<font face="Courier">on: pull_request: branches: [main]</font> block, so one '
         'PR runs every check this repo has. The secrets come from GitHub Actions repository secrets instead '
         'of .env; dotenv-cli silently no-ops when no .env file is present, so the identical npm commands run '
         'unchanged in both places:', body_style))
@@ -413,6 +423,47 @@ def build():
         'processing yet — so the script uses a fixed pause rather than retrying-until-nonempty, which would '
         'silently treat “not ready yet” as “clean”.'))
 
+    # ── 1.4 SonarQube vs CodeQL ───────────────────────────────────────────
+    story.append(Paragraph('1.4 SonarQube vs CodeQL — why both run, not either/or', h2_style))
+    story.append(Paragraph(
+        'Both tools are SAST and both report Vulnerabilities, which invites the question of whether one '
+        'makes the other redundant. It doesn’t — each has strengths the other doesn’t attempt:', body_style))
+    story.append(metrics_table(
+        [['CodeQL’s edge over SonarQube', 'SonarQube’s edge over CodeQL'],
+         ['Real interprocedural dataflow/taint-tracking — traces '
+          'how a specific untrusted input reaches a dangerous sink, '
+          'not just pattern-matching the code around it. Fewer '
+          'false positives on the injection/XSS/SSRF-class bugs it '
+          'targets.',
+          'Test <b>coverage</b> as a first-class gate condition — '
+          'CodeQL has no concept of coverage at all (Section 1.2, '
+          'coverage subsection).'],
+         ['Free, zero infrastructure for public repos — no server '
+          'to host, no secret to manage.',
+          'Much broader issue categories: <b>Code Smells</b> '
+          '(maintainability), <b>duplicated code density</b>, and '
+          'general <b>Bugs</b> beyond security — none of which are '
+          'in CodeQL’s scope at all.'],
+         ['security-extended query pack is purpose-built for '
+          'security; nothing to configure beyond enabling it.',
+          '<b>Security Hotspots</b> — flags security-sensitive code '
+          '(crypto, cookies, deserialization) for a human to '
+          'triage, instead of only binary-flagging it as a '
+          'vulnerability or not.'],
+         ['Native GitHub Code Scanning — results land directly on '
+          'the Security tab via SARIF (Section 4), no separate UI '
+          'to check.',
+          'Configurable, tunable rule sets and quality profiles on '
+          'a real dashboard — better suited to enforcing house '
+          'style/maintainability standards over time, not just '
+          'point-in-time security findings.']],
+        col_widths=[84 * mm, 84 * mm]))
+    story.append(Spacer(1, 6))
+    story.append(note(
+        'Net effect used here: SonarQube is the general quality gate (bugs, smells, duplication, '
+        'coverage-gated); CodeQL adds a deeper, security-specific pass on top of it. Running both means '
+        'whichever style of analysis catches a given bug, catches it.'))
+
     # ══════════════════════════════════════════════════════════════════════
     # 2. SCA — Software Composition Analysis
     # ══════════════════════════════════════════════════════════════════════
@@ -436,26 +487,73 @@ def build():
     # ── 2.2 Dependabot ────────────────────────────────────────────────────
     story.append(Paragraph('2.2 Dependabot', h2_style))
     story.append(Paragraph(
-        '<b>What it is &amp; what it’s used for.</b> “Dependabot” is a brand name covering two genuinely '
-        'distinct GitHub features, easy to conflate:', body_style))
+        '“Dependabot” is a brand name covering <b>three</b> genuinely distinct GitHub features, easy to '
+        'conflate because they share one config file and one Security-tab presence. Each is explained '
+        'separately below because each has a different job and a different reason for existing.', body_style))
     story.append(bullets([
-        '<b>Dependabot version updates</b> — opens scheduled PRs bumping dependency versions, vulnerable or '
-        'not. This is <i>not</i> a security tool by itself; it bumps everything on a schedule.',
-        '<b>Dependabot alerts</b> — the actual SCA tool. Event-driven, not scheduled: it re-checks whenever '
+        '<b>2.2.1 Dependabot alerts</b> — the actual SCA lookup: notices when a dependency already in use '
+        'has a known vulnerability.',
+        '<b>2.2.2 Dependabot security updates</b> — automatically opens a PR to <i>fix</i> a dependency an '
+        'alert just flagged.',
+        '<b>2.2.3 Dependabot version updates</b> — opens PRs to bump dependencies to their latest version on '
+        'a schedule, vulnerable or not; not a security feature by itself.',
+    ]))
+    story.append(note(
+        'GitHub deliberately keeps these independent: security-update PRs are never grouped with '
+        'version-update PRs, and dependabot.yml (2.2.3) has no effect on whether alerts or security updates '
+        'happen — the only link between them is that merging a security-update PR automatically closes the '
+        'alert that triggered it.'))
+
+    story.append(Paragraph('2.2.1 Dependabot alerts', h2_style))
+    story.append(Paragraph(
+        '<b>What it is &amp; the need for it.</b> The actual SCA tool (Section 2.1’s “lookup, not analysis” '
+        'description is specifically this). It’s <i>event-driven</i>, not scheduled: it re-checks whenever '
         'the dependency graph changes (a manifest/lockfile push) <i>or</i> whenever a new advisory is '
         'published for a package already in use — meaning an alert can appear on a dependency nobody has '
-        'touched in months, the moment a CVE for it becomes public. Results surface on the repo’s '
-        '<b>Security tab → Dependabot alerts</b>, entirely independent of PR activity.',
-    ]))
-
+        'touched in months, the moment a CVE for it becomes public. Without this, a vulnerable dependency '
+        'already merged into the codebase would sit there silently forever; nothing else in this document '
+        'watches the tree continuously the way this does.', body_style))
     story.append(Paragraph(
-        '<b>Configuring on GitHub.</b> Version updates need no separate toggle — committing '
-        '<font face="Courier">.github/dependabot.yml</font> is what enables them. Alerts are a repo Settings '
-        'toggle instead (<b>Settings → Code security and analysis → Dependabot alerts</b>), unrelated to that '
-        'file — confirmed enabled on this repo (the API’s '
-        '<font face="Courier">/vulnerability-alerts</font> endpoint returns 204, and 0 alerts are currently '
-        'open).', body_style))
+        '<b>Configuring on GitHub.</b> A repo Settings toggle: <b>Settings → Code security and analysis → '
+        'Dependabot alerts</b>. Nothing to configure in code — confirmed enabled on this repo (the API’s '
+        '<font face="Courier">/vulnerability-alerts</font> endpoint returns 204). Results surface on the '
+        'repo’s <b>Security tab → Dependabot alerts</b>, entirely independent of PR activity.', body_style))
+    story.append(Paragraph(
+        '<b>How it’s done here.</b> Enabled, nothing further to configure. Real example observed on this '
+        'repo: two alerts appeared on <font face="Courier">multer</font> (used by media-service and '
+        'api-gateway) — high severity for a deeply-nested-field-names DoS, medium for incomplete cleanup of '
+        'aborted uploads — the moment those advisories were published, with zero commits made to this repo '
+        'at that time. That’s the event-driven behavior above, not a coincidence of timing.', body_style))
 
+    story.append(Paragraph('2.2.2 Dependabot security updates', h2_style))
+    story.append(Paragraph(
+        '<b>What it is &amp; the need for it.</b> Alerts (2.2.1) only <i>notify</i> — something still has to '
+        'act on them. When this is enabled, Dependabot automatically tries to open a pull request for every '
+        'open alert that has an available patch: it checks whether the vulnerable dependency can be upgraded '
+        'to the minimum version containing the fix without breaking the dependency graph, then raises a PR '
+        'to exactly that version and links it to the alert. This is a completely separate mechanism from '
+        'version updates (2.2.3) — it needs no <font face="Courier">dependabot.yml</font> entry at all to '
+        'function, since it’s driven by alerts, not by a schedule.', body_style))
+    story.append(Paragraph(
+        '<b>Configuring on GitHub.</b> Its own repo Settings toggle, separate from alerts: <b>Settings → '
+        'Code security and analysis → Dependabot security updates</b>. Confirmed enabled on this repo (the '
+        'API’s <font face="Courier">security_and_analysis.dependabot_security_updates.status</font> field '
+        'reads <font face="Courier">enabled</font>).', body_style))
+    story.append(Paragraph(
+        '<b>How it’s done here.</b> Enabled, nothing further to configure — this is the mechanism behind any '
+        'PR titled like a plain version bump but opened <i>without</i> waiting for Monday’s schedule (2.2.3), '
+        'and whose merge closes a specific alert rather than just updating a version number.', body_style))
+
+    story.append(Paragraph('2.2.3 Dependabot version updates', h2_style))
+    story.append(Paragraph(
+        '<b>What it is &amp; the need for it.</b> Opens scheduled PRs bumping dependencies to their latest '
+        'version, vulnerable or not — <i>not</i> a security feature; it exists to stop the codebase drifting '
+        'arbitrarily far behind upstream, since an old-enough dependency eventually becomes hard to patch '
+        'safely at all, security-relevant or not.', body_style))
+    story.append(Paragraph(
+        '<b>Configuring on GitHub.</b> No Settings toggle — committing <font face="Courier">'
+        '.github/dependabot.yml</font> to the repo is itself what enables it, per ecosystem entry.',
+        body_style))
     story.append(Paragraph(
         '<b>Configuring in code.</b> <font face="Courier">.github/dependabot.yml</font> — one entry per '
         'package ecosystem:', body_style))
@@ -473,14 +571,24 @@ def build():
         'Deliberately no groups: — each bump becomes its own individual PR so the maintenance agent can '
         'parse a plain “Bump X from A to B” title and decide whether to merge or close it, rather than '
         'having to unpack a batched multi-package PR.'))
-
     story.append(Paragraph(
-        '<b>How it’s done here.</b> One npm entry and one pip entry, both rooted at <font face="Courier">'
-        '/</font> — a direct consequence of this repo’s single-root-package.json consolidation (previously '
-        'five separate npm entries, one per service, before that restructuring). Weekly on Mondays, capped '
-        'at 10 open npm PRs / 5 open pip PRs at a time. Alerts require nothing further once the Settings '
-        'toggle above is on — they just start appearing on the Security tab automatically as new advisories '
-        'are published or the graph changes.', body_style))
+        '<b>How it’s done here.</b> One npm entry and one pip entry, both rooted at '
+        '<font face="Courier">/</font> — a direct consequence of this repo’s single-root-package.json '
+        'consolidation (previously five separate npm entries, one per service, before that restructuring). '
+        'Weekly on Mondays, capped at 10 open npm PRs / 5 open pip PRs at a time.', body_style))
+
+    story.append(Paragraph('So which mechanism opened that PR I just saw?', h2_style))
+    story.append(Paragraph(
+        'Two different, independent things create Dependabot PRs on this repo, and the title/body tells you '
+        'which:', body_style))
+    story.append(bullets([
+        'If it references a <b>security advisory / Dependabot alert</b> in its description, or appeared '
+        'without waiting for a Monday — that’s a <b>security update</b> (2.2.2), reacting to an alert. '
+        'Merging it closes that alert.',
+        'If it’s a routine “Bump X from A to B” with no advisory reference, opened on/near Monday 06:00 UTC '
+        '— that’s a <b>version update</b> (2.2.3), running on dependabot.yml’s schedule regardless of '
+        'vulnerability status.',
+    ]))
 
     # ── 2.3 Dependency Review Action ──────────────────────────────────────
     story.append(Paragraph('2.3 Dependency Review Action', h2_style))
@@ -522,9 +630,134 @@ def build():
         'passed clean (no vulnerable or license-problematic new dependencies).', body_style))
 
     # ══════════════════════════════════════════════════════════════════════
-    # 3. Summary
+    # 3. DAST — Dynamic Application Security Testing
     # ══════════════════════════════════════════════════════════════════════
-    story.append(Paragraph('3. Summary', h1_style))
+    story.append(Paragraph('3. DAST — Dynamic Application Security Testing', h1_style))
+    story.append(Paragraph('3.1 What is DAST?', h2_style))
+    story.append(Paragraph(
+        'DAST tests the application <b>while it is actually running</b>, from the outside — sending it real '
+        'HTTP requests and observing the responses, the way an attacker (or a browser) would, with no access '
+        'to source code at all. This is the fundamental difference from Sections 1 and 2: SAST and SCA are '
+        'both static — they read files (source, or dependency manifests) and never execute anything. DAST '
+        'catches an entirely different class of problem as a result: things that only exist at runtime — '
+        'missing security headers, cookies without the right flags, information disclosed in error '
+        'responses, endpoints reachable that shouldn’t be — regardless of how clean the underlying source '
+        'looks to a static tool.', body_style))
+    story.append(note(
+        'The trade-off is depth of understanding: a DAST tool has no idea what the code is supposed to do, '
+        'only how it actually responds to being poked. It complements SAST/SCA rather than substituting for '
+        'either — this project runs all three.'))
+
+    story.append(Paragraph('3.2 OWASP ZAP', h2_style))
+    story.append(Paragraph(
+        '<b>What it is &amp; what it’s used for.</b> OWASP ZAP (Zed Attack Proxy) is a free, open-source '
+        'DAST tool. It runs as a proxy that <b>spiders</b> a target — following every link/form it can '
+        'discover, building a map of the application — then inspects the actual HTTP traffic that generates '
+        'against a ruleset of known-bad patterns. ZAP has two very different modes:', body_style))
+    story.append(bullets([
+        '<b>Baseline (passive) scan</b> — spiders the app and inspects whatever responses that spidering '
+        'naturally generates: headers, cookies, disclosed information. It never submits a form or sends a '
+        'crafted attack payload, so it cannot mutate data and is safe to run against a live-ish instance.',
+        '<b>Full (active) scan</b> — additionally sends real attack payloads (SQL injection strings, XSS '
+        'payloads, etc.) at every form/endpoint the spider found, including ones that create/delete real '
+        'data. Far more thorough, but slower, noisier, and will happily submit every form it finds.',
+    ]))
+    story.append(Paragraph(
+        'This project runs the <b>baseline</b> scan — it needs no authentication flow, no throwaway test '
+        'data, and can’t corrupt the seeded content already committed to blog.db/auth.db/media.db, which '
+        'made it the reasonable default to start from.', body_style))
+
+    story.append(Paragraph(
+        '<b>Configuring on GitHub.</b> Nothing to enable in repo Settings, unlike CodeQL — ZAP is not a '
+        'GitHub-native feature, it’s a third-party GitHub Action (<font face="Courier">'
+        'zaproxy/action-baseline</font>) that runs the official ZAP Docker image. No secret required for the '
+        'scan itself. Its results currently do <i>not</i> reach the Security tab at all (Section 4) — they '
+        'live only in the workflow log and a build artifact.', body_style))
+
+    story.append(Paragraph(
+        '<b>Configuring in code.</b> One job in <font face="Courier">.github/workflows/pr-check.yml</font>:',
+        body_style))
+    story.append(code_block(
+        'dast:\n'
+        '&nbsp;&nbsp;permissions: {contents: read}\n'
+        '&nbsp;&nbsp;steps:\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- actions/checkout@v4\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- actions/setup-node@v4\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- run: npm ci\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- name: Start the app\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;run: |\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;npm start &amp; wait-loop curl-ing :5173 and :3000/api/posts\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- zaproxy/action-baseline@v0.15.0\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with: {target: http://localhost:5173,\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fail_action: false, allow_issue_writing: false,\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;artifact_name: zap-baseline-report}'))
+
+    story.append(Paragraph(
+        '<b>How it’s done here.</b> The app is booted via <font face="Courier">npm start</font> directly on '
+        'the runner — not the real production Dockerfile. That image also builds the TTS service (PyTorch + '
+        'Kokoro model download), which DAST doesn’t need at all, so building it would add several minutes to '
+        'every PR for no scanning benefit; raw <font face="Courier">npm start</font> boots the whole app in '
+        'roughly 15 seconds. The step backgrounds it (<font face="Courier">&amp;</font>) and polls both the '
+        'frontend (port 5173) and the API gateway (port 3000) with <font face="Courier">curl</font> until '
+        'both respond, up to 30 attempts. ZAP then targets <font face="Courier">http://localhost:5173</font> '
+        '— the actual browsable SPA, not the api-gateway’s bare JSON API directly, since a passive spider '
+        'needs crawlable HTML/links to find the attack surface at all.', body_style))
+    story.append(note(
+        'GitHub-hosted Linux runners execute Docker-based actions (which is what action-baseline is, under '
+        'the hood) with host networking, so “localhost” inside ZAP’s container really does mean the '
+        'runner’s own localhost where npm start is listening — this only holds on Linux runners, which is '
+        'what this workflow uses throughout.'))
+    story.append(Paragraph(
+        'This job has no gate — <font face="Courier">fail_action: false</font> means it cannot fail the PR '
+        'no matter what it finds, and <font face="Courier">allow_issue_writing: false</font> stops it from '
+        'filing a GitHub issue every run (its default behavior, which would otherwise need '
+        '<font face="Courier">issues: write</font> permission this job deliberately doesn’t have). This is '
+        'intentional for now: no baseline run has happened yet to know what this app’s normal finding count '
+        'even looks like. Turning on a hard gate blind — the way SonarQube’s and CodeQL’s gates only were, '
+        'after seeing real results (Sections 1.2, 1.3) — would risk blocking every future PR on pre-existing '
+        'findings unrelated to whatever it actually changes. Results are only visible today via the '
+        '<font face="Courier">zap-baseline-report</font> build artifact and the job’s own log.', body_style))
+
+    # ══════════════════════════════════════════════════════════════════════
+    # 4. SARIF — what actually reaches the Security tab
+    # ══════════════════════════════════════════════════════════════════════
+    story.append(Paragraph('4. SARIF — what actually reaches the Security tab', h1_style))
+    story.append(Paragraph(
+        'SARIF (Static Analysis Results Interchange Format) is a standard JSON schema for representing '
+        'static-analysis findings — which tool found what, where, how severe, with what confidence — so '
+        'different tools and different consumers (like GitHub’s Security tab) can speak the same language '
+        'instead of every tool needing its own bespoke integration. GitHub’s <b>Code scanning alerts</b> UI '
+        'is fundamentally a SARIF viewer: anything that gets a SARIF file to '
+        '<font face="Courier">github/codeql-action/upload-sarif</font> (or an equivalent upload call) shows '
+        'up there, and nothing else does.', body_style))
+    story.append(Paragraph('Of every tool in this document, only one currently does that:', body_style))
+    story.append(metrics_table(
+        [['Tool', 'Generates SARIF?', 'Reaches the Security tab?'],
+         ['CodeQL', 'Yes — built into\ncodeql-action/analyze', 'Yes — automatically, same step\n(Code scanning alerts)'],
+         ['SonarQube', 'No', 'No — findings live on the separate,\nself-hosted SonarQube server UI'],
+         ['Dependabot alerts', 'No', 'Yes — but via GitHub’s own advisory-\nmatching, a different pipeline entirely\n(Dependabot alerts, not Code scanning)'],
+         ['Dependency Review', 'No', 'No — inline PR annotation only,\nnot a persistent Security-tab entry'],
+         ['OWASP ZAP', 'Can, but not\nconfigured here', 'Not currently — see below']],
+        col_widths=[32 * mm, 52 * mm, 84 * mm]))
+    story.append(Spacer(1, 6))
+    story.append(note(
+        'ZAP can emit a SARIF-format report (there are documented options/community actions for this), which '
+        'could then be pushed to the Security tab with an additional github/codeql-action/upload-sarif step '
+        '— exactly the mechanism CodeQL uses internally. That extra step isn’t wired up in this repo yet '
+        '(Section 3.2); today ZAP’s results are only visible via its build artifact and the job log. Worth '
+        'revisiting once the DAST job has a calibrated gate (Section 3.2) and is trusted enough to make its '
+        'findings persistent alongside CodeQL’s.'))
+    story.append(Paragraph(
+        'Two consequences worth being explicit about: first, “check GitHub’s Security tab” does not mean '
+        '“check everything” — SonarQube and (for now) ZAP both require checking their own separate places. '
+        'Second, Dependabot alerts and Code scanning alerts are two different sub-tabs fed by two entirely '
+        'different pipelines that happen to live under the same Security tab umbrella, not one unified feed.',
+        body_style))
+
+    # ══════════════════════════════════════════════════════════════════════
+    # 5. Summary
+    # ══════════════════════════════════════════════════════════════════════
+    story.append(Paragraph('5. Summary', h1_style))
     story.append(metrics_table(
         [['Tool', 'Category', 'Scope', 'Trigger', 'Blocks merge?'],
          ['SonarQube', 'SAST', 'Whole repo\n(gate: new/changed code)', 'pull_request\n(pr-check.yml)',
@@ -533,11 +766,15 @@ def build():
           'Yes — custom codeql-gate'],
          ['Dependabot alerts', 'SCA', 'Whole dependency tree,\ncontinuous', 'Event-driven\n(new advisory / graph change)',
           'No — informational,\nSecurity tab only'],
+         ['Dependabot\nsecurity updates', 'SCA (remediation)', 'Whole dependency tree,\ncontinuous', 'Event-driven\n(reacts to an alert)',
+          'N/A — opens PRs,\ndoesn’t gate'],
          ['Dependabot\nversion updates', '(not security)', 'Whole dependency tree', 'Weekly schedule',
           'N/A — opens PRs,\ndoesn’t gate'],
          ['Dependency Review', 'SCA', 'This PR’s manifest\ndiff only', 'pull_request\n(pr-check.yml)',
-          'Yes — fail-on-severity: high']],
-        col_widths=[32 * mm, 22 * mm, 38 * mm, 38 * mm, 38 * mm]))
+          'Yes — fail-on-severity: high'],
+         ['OWASP ZAP', 'DAST', 'Running app,\npassive spider', 'pull_request\n(pr-check.yml)',
+          'No — fail_action: false\n(pending baseline data)']],
+        col_widths=[32 * mm, 24 * mm, 36 * mm, 36 * mm, 40 * mm]))
 
     story.append(HRFlowable(width='100%', thickness=0.5, color=BORDER, spaceBefore=14, spaceAfter=8))
     story.append(Paragraph(
