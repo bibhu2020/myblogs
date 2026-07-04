@@ -131,3 +131,26 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run codeql:gate
+
+  dependency-review:
+    name: Dependency Review (SCA)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # SCA, not SAST: flags known-vulnerable or license-problematic *new*
+      # dependencies introduced by this PR's diff to package.json/
+      # package-lock.json/pyproject.toml, via the same GitHub Advisory
+      # Database that powers Dependabot alerts (Security tab) — but scoped
+      # to this PR instead of the whole repo, and gated inline instead of
+      # informational-only. Complements, not replaces, Dependabot alerts,
+      # which continuously cover the whole dependency tree (not just PR
+      # diffs) and react to newly-published advisories with no PR needed.
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
