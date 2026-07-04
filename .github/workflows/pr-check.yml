@@ -208,15 +208,20 @@ jobs:
           fail_action: false
           allow_issue_writing: false
           artifact_name: 'zap-baseline-report'
-          cmd_options: '-J zap-report.json'
 
       # ZAP's own risk scale tops out at High — there's no tier above it,
       # so "critical or high" here means High only. Medium/Low/Informational
       # (the header-hardening findings a dev-mode server normally produces)
       # stay out of the Security tab entirely; they're still visible in the
       # job log and the full HTML artifact above.
+      #
+      # report_json.json is action-baseline's own default JSON report path
+      # (it writes this itself, unprompted) — don't override it via
+      # cmd_options' -J flag, the action's own post-processing step expects
+      # to find the report at exactly this filename and fails outright if
+      # zap-baseline.py was told to write somewhere else instead.
       - name: Convert High-risk ZAP alerts to SARIF
-        run: python3 scripts/zap-alerts-to-sarif.py zap-report.json zap-high.sarif
+        run: python3 scripts/zap-alerts-to-sarif.py report_json.json zap-high.sarif
 
       - name: Upload ZAP SARIF
         uses: github/codeql-action/upload-sarif@v3

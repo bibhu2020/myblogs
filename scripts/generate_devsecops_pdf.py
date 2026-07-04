@@ -702,9 +702,8 @@ def build():
         '&nbsp;&nbsp;&nbsp;&nbsp;- zaproxy/action-baseline@v0.15.0\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with: {target: http://localhost:5173,\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fail_action: false, allow_issue_writing: false,\n'
-        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;artifact_name: zap-baseline-report,\n'
-        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cmd_options: "-J zap-report.json"}\n'
-        '&nbsp;&nbsp;&nbsp;&nbsp;- run: python3 scripts/zap-alerts-to-sarif.py zap-report.json zap-high.sarif\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;artifact_name: zap-baseline-report}\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- run: python3 scripts/zap-alerts-to-sarif.py report_json.json zap-high.sarif\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;- github/codeql-action/upload-sarif@v3\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with: {sarif_file: zap-high.sarif, category: zap-baseline}'))
 
@@ -732,12 +731,20 @@ def build():
         'even looks like. Turning on a hard <i>merge-blocking</i> gate blind — the way SonarQube’s and '
         'CodeQL’s gates only were, after seeing real results (Sections 1.2, 1.3) — would risk blocking every '
         'future PR on pre-existing findings unrelated to whatever it actually changes.', body_style))
+    story.append(note(
+        'A first attempt at this asked zap-baseline.py for a differently-named JSON report via '
+        '<font face="Courier">cmd_options: "-J zap-report.json"</font>. That broke the job outright: '
+        '<font face="Courier">report_json.json</font> is action-baseline’s own default JSON report path — '
+        'it writes that file itself, unprompted — and its own post-processing step expects to find the '
+        'report there and fails with “File report_json.json does not exist” if zap-baseline.py was told, '
+        'via an extra <font face="Courier">-J</font>, to write somewhere else instead. Fixed by dropping the '
+        '<font face="Courier">cmd_options</font> override entirely and reading the action’s existing default '
+        'output.'))
     story.append(Paragraph(
         'What <i>did</i> change once a real baseline run existed: '
-        '<font face="Courier">cmd_options: "-J zap-report.json"</font> asks '
-        '<font face="Courier">zap-baseline.py</font> (which the action wraps) for its native JSON report, '
-        'in addition to the HTML report the artifact upload already captured. '
-        '<font face="Courier">scripts/zap-alerts-to-sarif.py</font> reads that JSON and converts only the '
+        '<font face="Courier">scripts/zap-alerts-to-sarif.py</font> reads '
+        '<font face="Courier">report_json.json</font> — the JSON report action-baseline already produces by '
+        'default, alongside the HTML report the artifact upload captures — and converts only the '
         'High-risk alerts — ZAP’s risk scale tops out at High, there is no tier above it — into a minimal '
         'SARIF 2.1.0 file, which <font face="Courier">codeql-action/upload-sarif</font> then pushes to the '
         'Security tab under its own <font face="Courier">zap-baseline</font> category (kept separate from '
@@ -774,9 +781,9 @@ def build():
         'template) — but zaproxy/action-baseline wraps the older zap-baseline.py script, which doesn’t '
         'expose that template directly. Rather than depend on that, this repo takes the same "write a small '
         'script" approach already used for the SonarQube and CodeQL gates (Sections 1.2, 1.3): '
-        'cmd_options requests zap-baseline.py’s own native JSON report, and '
-        'scripts/zap-alerts-to-sarif.py (a script this repo owns, not a third-party converter) reads it and '
-        'hand-builds a minimal, schema-valid SARIF file containing only the High-risk alerts, which '
+        'scripts/zap-alerts-to-sarif.py (a script this repo owns, not a third-party converter) reads the '
+        'JSON report zap-baseline.py already writes by default (report_json.json) and hand-builds a '
+        'minimal, schema-valid SARIF file containing only the High-risk alerts, which '
         'codeql-action/upload-sarif then pushes up — exactly the mechanism CodeQL uses internally, just '
         'invoked as a separate step instead of being bundled into the scan action itself.'))
     story.append(Paragraph(

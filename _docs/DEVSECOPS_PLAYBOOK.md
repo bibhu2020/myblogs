@@ -394,13 +394,19 @@ dast:
         fail_action: false        # flip to true only after seeing a real baseline run's results
         allow_issue_writing: false  # avoid needing issues: write permission
         artifact_name: 'zap-baseline-report'
-        cmd_options: '-J zap-report.json'   # native JSON report, for the SARIF step below
 
     # Optional: get High-risk ZAP findings onto the Security tab. zap-baseline.py
     # doesn't expose ZAP's own SARIF report template, so this repo hand-converts
     # instead — same "own script over relying on tool internals" pattern as the
     # SonarQube/CodeQL gates in Steps 3-4. See scripts/zap-alerts-to-sarif.py.
-    - run: python3 scripts/zap-alerts-to-sarif.py zap-report.json zap-high.sarif
+    #
+    # report_json.json is action-baseline's own default JSON report path — it
+    # writes this file itself, unprompted. Don't try to redirect it via
+    # cmd_options' -J flag: the action's own post-processing step expects the
+    # report at exactly that filename and fails outright if zap-baseline.py
+    # was told (via an extra -J) to write somewhere else instead — a real
+    # mistake made (and fixed) while building this out.
+    - run: python3 scripts/zap-alerts-to-sarif.py report_json.json zap-high.sarif
     - uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: zap-high.sarif
