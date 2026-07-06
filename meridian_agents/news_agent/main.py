@@ -14,6 +14,9 @@ from agents import Agent, Runner, set_default_openai_client, set_default_openai_
 
 from .tools import fetch_region_news, save_news
 from .tracer import start_run, complete_run
+from ..observability import flush_observability, init_observability, traced_run
+
+init_observability("news_agent")
 
 _TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -134,11 +137,14 @@ def run_news_agent() -> None:
 
     run_id = start_run()
     try:
-        articles = _gather_articles()
-        summary = asyncio.run(_run(articles))
+        with traced_run("news_agent"):
+            articles = _gather_articles()
+            summary = asyncio.run(_run(articles))
     except Exception as exc:
         complete_run(run_id, str(exc), failed=True)
         raise
+    finally:
+        flush_observability()
 
     complete_run(run_id, summary or "News articles fetched and saved.")
 
