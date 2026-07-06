@@ -81,6 +81,10 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+          LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+          LANGFUSE_HOST: ${{ vars.LANGFUSE_HOST }}
+          LANGFUSE_DEBUG: ${{ vars.LANGFUSE_DEBUG }}
           SERVER_BASE: ${{ vars.HF_SPACE_URL }}
           FORCE_REBRAND: ${{ inputs.force_rebrand || 'false' }}
           # GITHUB_WORKSPACE is set automatically by the runner

@@ -3,6 +3,7 @@ import os
 import re
 import time
 
+from ...observability import observe
 from ...post_agent.nodes.images import _generate_image, _upload_image
 
 # Prefix injected before every illustration prompt to enforce child-friendly art style
@@ -12,6 +13,7 @@ _STYLE_PREFIX = (
 )
 
 
+@observe(name="generate_story_images")
 def generate_story_images_node(state: dict) -> dict:
     server_base = os.getenv("SERVER_BASE", "https://mishrabp-meridian.hf.space")
     content = state["story_content"]

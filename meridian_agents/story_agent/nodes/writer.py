@@ -5,6 +5,7 @@ import random
 import re
 
 from ...llm import chat_completion, extract_json
+from ...observability import observe
 from ..state import StoryAgentState
 
 # ── Age group definitions ─────────────────────────────────────────────────────
@@ -289,6 +290,7 @@ def _pick_theme(age_group: str) -> dict:
     }
 
 
+@observe(name="pick_theme")
 def pick_theme_node(state: StoryAgentState) -> dict:
     age_group = _pick_age_group()
     chosen = _pick_theme(age_group)
@@ -303,6 +305,7 @@ def pick_theme_node(state: StoryAgentState) -> dict:
     }
 
 
+@observe(name="write_story")
 def write_story_node(state: StoryAgentState) -> dict:
     age_group = state.get("age_group", "8-15")
     system_prompt = _SYSTEM_PROMPTS[age_group]
@@ -351,6 +354,7 @@ Write every scene completely — do not abbreviate or summarise. Stay within the
     }
 
 
+@observe(name="expand_story")
 def expand_story_node(state: StoryAgentState) -> dict:
     age_group = state.get("age_group", "8-15")
     min_words = _MIN_WORDS[age_group]

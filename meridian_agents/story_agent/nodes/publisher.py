@@ -5,9 +5,11 @@ import re
 import httpx
 
 from ...auth import make_agent_jwt
+from ...observability import observe
 from ..state import StoryAgentState
 
 
+@observe(name="save_pending")
 def save_pending_node(state: StoryAgentState) -> dict:
     print("\n⏸️  Saving story as PENDING (awaiting admin approval)...")
     server_base = state.get("server_base", "")

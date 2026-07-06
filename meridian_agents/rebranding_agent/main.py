@@ -14,6 +14,9 @@ from agents import Runner  # noqa: E402
 from .context import RebrandCtx  # noqa: E402
 from .pipeline import build_pipeline  # noqa: E402
 from .tracer import complete_run, start_run  # noqa: E402
+from ..observability import flush_observability, init_observability, traced_run  # noqa: E402
+
+init_observability("rebranding_agent")
 
 _GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
 _GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
@@ -97,11 +100,14 @@ def run_rebranding() -> None:
     })
 
     try:
-        summary = asyncio.run(_run_pipeline(repo_root, force_rebrand))
+        with traced_run("rebranding_agent"):
+            summary = asyncio.run(_run_pipeline(repo_root, force_rebrand))
     except Exception as exc:
         summary = f"Pipeline crashed: {exc}"
         complete_run(run_id, summary, failed=True)
         raise
+    finally:
+        flush_observability()
 
     failed = any(kw in summary.lower() for kw in ("build failed", "tests failed", "error:", "crashed"))
     complete_run(run_id, summary, failed=failed)

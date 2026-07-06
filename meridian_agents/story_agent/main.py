@@ -26,6 +26,9 @@ from .nodes.images import generate_story_images_node                            
 from .nodes.publisher import save_pending_node                                    # noqa: E402
 from .tracer import start_run, complete_run                                       # noqa: E402
 from ..cleanup import cleanup_old_stories  # noqa: E402
+from ..observability import flush_observability, init_observability, traced_run  # noqa: E402
+
+init_observability("story_agent")
 
 SERVER_BASE   = os.getenv("SERVER_BASE", "https://mishrabp-meridian.hf.space")
 AUTHOR_NAME   = os.getenv("STORY_AUTHOR_NAME", "Meridian Storyteller")
@@ -98,18 +101,21 @@ def run_agent() -> dict:
     }
 
     try:
-        state.update(pick_theme_node(state))
-        state.update(write_story_node(state))
+        with traced_run("story_agent"):
+            state.update(pick_theme_node(state))
+            state.update(write_story_node(state))
 
-        if state["word_count"] < _MIN_WORDS.get(state.get("age_group", "8-15"), 4000):
-            state.update(expand_story_node(state))
+            if state["word_count"] < _MIN_WORDS.get(state.get("age_group", "8-15"), 4000):
+                state.update(expand_story_node(state))
 
-        state.update(generate_story_images_node(state))
-        state.update(save_pending_node(state))
+            state.update(generate_story_images_node(state))
+            state.update(save_pending_node(state))
 
     except Exception as exc:
         complete_run(run_id, str(exc), failed=True)
         raise
+    finally:
+        flush_observability()
 
     elapsed = round(time.time() - t0)
     story_id   = state.get("pending_story_id")

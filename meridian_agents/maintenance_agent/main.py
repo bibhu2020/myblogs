@@ -9,6 +9,9 @@ load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 from .agents import run_team  # noqa: E402
 from .tracer import complete_run, start_run  # noqa: E402
+from ..observability import flush_observability, init_observability, traced_run  # noqa: E402
+
+init_observability("maintenance_agent")
 
 REPO_ROOT = str(Path(__file__).parent.parent.parent)
 SERVER_BASE = os.getenv("SERVER_BASE", "https://mishrabp-meridian.hf.space")
@@ -33,7 +36,8 @@ def run_maintenance() -> None:
     print(f"Run ID: {run_id}\n")
 
     try:
-        summary, findings = asyncio.run(run_team(REPO_ROOT, SERVER_BASE))
+        with traced_run("maintenance_agent"):
+            summary, findings = asyncio.run(run_team(REPO_ROOT, SERVER_BASE))
         complete_run(run_id, summary, findings)
         print(f"\n✅ Maintenance complete. Findings: {len(findings)}")
         if summary:
@@ -41,3 +45,5 @@ def run_maintenance() -> None:
     except Exception as exc:
         complete_run(run_id, str(exc), [], failed=True)
         raise
+    finally:
+        flush_observability()
