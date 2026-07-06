@@ -11,7 +11,7 @@ dependencies = []
 
 [project.optional-dependencies]
 post_agent = [
-    "langgraph>=1.0",
+    "langgraph>=1.2.7",
     "langchain-core>=1.4.7",
     "openai>=1.0",
     "huggingface_hub>=0.23",
@@ -52,7 +52,7 @@ story_agent = [
     "google-genai>=1.0",
     "Pillow>=10.0",
     "croniter>=2.0",
-    "langgraph>=1.0",
+    "langgraph>=1.2.7",
     "langchain-core>=1.4.7",
 ]
 news_agent = [
