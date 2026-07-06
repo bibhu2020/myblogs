@@ -60,7 +60,7 @@ function ago(d) {
     <main id="main-content" tabindex="-1" class="outline-none">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 text-center">
       <!-- HOLIDAY-HERO-START -->
-<div class="holiday-badge bg-primary-50 text-primary-800 border border-primary-200 rounded-full px-4 py-1 text-sm inline-block mb-4" aria-label="Global events highlight">Celebrate the World!</div>
+<div class="holiday-badge bg-primary-50 text-primary-800 border border-primary-200 rounded-full px-4 py-1 text-sm inline-block mb-4" aria-label="Sporting triumphs and national pride">Let's Celebrate!</div>
 <!-- HOLIDAY-HERO-END -->
     </div>
 
@@ -259,7 +259,7 @@ function ago(d) {
     <main id="main-content" tabindex="-1" class="outline-none">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 text-center">
       <!-- HOLIDAY-HERO-B-START -->
-<div class="holiday-badge-b bg-[#13132a] border border-[#43cfd8]/30 text-[#43cfd8] rounded-full px-4 py-1 text-sm inline-block mb-4" aria-label="Global events highlight">Celebrate the World!</div>
+<div class="holiday-badge-b bg-[#13132a] border border-[#39c0ed]/30 text-[#39c0ed] rounded-full px-4 py-1 text-sm inline-block mb-4" aria-label="Sporting triumphs and national pride">Game On!</div>
 <!-- HOLIDAY-HERO-B-END -->
     </div>
 
