@@ -39,13 +39,13 @@ const isB = () => layout.variant === 'b'
   <!-- Layout A: Holiday banner -->
   <template v-if="layout.variant === 'a'">
     <!-- HOLIDAY-BANNER-START -->
-<div role="banner" aria-label="World celebrations announcement" class="bg-gradient-to-r from-primary-700 to-primary-600 text-white text-center text-sm py-1.5 font-medium">🎉 Join global celebrations this June!</div>
+<div role="banner" aria-label="July 2026 sporting events announcement" class="bg-gradient-to-r from-primary-700 to-primary-600 text-white text-center text-sm py-1.5 font-medium">38A Celebrate Sporting Excellence and Independence!</div>
 <!-- HOLIDAY-BANNER-END -->
   </template>
   <!-- Layout B: Holiday banner -->
   <template v-else>
     <!-- HOLIDAY-BANNER-B-START -->
-<div role="banner" aria-label="World celebrations announcement" class="bg-[#0d0d1a] border-b border-[#43cfd8]/20 text-[#43cfd8] text-center text-sm py-1.5">Celebrate with the world this June!</div>
+<div role="banner" aria-label="July 2026 sporting events announcement" class="bg-[#0d0d1a] border-b border-[#39c0ed]/20 text-[#39c0ed] text-center text-sm py-1.5">Celebrate Global Sports and Milestones!</div>
 <!-- HOLIDAY-BANNER-B-END -->
   </template>
 
