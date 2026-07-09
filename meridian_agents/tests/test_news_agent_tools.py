@@ -20,9 +20,6 @@ from meridian_agents.news_agent.tools import (
     _fetch_item_image,
     _enhance_all_images,
     _assign_sort_order,
-    _synthesize_and_upload_audio,
-    _generate_all_audio_by_id,
-    _attach_audio_urls,
 )
 
 
@@ -291,90 +288,3 @@ class TestAssignSortOrder:
         assert "sortOrder" not in items[0]
 
 
-class TestSynthesizeAndUploadAudio:
-    def test_returns_the_uploaded_url_named_by_item_id(self, monkeypatch):
-        monkeypatch.setenv("SERVER_BASE", "https://server")
-        item = {"title": "Headline", "summary": "Something happened."}
-        with patch.object(tools_mod, "make_agent_jwt", return_value="jwt-token"), \
-             patch("meridian_agents.news_agent.tools.requests.post") as mock_post:
-            mock_post.side_effect = [
-                MagicMock(content=b"x" * 2048, raise_for_status=lambda: None),
-                MagicMock(ok=True, json=lambda: {"url": "https://server/uploads/news_3.mp3"}),
-            ]
-            item_id, url = _synthesize_and_upload_audio((3, item))
-        assert item_id == 3
-        assert url == "https://server/uploads/news_3.mp3"
-        tts_call = mock_post.call_args_list[0]
-        assert tts_call.args[0] == "https://server/api/tts"
-        assert tts_call.kwargs["json"] == {
-            "text": "Headline. Something happened.", "style": "news", "format": "mp3",
-        }
-        upload_call = mock_post.call_args_list[1]
-        assert upload_call.kwargs["params"] == {"filename": "news_3"}
-        assert upload_call.kwargs["files"]["file"][0] == "news_3.mp3"
-
-    def test_returns_none_when_tts_request_fails(self, monkeypatch):
-        monkeypatch.setenv("SERVER_BASE", "https://server")
-        with patch("meridian_agents.news_agent.tools.requests.post", side_effect=Exception("tts down")):
-            item_id, url = _synthesize_and_upload_audio((5, {"title": "A", "summary": "B"}))
-        assert item_id == 5
-        assert url is None
-
-    def test_returns_none_when_synthesis_produces_almost_no_audio(self, monkeypatch):
-        monkeypatch.setenv("SERVER_BASE", "https://server")
-        with patch("meridian_agents.news_agent.tools.requests.post") as mock_post:
-            mock_post.return_value = MagicMock(content=b"x" * 10, raise_for_status=lambda: None)
-            item_id, url = _synthesize_and_upload_audio((7, {"title": "A", "summary": "B"}))
-        assert item_id == 7
-        assert url is None
-
-    def test_returns_none_for_empty_text(self):
-        item_id, url = _synthesize_and_upload_audio((1, {"title": "", "summary": ""}))
-        assert item_id == 1
-        assert url is None
-
-
-class TestGenerateAllAudioById:
-    def test_returns_empty_dict_when_no_saved_items(self):
-        assert _generate_all_audio_by_id([]) == {}
-
-    def test_ignores_items_without_an_id(self):
-        assert _generate_all_audio_by_id([{"title": "A"}]) == {}
-
-    def test_returns_audio_url_keyed_by_real_id(self):
-        saved_items = [{"id": 10, "title": "A"}, {"id": 11, "title": "B"}]
-        with patch.object(tools_mod, "_synthesize_and_upload_audio",
-                           side_effect=lambda pair: (pair[0], f"https://hosted/news_{pair[0]}.mp3")):
-            result = _generate_all_audio_by_id(saved_items)
-        assert result == {10: "https://hosted/news_10.mp3", 11: "https://hosted/news_11.mp3"}
-
-    def test_omits_items_that_fail(self):
-        saved_items = [{"id": 10, "title": "A"}, {"id": 11, "title": "B"}]
-        with patch.object(tools_mod, "_synthesize_and_upload_audio",
-                           side_effect=[(10, None), (11, "https://hosted/news_11.mp3")]):
-            result = _generate_all_audio_by_id(saved_items)
-        assert result == {11: "https://hosted/news_11.mp3"}
-
-
-class TestAttachAudioUrls:
-    def test_does_nothing_when_no_urls(self):
-        with patch("meridian_agents.news_agent.tools.requests.patch") as mock_patch:
-            _attach_audio_urls("https://server", {})
-        mock_patch.assert_not_called()
-
-    def test_patches_each_item_with_its_audio_url(self, monkeypatch):
-        with patch.object(tools_mod, "make_agent_jwt", return_value="jwt-token"), \
-             patch("meridian_agents.news_agent.tools.requests.patch") as mock_patch:
-            mock_patch.return_value = MagicMock(raise_for_status=lambda: None)
-            _attach_audio_urls("https://server", {10: "https://hosted/news_10.mp3"})
-        mock_patch.assert_called_once_with(
-            "https://server/api/news/10",
-            json={"audioUrl": "https://hosted/news_10.mp3"},
-            headers={"Authorization": "Bearer jwt-token"},
-            timeout=15,
-        )
-
-    def test_swallows_errors_for_individual_items(self):
-        with patch.object(tools_mod, "make_agent_jwt", return_value="jwt-token"), \
-             patch("meridian_agents.news_agent.tools.requests.patch", side_effect=Exception("network down")):
-            _attach_audio_urls("https://server", {10: "https://hosted/news_10.mp3"})  # must not raise

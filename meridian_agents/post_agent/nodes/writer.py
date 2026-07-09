@@ -135,7 +135,7 @@ def _system_prompt(category: str) -> str:
 
 
 def strip_html(html: str) -> str:
-    """Plain text with tags removed — shared with nodes/audio.py for TTS input."""
+    """Plain text with tags removed."""
     return re.sub(r"<[^>]+>", " ", html)
 
 

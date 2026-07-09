@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import Navbar from '../components/Navbar.vue'
 import Footer from '../components/Footer.vue'
 import api from '../api'
@@ -11,85 +11,227 @@ const lastUpdated = ref(null)
 const loading     = ref(true)
 const activeRegion = ref('all')
 
-// ── Narration player — plays each item's pre-rendered mp3 (generated at publish time
-// and stored in the media library) as an auto-advancing playlist. No live synthesis:
-// the browser streams each static file itself, so playback starts instantly and never
-// stalls mid-story the way the old chunk-by-chunk fetch/decode pipeline could.
-const ttsState    = ref('idle')   // idle | loading | playing | paused | error | unavailable
-const ttsProgress = ref(0)        // 0–1 within the currently playing item
-const ttsDuration = ref(0)
+// ── TTS player — same server-side synthesis engine as the blog reader ─────────
+const ttsState       = ref('idle')   // idle | loading | playing | paused | error
+const ttsProgress    = ref(0)
+const ttsChunkIdx    = ref(0)
+const ttsTotalChunks = ref(0)
 const ttsError       = ref('')
 const playerOpen     = ref(false)
-const activeIdx      = ref(-1)    // index into `filtered` of the currently playing item
-const playlistPos    = ref(0)     // 0-based position within the audio playlist
-const audioEl        = ref(null)
+const activeIdx      = ref(-1)
 
 const { acquireWakeLock, releaseWakeLock } = useWakeLock()
 watch(ttsState, v => v === 'playing' ? acquireWakeLock() : releaseWakeLock())
 
-// Only items with a pre-rendered narration are playable; others are silently skipped.
-const playlist = computed(() => filtered.value.filter(i => i.audioUrl))
+let sessionId       = 0
+let audioCtx        = null
+let nextStartAt     = 0
+let highlightTimers = []
+let rafId           = null
+let chunkStartTimes = []
+let chunkDurations  = []
+let chunkFetches    = []
+let chunkData       = []   // { text, storyIdx }[]
 
-function _playAt(pos) {
-  const list = playlist.value
-  if (pos < 0 || pos >= list.length) { stopPlayback(); return }
-  playlistPos.value = pos
-  activeIdx.value = filtered.value.indexOf(list[pos])
-  ttsState.value = 'loading'
-  audioEl.value.src = list[pos].audioUrl
-  audioEl.value.play().catch(() => {
-    ttsState.value = 'error'
-    ttsError.value = 'Playback failed'
-  })
-  nextTick(() => document.getElementById(`news-item-${activeIdx.value}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
-}
-
-function openPlayer() {
-  playerOpen.value = true
-  ttsError.value = ''
-  if (!playlist.value.length) { ttsState.value = 'unavailable'; return }
-  if (ttsState.value === 'playing' || ttsState.value === 'paused') return
-  _playAt(0)
-}
-
-function togglePlayPause() {
-  if (!audioEl.value) return
-  if (ttsState.value === 'playing') audioEl.value.pause()
-  else if (ttsState.value === 'paused') audioEl.value.play()
-}
-
-function stopPlayback() {
-  if (audioEl.value) {
-    audioEl.value.pause()
-    audioEl.value.removeAttribute('src')
-    audioEl.value.load()
+function _splitText(text, maxLen = 200) {
+  const parts = []
+  let rem = text.trim()
+  while (rem.length > 0) {
+    if (rem.length <= maxLen) { parts.push(rem); break }
+    let cut = rem.lastIndexOf('. ', maxLen)
+    if (cut < maxLen * 0.4) cut = rem.lastIndexOf(' ', maxLen)
+    if (cut < 0) cut = maxLen
+    else cut += 1
+    parts.push(rem.slice(0, cut).trim())
+    rem = rem.slice(cut).trim()
   }
+  return parts.filter(Boolean)
+}
+
+function _buildChunks(newsList, regionLabel) {
+  const chunks = []
+  chunks.push({
+    text: `Good day. Here are today's top${regionLabel} news stories.`,
+    storyIdx: -1,
+  })
+  newsList.forEach((item, i) => {
+    chunks.push({ text: `Story ${i + 1}. ${item.title}.`, storyIdx: i })
+    _splitText(item.summary || '', 200).forEach(part =>
+      chunks.push({ text: part, storyIdx: i })
+    )
+  })
+  chunks.push({ text: 'That is all for now. Stay informed.', storyIdx: -1 })
+  return chunks
+}
+
+function _fetchChunk(text) {
+  return api.post('/tts', { text, style: 'news' }, { responseType: 'blob', timeout: 90_000 })
+    .then(r => r.data)
+    .catch(e => ({ _ttsError: e?.response?.data?.message || e?.message || 'TTS unavailable' }))
+}
+
+function _ensureAudioCtx() {
+  if (!audioCtx || audioCtx.state === 'closed') {
+    audioCtx = new AudioContext()
+    nextStartAt = audioCtx.currentTime
+  }
+  return audioCtx
+}
+
+function _clearTimers() {
+  highlightTimers.forEach(id => clearTimeout(id))
+  highlightTimers = []
+}
+
+function _stopRaf() {
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null }
+}
+
+function _startRaf() {
+  _stopRaf()
+  function tick() {
+    const ctx = audioCtx
+    if (!ctx || ctx.state === 'closed') return
+    const now = ctx.currentTime
+    for (let j = 0; j < chunkStartTimes.length; j++) {
+      const st  = chunkStartTimes[j]
+      const dur = chunkDurations[j]
+      if (st !== undefined && dur && now >= st && now < st + dur) {
+        ttsProgress.value = (j + (now - st) / dur) / ttsTotalChunks.value
+        break
+      }
+    }
+    rafId = requestAnimationFrame(tick)
+  }
+  rafId = requestAnimationFrame(tick)
+}
+
+async function _decodeAndSchedule(blob, i) {
+  const ctx = audioCtx
+  try {
+    const arrayBuf = await blob.arrayBuffer()
+    const audioBuf = await ctx.decodeAudioData(arrayBuf)
+    const source = ctx.createBufferSource()
+    source.buffer = audioBuf
+    source.connect(ctx.destination)
+    const startAt = Math.max(ctx.currentTime + 0.02, nextStartAt)
+    source.start(startAt)
+    nextStartAt = startAt + audioBuf.duration
+    chunkStartTimes[i] = startAt
+    chunkDurations[i]  = audioBuf.duration
+    // Scroll news item into view when this chunk starts playing
+    const si = chunkData[i]?.storyIdx ?? -1
+    const ms = Math.max(0, (startAt - ctx.currentTime) * 1000)
+    highlightTimers.push(setTimeout(() => {
+      if (si >= 0) {
+        activeIdx.value = si
+        document.getElementById(`news-item-${si}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      } else {
+        activeIdx.value = -1
+      }
+    }, ms))
+    return source
+  } catch { return null }
+}
+
+async function _runFrom(start, session) {
+  for (let i = start; i < ttsTotalChunks.value; i++) {
+    if (session !== sessionId) return
+    ttsChunkIdx.value = i
+    if (i === start) ttsState.value = 'loading'
+
+    if (!chunkFetches[i]) chunkFetches[i] = _fetchChunk(chunkData[i].text)
+    for (let p = 1; p <= 4; p++) {
+      const ahead = i + p
+      if (ahead < ttsTotalChunks.value && !chunkFetches[ahead])
+        chunkFetches[ahead] = _fetchChunk(chunkData[ahead].text)
+    }
+    const result = await chunkFetches[i]
+    if (session !== sessionId) return
+    if (!result || result._ttsError) {
+      ttsState.value = 'error'
+      ttsError.value = result?._ttsError || 'TTS unavailable'
+      return
+    }
+    const source = await _decodeAndSchedule(result, i)
+    if (session !== sessionId) return
+    if (!source) {
+      ttsState.value = 'error'
+      ttsError.value = 'Audio decode failed'
+      return
+    }
+    if (i === start) { ttsState.value = 'playing'; _startRaf() }
+    await new Promise(resolve => {
+      source.onended = resolve
+      const watchdog = setInterval(() => {
+        if (session !== sessionId || !audioCtx || audioCtx.state === 'closed') {
+          clearInterval(watchdog)
+          resolve(null)
+        }
+      }, 200)
+      source.addEventListener('ended', () => clearInterval(watchdog), { once: true })
+    })
+    if (session !== sessionId) return
+  }
+  _stopRaf()
+  _clearTimers()
   ttsState.value = 'idle'
   ttsProgress.value = 0
-  ttsDuration.value = 0
+  ttsChunkIdx.value = 0
   activeIdx.value = -1
   playerOpen.value = false
 }
 
-// Native <audio> element event handlers
-function onAudioTimeUpdate() {
-  if (!audioEl.value || !ttsDuration.value) return
-  ttsProgress.value = audioEl.value.currentTime / ttsDuration.value
+async function openPlayer() {
+  playerOpen.value = true
+  ttsError.value = ''
+  if (ttsState.value !== 'idle' && ttsState.value !== 'error') return
+  ttsState.value = 'idle'
+  _ensureAudioCtx()
+  const list = filtered.value
+  const regionLabel = activeRegion.value === 'all' ? '' : ` ${activeRegion.value}`
+  chunkData = _buildChunks(list, regionLabel)
+  ttsTotalChunks.value = chunkData.length
+  ttsProgress.value = 0
+  ttsChunkIdx.value = 0
+  chunkFetches = new Array(chunkData.length).fill(null)
+  nextStartAt = audioCtx.currentTime + 0.05
+  chunkStartTimes = []
+  chunkDurations = []
+  _clearTimers()
+  for (let k = 0; k < Math.min(4, chunkData.length); k++)
+    chunkFetches[k] = _fetchChunk(chunkData[k].text)
+  ttsState.value = 'loading'
+  const session = ++sessionId
+  await _runFrom(0, session)
 }
-function onAudioLoadedMetadata() {
-  ttsDuration.value = audioEl.value?.duration || 0
+
+function togglePlayPause() {
+  if (!audioCtx) return
+  if (ttsState.value === 'playing') { audioCtx.suspend(); ttsState.value = 'paused' }
+  else if (ttsState.value === 'paused') { audioCtx.resume(); ttsState.value = 'playing' }
 }
-function onAudioPlay() { ttsState.value = 'playing' }
-function onAudioPause() { if (ttsState.value !== 'idle') ttsState.value = 'paused' }
-function onAudioEnded() { _playAt(playlistPos.value + 1) }
-function onAudioWaiting() { if (ttsState.value !== 'idle') ttsState.value = 'loading' }
-function onAudioError() {
-  ttsState.value = 'error'
-  ttsError.value = 'Audio unavailable'
+
+function stopPlayback() {
+  sessionId++
+  _clearTimers()
+  _stopRaf()
+  if (audioCtx) { audioCtx.close(); audioCtx = null }
+  nextStartAt = 0; chunkStartTimes = []; chunkDurations = []
+  ttsState.value = 'idle'
+  ttsProgress.value = 0
+  ttsChunkIdx.value = 0
+  activeIdx.value = -1
+  playerOpen.value = false
 }
 
 watch(activeRegion, () => { if (playerOpen.value) stopPlayback() })
-onUnmounted(() => { audioEl.value?.pause() })
+onUnmounted(() => {
+  sessionId++
+  _clearTimers()
+  _stopRaf()
+  if (audioCtx) { audioCtx.close(); audioCtx = null }
+})
 
 // ── Topics / colours ─────────────────────────────────────────────────────────
 const REGIONS = [
@@ -193,15 +335,8 @@ onMounted(load)
 
         <!-- Player bar — shown while TTS is active (desktop only; mobile uses fixed bottom bar) -->
         <div v-if="playerOpen" class="mt-3 hidden sm:flex items-center gap-3 bg-white/10 rounded-xl px-4 py-2.5 border border-white/10">
-          <!-- Unavailable state -->
-          <template v-if="ttsState === 'unavailable'">
-            <span class="flex-1 text-xs text-white/70">Audio unavailable for these stories.</span>
-            <button @click="stopPlayback" class="flex items-center justify-center w-7 h-7 rounded-lg bg-white/10 hover:bg-rose-500/80 text-white transition-colors flex-shrink-0" title="Close">
-              <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
-            </button>
-          </template>
           <!-- Error state -->
-          <template v-else-if="ttsState === 'error'">
+          <template v-if="ttsState === 'error'">
             <span class="flex-1 text-xs text-red-300">{{ ttsError }}</span>
             <button @click="openPlayer" class="text-xs text-white/80 underline flex-shrink-0">Retry</button>
             <button @click="stopPlayback" class="flex items-center justify-center w-7 h-7 rounded-lg bg-white/10 hover:bg-rose-500/80 text-white transition-colors flex-shrink-0" title="Close">
@@ -222,9 +357,9 @@ onMounted(load)
             <div class="h-full bg-white rounded-full transition-all duration-200"
               :style="`width:${Math.round(ttsProgress * 100)}%`"></div>
           </div>
-          <!-- Playlist position -->
+          <!-- Chunk counter -->
           <span class="text-xs text-white/60 flex-shrink-0 tabular-nums">
-            {{ playlistPos + 1 }}/{{ playlist.length }}
+            {{ ttsChunkIdx + 1 }}/{{ ttsTotalChunks }}
           </span>
           <!-- Pause / Resume -->
           <button @click="ttsState === 'loading' ? null : togglePlayPause()"
@@ -353,14 +488,6 @@ onMounted(load)
 
     <Footer />
 
-    <!-- Narration playlist audio — a plain static file per item; the browser handles
-         streaming/buffering itself, and `src` is swapped imperatively as the playlist
-         advances (see _playAt). -->
-    <audio ref="audioEl" class="hidden"
-      @timeupdate="onAudioTimeUpdate" @loadedmetadata="onAudioLoadedMetadata"
-      @play="onAudioPlay" @pause="onAudioPause" @ended="onAudioEnded"
-      @waiting="onAudioWaiting" @error="onAudioError"></audio>
-
     <!-- Mobile fixed bottom bar — stays visible when news items auto-scroll the page -->
     <Teleport to="body">
       <div v-if="playerOpen" class="sm:hidden fixed bottom-0 left-0 right-0 z-50 shadow-2xl bg-slate-900 border-t border-slate-700">
@@ -375,19 +502,15 @@ onMounted(load)
               </span>
             </div>
             <span class="text-xs font-semibold text-white truncate flex-1">
-              {{ ttsState === 'loading' ? 'Loading…' : ttsState === 'error' ? 'Error' : ttsState === 'unavailable' ? 'Unavailable' : 'Now playing news' }}
+              {{ ttsState === 'loading' ? 'Loading…' : ttsState === 'error' ? 'Error' : 'Now playing news' }}
             </span>
-            <span v-if="ttsState !== 'unavailable'" class="text-xs text-white/60 flex-shrink-0 tabular-nums">{{ playlistPos + 1 }}/{{ playlist.length }}</span>
+            <span class="text-xs text-white/60 flex-shrink-0 tabular-nums">{{ ttsChunkIdx + 1 }}/{{ ttsTotalChunks }}</span>
             <button @click="stopPlayback" class="flex-shrink-0 ml-2 text-white/60 hover:text-white" title="Stop">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
           </div>
-          <!-- Unavailable state -->
-          <div v-if="ttsState === 'unavailable'" class="text-xs text-white/70">
-            Audio unavailable for these stories.
-          </div>
           <!-- Error state -->
-          <div v-else-if="ttsState === 'error'" class="flex items-center gap-2">
+          <div v-if="ttsState === 'error'" class="flex items-center gap-2">
             <span class="text-xs text-red-400 flex-1">{{ ttsError }}</span>
             <button @click="openPlayer" class="text-xs text-white/80 underline flex-shrink-0">Retry</button>
           </div>

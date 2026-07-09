@@ -11,7 +11,6 @@ from meridian_agents.post_agent.nodes.mcp import (
     ensure_author_node,
     pick_taxonomy_node,
     save_pending_node,
-    attach_audio_node,
     publish_approved_node,
 )
 
@@ -271,61 +270,6 @@ class TestSavePendingNode:
         assert args["category_id"] == 3
         assert args["tag_ids"] == [1, 2]
         assert args["featured_image"] == "https://img"
-
-    def test_never_includes_audio_url(self):
-        # audio_url is intentionally attached in a separate step (attach_audio_node)
-        # AFTER this save, since the post doesn't have an id yet when this runs.
-        state = {
-            "post_title": "T", "final_content": "<p>c</p>", "post_excerpt": "e", "author_name": "Agent",
-            "audio_url": "https://server/uploads/post_9.mp3",
-        }
-        with patch.object(mcp_mod, "mcp_call", return_value={"slug": "t", "id": 9}) as mock_call:
-            save_pending_node(state)
-        args = mock_call.call_args[0][1]
-        assert "audio_url" not in args
-
-
-class TestAttachAudioNode:
-    def test_attaches_audio_url_via_put(self):
-        state = {
-            "pending_post_id": 9, "audio_url": "https://server/uploads/post_9.mp3",
-            "server_base": "https://server",
-        }
-        with patch.object(mcp_mod, "make_agent_jwt", return_value="jwt-token"), \
-             patch("meridian_agents.post_agent.nodes.mcp.httpx.Client") as MockClient:
-            client = MockClient.return_value.__enter__.return_value
-            client.put.return_value = _resp({})
-            result = attach_audio_node(state)
-        client.put.assert_called_once_with(
-            "https://server/api/posts/9",
-            json={"audioUrl": "https://server/uploads/post_9.mp3"},
-            headers={"Authorization": "Bearer jwt-token"},
-        )
-        assert result == {}
-
-    def test_no_op_when_audio_url_missing(self):
-        state = {"pending_post_id": 9, "audio_url": None, "server_base": "https://server"}
-        with patch("meridian_agents.post_agent.nodes.mcp.httpx.Client") as MockClient:
-            attach_audio_node(state)
-            MockClient.assert_not_called()
-
-    def test_no_op_when_post_id_missing(self):
-        state = {"pending_post_id": None, "audio_url": "https://server/uploads/x.mp3", "server_base": "https://server"}
-        with patch("meridian_agents.post_agent.nodes.mcp.httpx.Client") as MockClient:
-            attach_audio_node(state)
-            MockClient.assert_not_called()
-
-    def test_swallows_request_errors(self):
-        state = {
-            "pending_post_id": 9, "audio_url": "https://server/uploads/post_9.mp3",
-            "server_base": "https://server",
-        }
-        with patch.object(mcp_mod, "make_agent_jwt", return_value="jwt-token"), \
-             patch("meridian_agents.post_agent.nodes.mcp.httpx.Client") as MockClient:
-            client = MockClient.return_value.__enter__.return_value
-            client.put.side_effect = Exception("network down")
-            result = attach_audio_node(state)
-        assert result == {}
 
 
 class TestPublishApprovedNode:

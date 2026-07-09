@@ -24,85 +24,306 @@ const commentSubmitted = ref(false)
 const galleryOpen = ref(false)
 const galleryIndex = ref(0)
 
-// ── TTS player — plays the pre-rendered narration mp3 (generated at publish time and
-// stored in the media library) via a plain <audio> element. No live per-chunk synthesis:
-// the browser streams and buffers the static file itself, so playback starts fast and
-// never stalls mid-article the way the old chunk-by-chunk fetch/decode pipeline could.
-const ttsState    = ref('idle')   // idle | loading | playing | paused | error | unavailable
-const ttsProgress = ref(0)        // 0–1, driven by the <audio> element's native events
-const ttsCurrentTime = ref(0)
-const ttsDuration    = ref(0)
+// ── TTS player ────────────────────────────────────────────────────────────────
+const ttsState       = ref('idle')   // idle | loading | playing | paused | error
+const ttsProgress    = ref(0)        // 0–1 across all chunks
+const ttsChunkIdx    = ref(0)        // current chunk index (0-based)
+const ttsTotalChunks = ref(0)
 const ttsError       = ref('')
 const playerOpen     = ref(false)
-const audioEl        = ref(null)
 
 const { acquireWakeLock, releaseWakeLock } = useWakeLock()
 watch(ttsState, v => v === 'playing' ? acquireWakeLock() : releaseWakeLock())
 
-function formatTime(sec) {
-  if (!Number.isFinite(sec) || sec < 0) return '0:00'
-  const m = Math.floor(sec / 60)
-  const s = Math.floor(sec % 60)
-  return `${m}:${String(s).padStart(2, '0')}`
+// Non-reactive internal state — AudioContext-based for gapless playback
+let sessionId             = 0
+let audioCtx              = null    // Web AudioContext — schedules audio with zero gaps
+let nextStartAt           = 0       // ctx.currentTime when next chunk should begin
+let highlightTimers       = []      // setTimeout IDs for text-highlight scheduling
+let rafId                 = null    // requestAnimationFrame ID for progress bar
+let chunkStartTimes       = []      // scheduled startAt per chunk index
+let chunkDurations        = []      // audioBuf.duration per chunk index
+let chunkFetches          = []
+let chunkTexts            = []
+let chunkElements         = []
+let lastHighlightedEl     = null
+let speculativeTitleFetch = null    // pre-warmed chunk 0 (title) started on page load
+
+function buildChunksWithDOM(contentSelector, title, maxLen = 300) {
+  const chunks = []
+  const elements = []
+
+  if (title) { chunks.push(title); elements.push(null) }
+
+  const contentEl = document.querySelector(contentSelector)
+  if (!contentEl) return { chunks, elements }
+
+  const nodes = contentEl.querySelectorAll('p, h2, h3, h4, blockquote, li')
+  let accText = ''
+  let accEl = null
+
+  function flush() {
+    if (accText) { chunks.push(accText); elements.push(accEl); accText = ''; accEl = null }
+  }
+  function addSplit(text, el) {
+    let rem = text
+    while (rem.length > 0) {
+      if (rem.length <= maxLen) { chunks.push(rem); elements.push(el); break }
+      let cut = rem.lastIndexOf('. ', maxLen)
+      if (cut < maxLen * 0.4) cut = rem.lastIndexOf(' ', maxLen)
+      if (cut < 0) cut = maxLen; else cut += 1
+      chunks.push(rem.slice(0, cut).trim()); elements.push(el)
+      rem = rem.slice(cut).trim()
+    }
+  }
+
+  for (const node of nodes) {
+    const text = (node.textContent || '').trim()
+    if (!text) continue
+    if (!accText) {
+      if (text.length > maxLen) { addSplit(text, node) }
+      else { accText = text; accEl = node }
+    } else if (accText.length + 1 + text.length <= maxLen) {
+      accText += ' ' + text
+    } else {
+      flush()
+      if (text.length > maxLen) { addSplit(text, node) }
+      else { accText = text; accEl = node }
+    }
+  }
+  flush()
+  return { chunks, elements }
 }
 
-function openPlayer() {
+function clearHighlight() {
+  if (lastHighlightedEl) {
+    lastHighlightedEl.style.removeProperty('background-color')
+    lastHighlightedEl.style.removeProperty('border-radius')
+    lastHighlightedEl.style.removeProperty('transition')
+    lastHighlightedEl = null
+  }
+}
+
+function highlightChunk(i) {
+  clearHighlight()
+  const el = chunkElements[i]
+  if (!el) return
+  el.style.backgroundColor = 'rgba(99, 102, 241, 0.10)'
+  el.style.borderRadius = '4px'
+  el.style.transition = 'background-color 0.35s ease'
+  lastHighlightedEl = el
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+function fetchOneChunk(text) {
+  return api.post('/tts', { text, style: 'blog' }, { responseType: 'blob', timeout: 90_000 })
+    .then(r => r.data)
+    .catch(e => ({ _ttsError: e?.response?.data?.message || e?.message || 'TTS unavailable' }))
+}
+
+// Creates (or re-uses) the AudioContext — must be called synchronously in the
+// click handler so Safari's autoplay policy is satisfied.
+function ensureAudioCtx() {
+  if (!audioCtx || audioCtx.state === 'closed') {
+    audioCtx = new AudioContext()
+    nextStartAt = audioCtx.currentTime
+  }
+  return audioCtx
+}
+
+function _clearTimers() {
+  highlightTimers.forEach(id => clearTimeout(id))
+  highlightTimers = []
+}
+
+function _stopRaf() {
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null }
+}
+
+function _startRaf() {
+  _stopRaf()
+  function tick() {
+    const ctx = audioCtx
+    if (!ctx || ctx.state === 'closed') return
+    const now = ctx.currentTime
+    for (let j = 0; j < chunkStartTimes.length; j++) {
+      const st  = chunkStartTimes[j]
+      const dur = chunkDurations[j]
+      if (st !== undefined && dur && now >= st && now < st + dur) {
+        ttsProgress.value = (j + (now - st) / dur) / ttsTotalChunks.value
+        break
+      }
+    }
+    rafId = requestAnimationFrame(tick)
+  }
+  rafId = requestAnimationFrame(tick)
+}
+
+// Decodes a WAV blob and schedules it to play back-to-back with the previous chunk.
+// Returns the AudioBufferSourceNode (listen to .onended for completion).
+async function _decodeAndSchedule(blob, i) {
+  const ctx = audioCtx
+  try {
+    const arrayBuf = await blob.arrayBuffer()
+    const audioBuf = await ctx.decodeAudioData(arrayBuf)
+    const source = ctx.createBufferSource()
+    source.buffer = audioBuf
+    source.connect(ctx.destination)
+    const startAt = Math.max(ctx.currentTime + 0.02, nextStartAt)
+    source.start(startAt)
+    nextStartAt = startAt + audioBuf.duration
+    chunkStartTimes[i] = startAt
+    chunkDurations[i]  = audioBuf.duration
+    // Delay the text highlight until this chunk actually starts playing
+    const ms = Math.max(0, (startAt - ctx.currentTime) * 1000)
+    highlightTimers.push(setTimeout(() => highlightChunk(i), ms))
+    return source
+  } catch { return null }
+}
+
+async function runFrom(startIdx, session) {
+  for (let i = startIdx; i < ttsTotalChunks.value; i++) {
+    if (session !== sessionId) return
+    ttsChunkIdx.value = i
+    if (i === startIdx) ttsState.value = 'loading'
+
+    if (!chunkFetches[i]) chunkFetches[i] = fetchOneChunk(chunkTexts[i])
+    // 4-ahead prefetch — synthesis results sit in chunkFetches[] ready for decode
+    for (let p = 1; p <= 4; p++) {
+      const ahead = i + p
+      if (ahead < ttsTotalChunks.value && !chunkFetches[ahead])
+        chunkFetches[ahead] = fetchOneChunk(chunkTexts[ahead])
+    }
+
+    const result = await chunkFetches[i]
+    if (session !== sessionId) return
+    if (!result || result._ttsError) {
+      clearHighlight()
+      ttsState.value = 'error'
+      ttsError.value = result?._ttsError || 'TTS unavailable'
+      return
+    }
+
+    // Decode + schedule immediately; AudioContext queues it right after the previous chunk
+    const source = await _decodeAndSchedule(result, i)
+    if (session !== sessionId) return   // player was closed/seeked while decoding
+    if (!source) {
+      clearHighlight()
+      ttsState.value = 'error'
+      ttsError.value = 'Audio decode failed'
+      return
+    }
+    if (i === startIdx) { ttsState.value = 'playing'; _startRaf() }
+
+    // Wait for chunk to finish; watchdog resolves if context is closed so we never hang
+    await new Promise(resolve => {
+      source.onended = resolve
+      const watchdog = setInterval(() => {
+        if (session !== sessionId || !audioCtx || audioCtx.state === 'closed') {
+          clearInterval(watchdog)
+          resolve(null)
+        }
+      }, 200)
+      source.addEventListener('ended', () => clearInterval(watchdog), { once: true })
+    })
+    if (session !== sessionId) return
+  }
+  clearHighlight()
+  _stopRaf()
+  _clearTimers()
+  ttsState.value = 'idle'
+  ttsProgress.value = 0
+  ttsChunkIdx.value = 0
+}
+
+async function openPlayer() {
   playerOpen.value = true
   ttsError.value = ''
-  if (!post.value?.audioUrl) { ttsState.value = 'unavailable'; return }
-  if (ttsState.value === 'playing' || ttsState.value === 'paused') return
+  if (ttsState.value !== 'idle' && ttsState.value !== 'error') return
+  ttsState.value = 'idle'
+  // Create AudioContext synchronously inside click handler — satisfies Safari autoplay policy
+  ensureAudioCtx()
+
+  await nextTick()
+  const { chunks, elements } = buildChunksWithDOM('.post-content', post.value.title, 200)
+  if (!chunks.length) return
+
+  chunkTexts = chunks
+  chunkElements = elements
+  ttsTotalChunks.value = chunks.length
+  ttsProgress.value = 0
+  ttsChunkIdx.value = 0
+  chunkFetches = new Array(chunks.length).fill(null)
+  nextStartAt = audioCtx.currentTime + 0.05
+  chunkStartTimes = []
+  chunkDurations = []
+  _clearTimers()
+
+  // Use speculative title fetch (started on page load) as chunk 0 if text matches
+  if (speculativeTitleFetch && chunks[0] === post.value.title) {
+    chunkFetches[0] = speculativeTitleFetch
+  }
+  speculativeTitleFetch = null
+
+  // Warm up remaining chunks in parallel
+  for (let k = 0; k < Math.min(4, chunks.length); k++)
+    if (!chunkFetches[k]) chunkFetches[k] = fetchOneChunk(chunkTexts[k])
+
   ttsState.value = 'loading'
-  audioEl.value?.play().catch(() => {
-    ttsState.value = 'error'
-    ttsError.value = 'Playback failed'
-  })
+  const session = ++sessionId
+  await runFrom(0, session)
 }
 
 function togglePlayPause() {
-  if (!audioEl.value) return
-  if (ttsState.value === 'playing') audioEl.value.pause()
-  else if (ttsState.value === 'paused') audioEl.value.play()
+  if (!audioCtx) return
+  if (ttsState.value === 'playing') { audioCtx.suspend(); ttsState.value = 'paused' }
+  else if (ttsState.value === 'paused') { audioCtx.resume(); ttsState.value = 'playing' }
 }
 
 function stopPlayback() {
-  if (!audioEl.value) return
-  audioEl.value.pause()
-  audioEl.value.currentTime = 0
+  sessionId++
+  _clearTimers()
+  _stopRaf()
+  clearHighlight()
+  if (audioCtx) { audioCtx.close(); audioCtx = null }
+  nextStartAt = 0; chunkStartTimes = []; chunkDurations = []
   ttsState.value = 'idle'
   ttsProgress.value = 0
-  ttsCurrentTime.value = 0
+  ttsChunkIdx.value = 0
 }
 
-function seekTo(fraction) {
-  if (!audioEl.value || !ttsDuration.value) return
-  audioEl.value.currentTime = fraction * ttsDuration.value
+async function seekTo(fraction) {
+  if (!ttsTotalChunks.value || !chunkTexts.length) return
+  const target = Math.max(0, Math.min(Math.floor(fraction * ttsTotalChunks.value), ttsTotalChunks.value - 1))
+  _clearTimers()
+  _stopRaf()
+  clearHighlight()
+  if (audioCtx) { audioCtx.close(); audioCtx = null }
+  nextStartAt = 0; chunkStartTimes = []; chunkDurations = []
+  ttsProgress.value = target / ttsTotalChunks.value
+  ttsChunkIdx.value = target
+  ttsState.value = 'loading'
+  ensureAudioCtx()
+  const session = ++sessionId
+  await new Promise(r => setTimeout(r, 0))
+  if (session !== sessionId) return
+  await runFrom(target, session)
 }
 
 function closePlayer() {
-  stopPlayback()
-  playerOpen.value = false
-}
-
-// Native <audio> element event handlers
-function onAudioTimeUpdate() {
-  if (!audioEl.value) return
-  ttsCurrentTime.value = audioEl.value.currentTime
-  if (ttsDuration.value) ttsProgress.value = ttsCurrentTime.value / ttsDuration.value
-}
-function onAudioLoadedMetadata() {
-  ttsDuration.value = audioEl.value?.duration || 0
-}
-function onAudioPlay() { ttsState.value = 'playing' }
-function onAudioPause() { if (ttsState.value !== 'idle') ttsState.value = 'paused' }
-function onAudioEnded() {
+  sessionId++
+  _clearTimers()
+  _stopRaf()
+  clearHighlight()
+  if (audioCtx) { audioCtx.close(); audioCtx = null }
+  nextStartAt = 0
+  chunkFetches = []; chunkTexts = []; chunkElements = []
+  chunkStartTimes = []; chunkDurations = []
+  ttsTotalChunks.value = 0
   ttsState.value = 'idle'
   ttsProgress.value = 0
-  ttsCurrentTime.value = 0
-}
-function onAudioWaiting() { if (ttsState.value !== 'idle') ttsState.value = 'loading' }
-function onAudioError() {
-  ttsState.value = 'error'
-  ttsError.value = 'Audio unavailable'
+  ttsChunkIdx.value = 0
+  playerOpen.value = false
 }
 
 async function applyHighlighting() {
@@ -122,13 +343,20 @@ async function applyHighlighting() {
 }
 
 onUnmounted(() => {
-  audioEl.value?.pause()
+  sessionId++
+  _clearTimers()
+  _stopRaf()
+  if (audioCtx) { audioCtx.close(); audioCtx = null }
+  speculativeTitleFetch = null
 })
 
 onMounted(async () => {
   try {
     post.value = await blog.fetchPost(route.params.slug)
     applyHighlighting()
+    // Pre-warm chunk 0 (the post title) so it's synthesised before the user clicks Listen.
+    // The title is short (~5-15 words) so synthesis finishes in ~1-3s in the background.
+    if (post.value?.title) speculativeTitleFetch = fetchOneChunk(post.value.title)
     if (post.value.category) {
       const res = await blog.fetchPosts({ category: post.value.category.slug, limit: 3 })
       relatedPosts.value = res.posts.filter(p => p.id !== post.value.id).slice(0, 3)
@@ -296,14 +524,6 @@ function copyLink() {
       <button @click="galleryIndex = (galleryIndex + 1) % getGallery().length" aria-label="Next image" class="absolute right-4 text-white text-3xl p-2 rounded-full hover:bg-white/20 transition-colors">&#8250;</button>
     </div>
 
-    <!-- Pre-rendered narration audio — a plain static file, so the browser handles
-         streaming/buffering itself; no manual chunk fetch/decode needed. -->
-    <audio v-if="post?.audioUrl" ref="audioEl" :src="post.audioUrl" preload="none"
-      class="hidden"
-      @timeupdate="onAudioTimeUpdate" @loadedmetadata="onAudioLoadedMetadata"
-      @play="onAudioPlay" @pause="onAudioPause" @ended="onAudioEnded"
-      @waiting="onAudioWaiting" @error="onAudioError"></audio>
-
     <!-- Mobile TTS fixed bottom bar — Teleported so scrollIntoView can't push it off screen -->
     <Teleport to="body">
       <div v-if="playerOpen && post" class="sm:hidden fixed bottom-0 left-0 right-0 z-50 shadow-2xl"
@@ -317,17 +537,13 @@ function copyLink() {
                 :style="ttsState === 'playing' ? `animation-delay:${i * 80}ms` : ''"></span>
             </div>
             <p class="text-xs font-semibold truncate flex-1" :class="layout.variant === 'b' ? 'text-slate-200' : 'text-gray-800'">{{ post.title }}</p>
-            <span v-if="ttsDuration" class="text-xs flex-shrink-0" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">{{ formatTime(ttsCurrentTime) }} / {{ formatTime(ttsDuration) }}</span>
+            <span v-if="ttsTotalChunks" class="text-xs flex-shrink-0" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">{{ ttsChunkIdx + 1 }}/{{ ttsTotalChunks }}</span>
             <button @click="closePlayer" class="flex-shrink-0 ml-2" :class="layout.variant === 'b' ? 'text-slate-500 hover:text-slate-300' : 'text-gray-400 hover:text-gray-600'" title="Close">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
           </div>
-          <!-- Unavailable state (no pre-rendered audio for this post) -->
-          <div v-if="ttsState === 'unavailable'" class="text-xs" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">
-            Audio unavailable for this post.
-          </div>
           <!-- Error state -->
-          <div v-else-if="ttsState === 'error'" class="flex items-center gap-2 mt-1">
+          <div v-if="ttsState === 'error'" class="flex items-center gap-2 mt-1">
             <span class="text-xs flex-1" :class="layout.variant === 'b' ? 'text-red-400' : 'text-red-600'">Audio unavailable — {{ ttsError }}</span>
             <button @click="openPlayer" class="text-xs underline flex-shrink-0" :class="layout.variant === 'b' ? 'text-violet-400' : 'text-primary-600'">Retry</button>
           </div>
@@ -398,70 +614,62 @@ function copyLink() {
               </button>
             </div>
 
-            <!-- Unavailable / error state (no pre-rendered audio for this post) -->
-            <div v-if="ttsState === 'unavailable' || ttsState === 'error'" class="flex-1 flex items-center justify-center text-center text-xs py-6"
-              :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">
-              {{ ttsState === 'error' ? `Audio unavailable — ${ttsError}` : 'Audio unavailable for this post.' }}
+            <!-- Waveform animation -->
+            <div class="flex items-end justify-center gap-1 h-10" aria-hidden="true">
+              <span v-for="i in 12" :key="i" class="w-1.5 rounded-full"
+                :class="[ttsState === 'playing' ? 'tts-bar' : 'h-1.5 opacity-30', layout.variant === 'b' ? 'bg-violet-400' : 'bg-primary-400']"
+                :style="ttsState === 'playing' ? `animation-delay:${i * 60}ms` : ''"></span>
             </div>
 
-            <template v-else>
-              <!-- Waveform animation -->
-              <div class="flex items-end justify-center gap-1 h-10" aria-hidden="true">
-                <span v-for="i in 12" :key="i" class="w-1.5 rounded-full"
-                  :class="[ttsState === 'playing' ? 'tts-bar' : 'h-1.5 opacity-30', layout.variant === 'b' ? 'bg-violet-400' : 'bg-primary-400']"
-                  :style="ttsState === 'playing' ? `animation-delay:${i * 60}ms` : ''"></span>
+            <!-- Seek slider -->
+            <div>
+              <input type="range" min="0" max="100"
+                :value="Math.round(ttsProgress * 100)"
+                :disabled="ttsState === 'loading' || ttsState === 'idle'"
+                class="tts-slider w-full"
+                @change="seekTo($event.target.value / 100)" />
+              <div class="flex justify-between mt-1.5 text-xs" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">
+                <span v-if="ttsTotalChunks">Segment {{ ttsChunkIdx + 1 }} / {{ ttsTotalChunks }}</span>
+                <span v-else>—</span>
+                <span>{{ Math.round(ttsProgress * 100) }}%</span>
               </div>
+            </div>
 
-              <!-- Seek slider -->
-              <div>
-                <input type="range" min="0" max="100"
-                  :value="Math.round(ttsProgress * 100)"
-                  :disabled="ttsState === 'loading' || ttsState === 'idle'"
-                  class="tts-slider w-full"
-                  @change="seekTo($event.target.value / 100)" />
-                <div class="flex justify-between mt-1.5 text-xs" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">
-                  <span v-if="ttsDuration">{{ formatTime(ttsCurrentTime) }} / {{ formatTime(ttsDuration) }}</span>
-                  <span v-else>—</span>
-                  <span>{{ Math.round(ttsProgress * 100) }}%</span>
-                </div>
-              </div>
+            <!-- Controls: Stop + Play/Pause -->
+            <div class="flex items-center justify-center gap-3">
+              <!-- Stop button -->
+              <button @click="stopPlayback"
+                :disabled="ttsState === 'idle' || ttsState === 'loading'"
+                class="flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all"
+                :class="ttsState === 'idle' || ttsState === 'loading'
+                  ? (layout.variant === 'b' ? 'border-slate-800 text-slate-700 cursor-not-allowed' : 'border-gray-200 text-gray-300 cursor-not-allowed')
+                  : (layout.variant === 'b' ? 'border-slate-600 text-slate-400 hover:border-slate-400 hover:text-slate-200' : 'border-gray-300 text-gray-600 hover:border-gray-500 hover:text-gray-800')"
+                title="Stop (return to beginning)">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <rect x="4" y="4" width="16" height="16" rx="2"/>
+                </svg>
+              </button>
 
-              <!-- Controls: Stop + Play/Pause -->
-              <div class="flex items-center justify-center gap-3">
-                <!-- Stop button -->
-                <button @click="stopPlayback"
-                  :disabled="ttsState === 'idle' || ttsState === 'loading'"
-                  class="flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all"
-                  :class="ttsState === 'idle' || ttsState === 'loading'
-                    ? (layout.variant === 'b' ? 'border-slate-800 text-slate-700 cursor-not-allowed' : 'border-gray-200 text-gray-300 cursor-not-allowed')
-                    : (layout.variant === 'b' ? 'border-slate-600 text-slate-400 hover:border-slate-400 hover:text-slate-200' : 'border-gray-300 text-gray-600 hover:border-gray-500 hover:text-gray-800')"
-                  title="Stop (return to beginning)">
-                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <rect x="4" y="4" width="16" height="16" rx="2"/>
-                  </svg>
-                </button>
+              <!-- Play / Pause button -->
+              <button @click="ttsState === 'loading' ? null : togglePlayPause()"
+                class="flex items-center justify-center w-14 h-14 rounded-full transition-all"
+                :class="ttsState === 'loading'
+                  ? (layout.variant === 'b' ? 'bg-slate-800 text-slate-500 cursor-wait' : 'bg-gray-100 text-gray-400 cursor-wait')
+                  : (layout.variant === 'b' ? 'bg-violet-600 text-white hover:bg-violet-700 hover:scale-105 active:scale-95' : 'bg-primary-600 text-white hover:bg-primary-700 hover:scale-105 active:scale-95')">
+                <svg v-if="ttsState === 'loading'" class="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+                <svg v-else-if="ttsState === 'playing'" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+                </svg>
+                <svg v-else class="w-6 h-6 ml-1" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+              </button>
+            </div>
 
-                <!-- Play / Pause button -->
-                <button @click="ttsState === 'loading' ? null : togglePlayPause()"
-                  class="flex items-center justify-center w-14 h-14 rounded-full transition-all"
-                  :class="ttsState === 'loading'
-                    ? (layout.variant === 'b' ? 'bg-slate-800 text-slate-500 cursor-wait' : 'bg-gray-100 text-gray-400 cursor-wait')
-                    : (layout.variant === 'b' ? 'bg-violet-600 text-white hover:bg-violet-700 hover:scale-105 active:scale-95' : 'bg-primary-600 text-white hover:bg-primary-700 hover:scale-105 active:scale-95')">
-                  <svg v-if="ttsState === 'loading'" class="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                  </svg>
-                  <svg v-else-if="ttsState === 'playing'" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
-                  </svg>
-                  <svg v-else class="w-6 h-6 ml-1" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z"/>
-                  </svg>
-                </button>
-              </div>
-
-              <p class="text-xs text-center" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">Powered by local AI</p>
-            </template>
+            <p class="text-xs text-center" :class="layout.variant === 'b' ? 'text-slate-400' : 'text-gray-500'">Powered by local AI</p>
           </div>
         </div>
       </div>

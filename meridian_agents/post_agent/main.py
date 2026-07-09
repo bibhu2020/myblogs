@@ -101,7 +101,6 @@ def run_agent() -> dict:
         "post_featured_image_prompt": "", "post_category_keywords": [],
         "post_tag_keywords": [], "post_unsplash_query": None, "word_count": 0,
         "featured_image_url": None, "final_content": "",
-        "audio_url": None,
         "category_id": None, "tag_ids": [],
         "pending_post_id": None, "pending_post_slug": None,
         "approved": None, "published_slug": None, "published_id": None,
