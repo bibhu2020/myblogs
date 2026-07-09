@@ -1,13 +1,18 @@
 #!/bin/sh
-# Applies a CUSTOM severity gate against the repo's open Code Scanning alerts
-# that originated from the DAST (OWASP ZAP) tool specifically.
+# Applies a CUSTOM gate against the repo's open Code Scanning alerts that
+# originated from the DAST (OWASP ZAP) tool specifically.
 #
-# zap-alerts-to-sarif.py only ever emits High-risk ZAP findings, and always
-# tags them with security-severity "8.0" (ZAP's risk scale tops out at High —
-# there's no tier above it, so 8.0 stands in for "high or worse", i.e. a
-# CVE/CVSS rating of 8+):
+# ZAP does not identify CVEs and has no CVSS-style numeric score — unlike SCA
+# (which reports real, externally-assigned CVE/CVSS ratings from the GitHub
+# Advisory Database) or CodeQL (whose security_severity_level is modeled on
+# CVSS methodology by GitHub's own researchers), ZAP only classifies findings
+# on its own internal Risk scale: Informational / Low / Medium / High, with
+# no tier above High. zap-alerts-to-sarif.py only ever uploads ZAP's
+# High-risk findings, and stamps them with security-severity "8.0" purely so
+# GitHub's Code Scanning UI buckets them consistently alongside CodeQL/Sonar
+# alerts — that number is a chosen display value, not a computed rating.
 #
-#   FAIL if any open ZAP-sourced alert exists (all of them are severity 8.0)
+#   FAIL if any open ZAP-sourced (High-risk) alert exists
 #   otherwise PASS
 #
 # Must run as a job with `needs: dast` in the same workflow, so the baseline
@@ -59,14 +64,14 @@ for alert in alerts:
         f"  {loc.get('path', '?')} — {alert['rule']['description']}"
     )
 
-print(f"Open DAST (ZAP) alerts: {len(findings)} (all severity 8.0 by construction)")
+print(f"Open DAST (ZAP) High-risk alerts: {len(findings)}")
 
 if findings:
-    print(f"FAILED: {len(findings)} high-severity (8+) DAST finding(s) found (must be 0):")
+    print(f"FAILED: {len(findings)} High-risk DAST finding(s) found (must be 0):")
     for f in findings:
         print(f)
     print(f"See: https://github.com/{repo}/security/code-scanning")
     sys.exit(1)
 
-print("DAST security gate: OK (0 findings rated 8+)")
+print("DAST security gate: OK (0 High-risk findings)")
 PYEOF

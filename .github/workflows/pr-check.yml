@@ -232,7 +232,8 @@ jobs:
       # built-in behavior would fail (or file issues for) *any* finding,
       # including Medium/Low header-hardening noise a dev-mode server
       # normally produces. The real gate is dast-gate below, which only
-      # fails on High-risk (severity 8+) findings via the SARIF upload.
+      # fails on High-risk findings (ZAP's own Risk scale, not a CVE/CVSS
+      # score — see zap-quality-gate.sh) via the SARIF upload.
       - name: ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.15.0
         with:
@@ -273,7 +274,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Enforce DAST severity gate (0 findings rated 8+)
+      - name: Enforce DAST severity gate (0 High-risk findings)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: sh scripts/zap-quality-gate.sh
