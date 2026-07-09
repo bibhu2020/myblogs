@@ -213,15 +213,15 @@ def build():
         'npm run sonar:check&nbsp;&nbsp;# run both in sequence; exits non-zero if the gate fails\n'
         'npm run sonar:full&nbsp;&nbsp;&nbsp;&nbsp;# coverage:all + sonar:check — the whole CI pipeline, locally'))
     story.append(Paragraph(
-        'In CI, defined in <font face="Courier">.github/workflows/pr-check.yml</font> ("PR Checks") as a job '
-        'alongside build-check, CodeQL, Dependency Review, and OWASP ZAP (Sections 1.3, 2.3, 3.2) — all in '
-        'the same file, all triggered by the same '
+        'In CI, defined in <font face="Courier">.github/workflows/pr-check.yml</font> ("PR Checks") as two '
+        'jobs alongside build-check, CodeQL, Dependency Review, and OWASP ZAP (Sections 1.3, 2.3, 3.2) — all '
+        'in the same file, all triggered by the same '
         '<font face="Courier">on: pull_request: branches: [main]</font> block, so one '
         'PR runs every check this repo has. The secrets come from GitHub Actions repository secrets instead '
         'of .env; dotenv-cli silently no-ops when no .env file is present, so the identical npm commands run '
         'unchanged in both places:', body_style))
     story.append(code_block(
-        'sonarqube:\n'
+        'sonarqube-scan:\n'
         '&nbsp;&nbsp;permissions: {pull-requests: read}\n'
         '&nbsp;&nbsp;steps:\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;- actions/checkout@v4&nbsp;&nbsp;(fetch-depth: 0)\n'
@@ -233,15 +233,38 @@ def build():
         '&nbsp;&nbsp;&nbsp;&nbsp;- name: SonarQube Scan\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;env: {SONAR_TOKEN, SONAR_HOST_URL, SONAR_PROJECT_KEY}&nbsp;&nbsp;# from GitHub Secrets\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;run: npm run sonar\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- actions/upload-artifact@v4&nbsp;&nbsp;# hands off .scannerwork/report-task.txt\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# only (the ceTaskId), not the full scan output\n\n'
+        'sonarqube-gate:\n'
+        '&nbsp;&nbsp;needs: sonarqube-scan\n'
+        '&nbsp;&nbsp;permissions: {contents: read}\n'
+        '&nbsp;&nbsp;steps:\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- actions/checkout@v4\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- actions/download-artifact@v4&nbsp;&nbsp;(into .scannerwork/)\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;- name: SonarQube Quality Gate check\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;env: {SONAR_TOKEN, SONAR_HOST_URL, SONAR_PROJECT_KEY}\n'
-        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;run: npm run sonar:gate'))
+        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;run: sh scripts/sonar-quality-gate.sh'))
     story.append(Paragraph(
-        'This job is what actually blocks a PR merge on a failed gate (via a required status check), which '
-        'running from a developer’s machine or IDE alone cannot enforce. The Python setup step exists '
-        'because <font face="Courier">coverage:all</font> shells out to pytest for the meridian_agents suite '
-        '— without it, that step fails with “No module named pytest”, tolerated only because it runs with '
-        '<font face="Courier">continue-on-error: true</font>.', body_style))
+        'The gate used to be a second step bolted onto the end of a single combined job — functionally '
+        'identical, but that meant the PR checks list only ever showed one row, “SonarQube Scan”, with no way '
+        'to tell at a glance (or via a required status check, Section 6.1) whether the gate itself passed '
+        'versus just the scan having run. Splitting it into its own job mirrors CodeQL’s existing '
+        '<font face="Courier">codeql</font> / <font face="Courier">codeql-gate</font> split (Section 1.3): '
+        'the scan job uploads only <font face="Courier">report-task.txt</font> (the small receipt file '
+        'carrying <font face="Courier">ceTaskId</font>, not the full scan output) as a workflow artifact, and '
+        'the gate job downloads it before running the same check script — now called directly with '
+        '<font face="Courier">sh</font> rather than through <font face="Courier">npm run sonar:gate</font>, '
+        'since that wrapper’s only real job is loading <font face="Courier">.env</font> for local dev, and '
+        'CI already supplies the same environment variables directly; calling the script means this job needs '
+        'no Node/npm setup at all, keeping it as lightweight as <font face="Courier">codeql-gate</font>.',
+        body_style))
+    story.append(Paragraph(
+        'This gate job is what actually blocks a PR merge on a failed gate (via a required status check), '
+        'which running from a developer’s machine or IDE alone cannot enforce. The Python setup step in '
+        '<font face="Courier">sonarqube-scan</font> exists because <font face="Courier">coverage:all</font> '
+        'shells out to pytest for the meridian_agents suite — without it, that step fails with “No module '
+        'named pytest”, tolerated only because it runs with <font face="Courier">continue-on-error: '
+        'true</font>.', body_style))
     story.append(Paragraph(
         'As a complementary, faster feedback loop, the VS Code extension <b>SonarQube for IDE</b> '
         '(SonarLint) can connect to the same server (Connected Mode) so issues show up inline while typing, '
@@ -707,7 +730,13 @@ def build():
         '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;artifact_name: zap-baseline-report}\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;- run: python3 scripts/zap-alerts-to-sarif.py report_json.json zap-high.sarif\n'
         '&nbsp;&nbsp;&nbsp;&nbsp;- github/codeql-action/upload-sarif@v3\n'
-        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with: {sarif_file: zap-high.sarif, category: zap-baseline}'))
+        '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with: {sarif_file: zap-high.sarif, category: zap-baseline}\n\n'
+        'dast-gate:\n'
+        '&nbsp;&nbsp;needs: dast\n'
+        '&nbsp;&nbsp;permissions: {security-events: read, contents: read}\n'
+        '&nbsp;&nbsp;steps:\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- actions/checkout@v4\n'
+        '&nbsp;&nbsp;&nbsp;&nbsp;- run: sh scripts/zap-quality-gate.sh'))
 
     story.append(Paragraph(
         '<b>How it’s done here.</b> The app is booted via <font face="Courier">npm start</font> directly on '
@@ -725,14 +754,46 @@ def build():
         'runner’s own localhost where npm start is listening — this only holds on Linux runners, which is '
         'what this workflow uses throughout.'))
     story.append(Paragraph(
-        'This job still has no merge gate — <font face="Courier">fail_action: false</font> means it cannot '
-        'fail the PR no matter what it finds, and <font face="Courier">allow_issue_writing: false</font> '
-        'stops it from filing a GitHub issue every run (its default behavior, which would otherwise need a '
-        'broader <font face="Courier">issues: write</font> permission). That stays intentional: no baseline '
-        'run had happened yet, at the time this job was added, to know what this app’s normal finding count '
-        'even looks like. Turning on a hard <i>merge-blocking</i> gate blind — the way SonarQube’s and '
-        'CodeQL’s gates only were, after seeing real results (Sections 1.2, 1.3) — would risk blocking every '
-        'future PR on pre-existing findings unrelated to whatever it actually changes.', body_style))
+        'The <font face="Courier">dast</font> job itself still has no merge gate — '
+        '<font face="Courier">fail_action: false</font> means it cannot fail the PR no matter what it finds, '
+        'and <font face="Courier">allow_issue_writing: false</font> stops it from filing a GitHub issue every '
+        'run (its default behavior, which would otherwise need a broader '
+        '<font face="Courier">issues: write</font> permission). That’s deliberate: ZAP’s own binary '
+        'pass/fail would trip on <i>any</i> finding, including routine Medium/Low dev-mode header noise — '
+        'exactly the risk that made turning it on blind, before a baseline run existed, a bad idea. The '
+        'actual gate now lives one job downstream, in <font face="Courier">dast-gate</font>, described next.',
+        body_style))
+
+    story.append(Paragraph('Custom gate — scripts/zap-quality-gate.sh', h2_style))
+    story.append(Paragraph(
+        'Once a real baseline run existed and showed what this app’s normal finding count looks like, a '
+        'merge-blocking gate became possible without the earlier blind-gate risk. '
+        '<font face="Courier">dast-gate</font> declares <font face="Courier">needs: dast</font> — same '
+        'pattern as <font face="Courier">codeql-gate</font> (Section 1.3) — so it only starts once the '
+        'baseline scan’s SARIF has been uploaded, then queries the same Code Scanning alerts endpoint '
+        'CodeQL’s own gate uses, filtered to <font face="Courier">tool.name == "OWASP ZAP"</font> so it only '
+        'judges DAST findings, not CodeQL’s:', body_style))
+    story.append(bullets([
+        '<b>FAIL</b> if any open ZAP-sourced (High-risk) alert exists.',
+        'otherwise <b>PASS</b>.',
+    ]))
+    story.append(note(
+        'This is a plain binary cutoff, like Dependency Review’s (Section 2.3), not the count-based '
+        '“0 critical, ≤N high” tolerance CodeQL and SonarQube use. Those two evaluate the whole existing '
+        'codebase, where some accumulated, already-triaged risk is tolerated; ZAP’s risk scale only ever '
+        'reaches “High” for a small, deliberately curated set of finding types to begin with (Section 4), so '
+        'there’s no equivalent volume of accumulated noise to tolerate — any High-risk finding here is worth '
+        'blocking outright.'))
+    story.append(note(
+        'Important distinction from Section 2 (SCA) and Section 1.3 (CodeQL): SCA’s severities are real, '
+        'externally-assigned CVE/CVSS ratings from the GitHub Advisory Database, and CodeQL’s '
+        '<font face="Courier">security_severity_level</font> is modeled on CVSS methodology by GitHub’s own '
+        'researchers. ZAP has neither — it doesn’t identify CVEs at all, only its own internal Risk scale '
+        '(Informational/Low/Medium/High, no tier above High). The <font face="Courier">security-severity: '
+        '"8.0"</font> that <font face="Courier">zap-alerts-to-sarif.py</font> stamps onto every High-risk '
+        'finding (Section 4) is a chosen display value — picked purely so GitHub’s Code Scanning UI buckets '
+        'these consistently alongside CodeQL/Sonar alerts — not a computed rating. Read “High-risk ZAP '
+        'finding” here as exactly that, not as shorthand for “CVSS 8+”.'))
     story.append(note(
         'A first attempt at this asked zap-baseline.py for a differently-named JSON report via '
         '<font face="Courier">cmd_options: "-J zap-report.json"</font>. That broke the job outright: '
@@ -753,8 +814,10 @@ def build():
         'CodeQL’s own categories so the two don’t collide). Medium/Low/Informational alerts — the '
         'missing-security-header findings a dev-mode server commonly produces — are deliberately left out of '
         'that conversion: they still show up in the job log and the full HTML artifact, just not as '
-        'permanent, cross-linkable Security-tab entries. This is a visibility change only, not a gate '
-        'change — the job still cannot fail a PR on its own.', body_style))
+        'permanent, cross-linkable Security-tab entries. This conversion step is a visibility change only, '
+        'not a gate by itself — the <font face="Courier">dast</font> job still cannot fail a PR on its own. '
+        'It’s what <font face="Courier">dast-gate</font>, described above, reads to make that decision '
+        'downstream.', body_style))
 
     # ══════════════════════════════════════════════════════════════════════
     # 4. SARIF — what actually reaches the Security tab
@@ -794,7 +857,9 @@ def build():
         '(the 8 WARN-level missing-security-header alerts a dev-mode Vite server normally produces — see the '
         'gate discussion above) would clutter the one place people check for “what’s actually exploitable” '
         'with findings that may not even reflect the real production nginx config. Restricting the SARIF '
-        'conversion to High keeps that view meaningful while the DAST job itself still has no merge gate.',
+        'conversion to High keeps that view meaningful — and it’s exactly this restricted set that '
+        '<font face="Courier">dast-gate</font> (Section 3.2) now enforces zero-tolerance on, so keeping it '
+        'to genuinely High-risk findings also keeps the gate itself from being noisy.',
         body_style))
     story.append(Paragraph(
         'Two consequences worth being explicit about: first, “check GitHub’s Security tab” does not mean '
@@ -827,7 +892,7 @@ def build():
           'Automatic — GitHub parses on\nevery push to a tracked branch',
           'N/A — produces no findings;\nDependabot &amp; Dependency\nReview both read it'],
          ['SonarQube', 'SAST', 'Whole repo\n(gate: new/changed code)', 'pull_request\n(pr-check.yml)',
-          'Yes — sonar:gate'],
+          'Yes — sonarqube-gate'],
          ['CodeQL', 'SAST', 'Whole repo\n(JS/TS + Python matrix)', 'pull_request\n(pr-check.yml)',
           'Yes — custom codeql-gate'],
          ['Dependabot alerts', 'SCA', 'Whole dependency tree,\ncontinuous', 'Event-driven\n(new advisory / graph change)',
@@ -839,13 +904,17 @@ def build():
          ['Dependency Review', 'SCA', 'This PR’s manifest\ndiff only', 'pull_request\n(pr-check.yml)',
           'Yes — fail-on-severity: high'],
          ['OWASP ZAP', 'DAST', 'Running app,\npassive spider', 'pull_request\n(pr-check.yml)',
-          'No — fail_action: false\n(pending baseline data)']],
+          'Yes — custom dast-gate\n(High-risk findings only)']],
         col_widths=[32 * mm, 24 * mm, 36 * mm, 36 * mm, 40 * mm]))
     story.append(Spacer(1, 6))
     story.append(note(
-        'Read the “Blocks merge?” column as “fails its own check” — see Section 6’s first gap. As of '
-        'writing, none of these are wired as required status checks on main, so a red check here does not '
-        'currently stop GitHub from allowing the merge itself.'))
+        'Read the “Blocks merge?” column as “fails its own check”, not “blocks the merge button” — see '
+        'Section 6.1. As of writing, only <font face="Courier">Build all services</font> and '
+        '<font face="Courier">SonarQube Scan</font> are wired as required status checks on main; a red '
+        '<font face="Courier">CodeQL Security Gate</font>, <font face="Courier">Dependency Review</font>, '
+        'or <font face="Courier">DAST Security Gate</font> — or even a red '
+        '<font face="Courier">SonarQube Quality Gate</font> specifically — does not currently stop GitHub '
+        'from allowing the merge.'))
 
     # ══════════════════════════════════════════════════════════════════════
     # 6. Known Gaps — what this pipeline doesn't cover yet
@@ -857,30 +926,55 @@ def build():
         'real workflow/policy decisions, not just missing YAML, and are called out for a deliberate choice, '
         'not a silent patch.', body_style))
 
-    story.append(Paragraph('6.1 No required status checks on main (High)', h2_style))
+    story.append(Paragraph('6.1 Required status checks cover 2 of 7 gate jobs (Medium)', h2_style))
     story.append(Paragraph(
-        'This repo’s branch protection is a modern <b>ruleset</b> (Settings → Rules → Rulesets), not classic '
-        'branch protection — which is why the legacy '
-        '<font face="Courier">/branches/main/protection</font> API returns 404 even though protection '
-        'exists. The active ruleset enforces exactly three things: no direct deletion of '
-        'main, no non-fast-forward (force) pushes, and a pull-request requirement with '
-        '<font face="Courier">required_approving_review_count: 0</font>. There is no '
-        '<font face="Courier">required_status_checks</font> rule at all.', body_style))
+        'This repo actually has <b>two independent protection layers</b> on <font face="Courier">main</font>, '
+        'discovered by checking both APIs directly rather than assuming either was authoritative:',
+        body_style))
+    story.append(bullets([
+        'A <b>ruleset</b> (Settings → Rules → Rulesets, GitHub’s newer mechanism), named '
+        '<font face="Courier">main_branch_protection</font>, <font face="Courier">enforcement: '
+        'active</font>. It has the right rules — no deletion, no non-fast-forward (force) pushes, a '
+        'pull-request requirement with <font face="Courier">required_approving_review_count: 0</font> — but '
+        'its <font face="Courier">conditions.ref_name.include</font> is an <b>empty array</b>. An empty '
+        'include list matches no branch at all, so despite reading “active”, this ruleset has never actually '
+        'applied to anything, including main. This is not a hypothetical risk; it was verified live and is '
+        'exactly the kind of bug that reads as protection in the UI while doing nothing.',
+        'Classic <b>branch protection</b> (the legacy <font face="Courier">/branches/main/protection</font> '
+        'API, which 404’d — “Branch not protected” — before this layer was added), applied directly to '
+        '<font face="Courier">main</font> by name, so it has no equivalent ref-matching failure mode. It '
+        'requires a pull request (0 approvals), blocks force-pushes and deletion, and — unlike the ruleset '
+        'above — sets <font face="Courier">enforce_admins: true</font>, so it applies even to repo admins, '
+        'not just other collaborators.',
+    ]))
+    story.append(note(
+        'The ruleset’s empty <font face="Courier">ref_name.include</font> is left as-is in this document, not '
+        'silently fixed — whether to repair it (add <font face="Courier">["~DEFAULT_BRANCH"]</font>) or '
+        'delete it outright as redundant now that classic protection covers the same ground is a real policy '
+        'choice, not a one-line patch. Running two independently-configured protection mechanisms side by '
+        'side is itself worth deciding about deliberately.'))
     story.append(Paragraph(
-        'Practical effect: every gate described in Sections 1–3 — SonarQube’s, CodeQL’s, Dependency '
-        'Review’s, even a future calibrated ZAP gate — makes its own check go red on failure, but nothing '
-        'stops the PR’s merge button from being clicked anyway. “Blocks merge” throughout this document '
-        'describes what each script/action does when invoked, not what GitHub itself currently enforces. '
-        '<b>Fix:</b> add a <font face="Courier">required_status_checks</font> rule to the ruleset (or a '
-        'branch protection rule) naming the job names from this document — e.g. '
-        '<font face="Courier">SonarQube Scan</font>, <font face="Courier">CodeQL Security Gate</font>, '
-        '<font face="Courier">Dependency Review (SCA)</font> — plus <font face="Courier">strict: true</font> '
-        'if you also want the branch to be up to date before merging.', body_style))
+        'Direct pushes to main are therefore genuinely blocked today — the historical gap this section used '
+        'to describe (branch protection existing on paper but not in effect) is closed. What remains open is '
+        'narrower: classic branch protection’s <font face="Courier">required_status_checks</font> currently '
+        'names exactly <b>two</b> contexts — <font face="Courier">Build all services</font> and '
+        '<font face="Courier">SonarQube Scan</font> (<font face="Courier">strict: true</font>) — verified '
+        'directly via the protection API, not assumed from the Settings UI. None of the other five jobs in '
+        'pr-check.yml are required: <font face="Courier">SonarQube Quality Gate</font>, '
+        '<font face="Courier">CodeQL Security Gate</font>, <font face="Courier">Dependency Review '
+        '(SCA)</font>, <font face="Courier">DAST Security Gate</font>, or even the CodeQL analyze matrix '
+        'itself. Concretely: a PR can merge today with CodeQL’s gate red, Dependency Review’s gate red, or '
+        'DAST’s gate red — “SonarQube Scan” only certifies the <i>scan ran</i> (Section 1.2), not that its '
+        'quality gate passed, since that’s now a separate job (<font face="Courier">sonarqube-gate</font>) not '
+        'in this list. <b>Fix:</b> add the remaining job names to '
+        '<font face="Courier">required_status_checks</font> — at minimum '
+        '<font face="Courier">SonarQube Quality Gate</font>, since “scan ran” without “gate passed” being '
+        'required defeats much of the point of having split them (Section 1.2).', body_style))
     story.append(note(
         'This is a real behavior change once applied, not a documentation fix: any future PR would be '
-        'blocked from merging while a check is red — including for causes unrelated to the PR’s own change, '
-        'like the transient SonarQube-server 502 hit while building this pipeline out. Decide the required '
-        'check list deliberately rather than requiring everything by default.'))
+        'blocked from merging while a newly-required check is red — including for causes unrelated to the '
+        'PR’s own change, like the transient SonarQube-server 502 hit while building this pipeline out. '
+        'Decide the required check list deliberately rather than requiring everything by default.'))
 
     story.append(Paragraph('6.2 Secret scanning is disabled (High)', h2_style))
     story.append(Paragraph(

@@ -24,7 +24,7 @@ jobs:
       - name: Build all services + frontend
         run: npm run build:all
 
-  sonarqube:
+  sonarqube-scan:
     name: SonarQube Scan
     runs-on: ubuntu-latest
     permissions:
@@ -64,12 +64,43 @@ jobs:
           SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
         run: npm run sonar
 
+      # Handed off to the sonarqube-gate job below (mirrors codeql/codeql-gate) so the
+      # gate has its own named check instead of being a silent step inside this job —
+      # only report-task.txt is needed there (it carries the ceTaskId the gate script
+      # polls), not the full scan output.
+      - name: Upload SonarQube scan report
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonar-report-task
+          path: .scannerwork/report-task.txt
+          retention-days: 1
+
+  sonarqube-gate:
+    name: SonarQube Quality Gate
+    runs-on: ubuntu-latest
+    needs: sonarqube-scan
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download SonarQube scan report
+        uses: actions/download-artifact@v4
+        with:
+          name: sonar-report-task
+          path: .scannerwork
+
+      # Called directly rather than via `npm run sonar:gate` — that wrapper's only job is
+      # loading .env for local dev; env vars are already supplied below in CI, and calling
+      # the script directly keeps this job as lightweight as codeql-gate (no Node/npm setup).
       - name: SonarQube Quality Gate check
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
           SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
-        run: npm run sonar:gate
+        run: sh scripts/sonar-quality-gate.sh
 
   codeql:
     name: CodeQL Analyze (${{ matrix.language }})
@@ -197,10 +228,12 @@ jobs:
       # Passive-only: spiders the running frontend and inspects responses
       # (headers, cookies, disclosed info) without sending attack payloads —
       # safe against the real seeded data in blog.db/auth.db/media.db.
-      # fail_action stays false and allow_issue_writing stays false until a
-      # real baseline run establishes what this app's normal finding count
-      # looks like — turning on a hard gate blind would risk blocking every
-      # future PR on pre-existing findings unrelated to whatever it changes.
+      # fail_action and allow_issue_writing stay false — the action's own
+      # built-in behavior would fail (or file issues for) *any* finding,
+      # including Medium/Low header-hardening noise a dev-mode server
+      # normally produces. The real gate is dast-gate below, which only
+      # fails on High-risk findings (ZAP's own Risk scale, not a CVE/CVSS
+      # score — see zap-quality-gate.sh) via the SARIF upload.
       - name: ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.15.0
         with:
@@ -228,3 +261,20 @@ jobs:
         with:
           sarif_file: zap-high.sarif
           category: zap-baseline
+
+  dast-gate:
+    name: DAST Security Gate
+    runs-on: ubuntu-latest
+    needs: dast
+    permissions:
+      security-events: read
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Enforce DAST severity gate (0 High-risk findings)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sh scripts/zap-quality-gate.sh

@@ -229,9 +229,17 @@ whatever's already on disk, it doesn't run your tests itself. Point
 `sonar.javascript.lcov.reportPaths` / `sonar.python.coverage.reportPaths`
 (Step 3.2) at those files.
 
-### 3.6 — CI job
+### 3.6 — CI jobs
+Split into a scan job and a gate job — same reason as CodeQL's `codeql` /
+`codeql-gate` split (Step 4.2): a gate bolted on as a second step inside one
+combined job still works, but it means the PR checks list only ever shows
+one row ("SonarQube Scan"), with no way to tell — at a glance, or by naming
+it individually in required status checks (Step 8) — whether the *gate*
+passed versus just the *scan* having run. Splitting them gives the gate its
+own name and its own required-check entry.
+
 ```yaml
-sonarqube:
+sonarqube-scan:
   runs-on: ubuntu-latest
   permissions: { pull-requests: read }
   steps:
@@ -244,9 +252,28 @@ sonarqube:
     - name: SonarQube Scan
       env: { SONAR_TOKEN: "${{ secrets.SONAR_TOKEN }}", SONAR_HOST_URL: "${{ secrets.SONAR_HOST_URL }}", SONAR_PROJECT_KEY: "${{ secrets.SONAR_PROJECT_KEY }}" }
       run: npm run sonar
+    - name: Upload SonarQube scan report
+      uses: actions/upload-artifact@v4
+      with:
+        name: sonar-report-task
+        path: .scannerwork/report-task.txt   # only the small ceTaskId receipt, not the full scan output
+        retention-days: 1
+
+sonarqube-gate:
+  needs: sonarqube-scan       # only works because this job is in the SAME workflow file
+  runs-on: ubuntu-latest
+  permissions: { contents: read }
+  steps:
+    - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4
+      with: { name: sonar-report-task, path: .scannerwork }
     - name: SonarQube Quality Gate check
       env: { SONAR_TOKEN: "${{ secrets.SONAR_TOKEN }}", SONAR_HOST_URL: "${{ secrets.SONAR_HOST_URL }}", SONAR_PROJECT_KEY: "${{ secrets.SONAR_PROJECT_KEY }}" }
-      run: npm run sonar:gate
+      run: sh scripts/sonar-quality-gate.sh    # called directly, not via `npm run sonar:gate` — that
+                                                # wrapper only exists to load .env for local dev; CI
+                                                # already supplies the same env vars above, and calling
+                                                # the script directly means this job needs no Node/npm
+                                                # setup at all, same as codeql-gate
 ```
 
 ---
@@ -422,6 +449,82 @@ This step needs `security-events: write` added to the job's `permissions:` block
 (alongside `contents: read`) — the SARIF upload is the only reason this job
 needs write access to anything.
 
+### 6.1 — Custom severity gate (`scripts/zap-quality-gate.sh`), once you have baseline data
+
+`fail_action: false` above means the `dast` job itself can never fail a PR —
+deliberately, until you've watched a few real runs and know what your app's
+normal finding count looks like. Once you do, add a separate gate job, same
+`needs:` pattern as `codeql-gate` (Step 4.2) and `sonarqube-gate` (Step 3.6):
+
+```yaml
+dast-gate:
+  needs: dast
+  permissions: { security-events: read, contents: read }
+  steps:
+    - uses: actions/checkout@v4
+    - env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+      run: sh scripts/zap-quality-gate.sh
+```
+
+```sh
+#!/bin/sh
+set -e
+python3 <<'PYEOF'
+import json, os, sys, time, urllib.request
+
+repo, token = os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_TOKEN"]
+api = f"https://api.github.com/repos/{repo}"
+headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+
+def get(path):
+    req = urllib.request.Request(f"{api}{path}", headers=headers)
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.load(resp)
+
+# Same processing-lag reasoning as codeql-quality-gate.sh (Step 4.3).
+time.sleep(30)
+
+alerts, page = [], 1
+while True:
+    batch = get(f"/code-scanning/alerts?state=open&per_page=100&page={page}")
+    if not batch:
+        break
+    alerts += batch
+    if len(batch) < 100:
+        break
+    page += 1
+
+# Filtered to ZAP specifically so this gate doesn't also judge CodeQL's own
+# alerts, which land in the same alerts API and are already covered by
+# codeql-quality-gate.sh.
+zap_alerts = [a for a in alerts if (a.get("tool") or {}).get("name") == "OWASP ZAP"]
+print(f"{len(zap_alerts)} open DAST (ZAP) High-risk alert(s)")
+sys.exit(1 if zap_alerts else 0)   # any = fail; see the CVE/CVSS note below for why there's no threshold to tune here
+PYEOF
+```
+
+Unlike the SonarQube/CodeQL gates above, there's no `CRITICAL_MAX`/`HIGH_MAX`
+to tune — this is a plain binary cutoff like Dependency Review's
+`fail-on-severity` (Step 5), not a count-based tolerance. Reason: those two
+gates evaluate the *whole existing codebase*, where some accumulated,
+already-triaged risk is tolerated; `zap-alerts-to-sarif.py` (Step 6) only
+ever forwards a small, deliberately curated set of High-risk findings to
+begin with, so there's no equivalent volume of noise to tolerate — any
+High-risk finding here is worth blocking outright.
+
+> **ZAP's severity is not a CVE/CVSS rating, and this matters for how you
+> read/tune this gate.** SCA's severities (Step 5, Dependabot) are real,
+> externally-assigned CVE/CVSS scores from an advisory database. CodeQL's
+> `security_severity_level` (Step 4.3) is modeled on CVSS methodology by
+> GitHub's own researchers. ZAP has neither — it doesn't identify CVEs at
+> all, only its own internal Risk scale: Informational/Low/Medium/High, no
+> tier above High. The `security-severity: "8.0"` that
+> `zap-alerts-to-sarif.py` stamps onto every High-risk finding (Step 6) is a
+> **chosen display value**, picked purely so GitHub's Code Scanning UI
+> buckets these consistently alongside CodeQL/Sonar alerts — not a computed
+> rating. Don't read "High-risk ZAP finding" as shorthand for "CVSS 8+"; it
+> just means "ZAP's own rules classified this as High."
+
 Notes that generalize regardless of stack:
 - **Use the fastest boot path that serves real, crawlable HTML** — not
   necessarily your production Docker image, if that image bundles slow
@@ -432,8 +535,8 @@ Notes that generalize regardless of stack:
   finding count (missing security headers are extremely common on
   dev-mode servers and may not reflect your real production config at
   all). Run it a few times, look at the log's `WARN-NEW`/`FAIL-NEW` counts,
-  *then* decide a real threshold — same "observe before you gate" pattern
-  as Steps 3/4's custom scripts.
+  *then* add the gate job in Step 6.1 — same "observe before you gate"
+  pattern as Steps 3/4's custom scripts.
 - This is a **passive-only** scan (spider + response inspection, no attack
   payloads) — safe to run against real seeded/demo data. If you want a
   full active scan instead (`zaproxy/action-full-scan`), understand first
@@ -467,17 +570,21 @@ on:
     branches: [<main>]
 
 jobs:
-  build-check:      # your normal build/test job(s)
+  build-check:        # your normal build/test job(s)
     ...
-  sonarqube:        # Step 3.6
+  sonarqube-scan:     # Step 3.6
     ...
-  codeql:           # Step 4.2
+  sonarqube-gate:     # Step 3.6 — needs: sonarqube-scan
     ...
-  codeql-gate:      # Step 4.2 — needs: codeql
+  codeql:             # Step 4.2
+    ...
+  codeql-gate:        # Step 4.2 — needs: codeql
     ...
   dependency-review:  # Step 5
     ...
-  dast:             # Step 6
+  dast:               # Step 6
+    ...
+  dast-gate:          # Step 6.1 — needs: dast (only once you have baseline data)
     ...
 ```
 
@@ -502,15 +609,30 @@ this out originally; do these deliberately from the start instead:
 - [ ] **Required status checks.** Add a branch protection rule (or a
       repository *ruleset* — GitHub's newer mechanism, check
       **Settings → Rules → Rulesets** as well as the classic **Settings →
-      Branches**) naming the actual job names from Step 7 —
-      e.g. `SonarQube Scan`, `CodeQL Security Gate`,
-      `Dependency Review (SCA)`. Without this, "Blocks merge?" throughout
-      this playbook describes what each script does when it runs, not
-      what GitHub actually enforces. This is a real behavior change once
-      applied — future PRs get blocked on any red check, including causes
-      unrelated to the PR's own diff (a flaky self-hosted SonarQube server
-      returning a transient 502, for instance) — so decide the required
-      list deliberately rather than requiring everything by default.
+      Branches**) naming the actual job names from Step 7 — e.g.
+      `SonarQube Quality Gate`, `CodeQL Security Gate`,
+      `Dependency Review (SCA)`, `DAST Security Gate`. Without this,
+      "Blocks merge?" throughout this playbook describes what each script
+      does when it runs, not what GitHub actually enforces. This is a real
+      behavior change once applied — future PRs get blocked on any red
+      check, including causes unrelated to the PR's own diff (a flaky
+      self-hosted SonarQube server returning a transient 502, for
+      instance) — so decide the required list deliberately rather than
+      requiring everything by default.
+      > **Name the gate job, not just the scan job.** If you split
+      > SonarQube/DAST into scan + gate jobs (Steps 3.6, 6.1), requiring
+      > only `SonarQube Scan` certifies that the *scan ran* — not that
+      > `SonarQube Quality Gate` (the separate job) actually *passed*.
+      > This is an easy, easy-to-miss mistake to make even after doing
+      > everything else right: check the required-checks list names the
+      > gate jobs specifically, not their upstream scan jobs.
+      > **Verify by querying the API, not by trusting "Active" in the UI.**
+      > A ruleset that reads `enforcement: active` can still apply to
+      > *zero* branches if its `conditions.ref_name.include` is an empty
+      > array — a real, verified case, not a hypothetical one. Confirm
+      > with `gh api repos/<owner>/<repo>/rulesets/<id>` (or the classic
+      > `.../branches/<branch>/protection` endpoint) that the rule you
+      > added actually targets the branch you think it does.
 - [ ] **Secret scanning** (**Settings → Code security and analysis →
       Secret scanning**) — free, zero-config, catches committed
       credentials. Turn on **push protection** underneath it too if you
@@ -549,8 +671,9 @@ this out originally; do these deliberately from the start instead:
       just the check going red.
 - [ ] `Build all services` (or your build-check job) passes on the
       unmodified branch.
-- [ ] `SonarQube Scan` uploads and `SonarQube Quality Gate check` reports a
-      real pass/fail (not an auth error — check the three secrets first).
+- [ ] `SonarQube Scan` uploads successfully, and the separate
+      `SonarQube Quality Gate` job reports a real pass/fail (not an auth
+      error — check the three secrets first).
 - [ ] `CodeQL Analyze (<language>)` passes, and results appear under repo
       **Security → Code scanning alerts** within a few minutes.
 - [ ] `CodeQL Security Gate` passes (0 critical / your threshold).
@@ -561,6 +684,11 @@ this out originally; do these deliberately from the start instead:
       the job log for the `WARN-NEW`/`FAIL-NEW` summary line. If any alert
       is High risk, confirm it also lands on **Security → Code scanning
       alerts** under the `zap-baseline` category within a few minutes.
+- [ ] Once `dast-gate` (Step 6.1) exists: confirm it reports pass/fail
+      based on ZAP-sourced alerts specifically — not CodeQL's (they share
+      the same alerts API) — by temporarily lowering the filter or
+      checking the job log's alert count against what's actually tagged
+      `tool.name == "OWASP ZAP"` on the Security tab.
 - [ ] Repo **Security → Dependabot alerts** shows 0 (or your known/
       accepted baseline) — confirms Step 1's toggles are really on.
 - [ ] Wait for (or manually trigger) a Dependabot version-update PR;
