@@ -422,7 +422,7 @@ export class AppController {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text, style, format }),
-          signal: AbortSignal.timeout(format === 'mp3' ? 280_000 : 120_000),
+          signal: AbortSignal.timeout(format === 'mp3' ? 900_000 : 120_000),
         });
         if (!r.ok) throw new Error(`Kokoro: ${r.status}`);
         const buf = Buffer.from(await r.arrayBuffer());

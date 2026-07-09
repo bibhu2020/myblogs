@@ -1,23 +1,30 @@
 #!/usr/bin/env python3
 """
-Backfill narration mp3s for existing published posts and stories that don't have one
-yet (audioUrl is null) — e.g. content generated before the pre-rendered-audio pipeline
-existed. News items are not covered here: the news agent replaces its entire table on
-every run, so a stale item is never worth backfilling — just run the news agent again.
+Generate/correct narration mp3s for existing published posts, stories, and news items.
+
+Covers two cases per item:
+  - missing audio entirely (audioUrl is null) — generate fresh
+  - audio exists but was uploaded before the myblogs/audio path split and the
+    post_<id>/story_<id>/news_<id> deterministic-naming fix (i.e. its audioUrl still
+    points at myblogs/uploads/<random-uuid>.mp3) — regenerate under the correct path/
+    name and delete the old orphaned file
 
 For each item: synthesizes an mp3 via the deployed TTS service (POST /api/tts,
 format=mp3), uploads it to the media library named deterministically by content id
-(post_<id>.mp3 / story_<id>.mp3 — same convention the agents use going forward), and
-attaches the resulting URL via PUT /api/posts/:id or PUT /api/stories/:id.
+(post_<id>.mp3 / story_<id>.mp3 / news_<id>.mp3), and attaches the resulting URL
+(PUT /api/posts/:id, PUT /api/stories/:id, or PATCH /api/news/:id).
 
-Idempotent: items that already have an audioUrl are skipped, so this is safe to re-run.
-A failure on one item is logged and does not block the rest of the batch.
+Idempotent: items whose audioUrl already points at myblogs/audio are left alone, so
+this is safe to re-run. A failure on one item is logged and does not block the batch.
+Runs strictly sequentially — the deployed TTS service is a single worker with inference
+serialized behind an internal lock, so concurrency here only adds contention, not speed.
 
 Usage:
-  python3 -m scripts.backfill_narration_audio             # posts + stories
+  python3 -m scripts.backfill_narration_audio                  # posts + stories + news
   python3 -m scripts.backfill_narration_audio --posts-only
   python3 -m scripts.backfill_narration_audio --stories-only
-  python3 -m scripts.backfill_narration_audio --dry-run    # list what would run, do nothing
+  python3 -m scripts.backfill_narration_audio --news-only
+  python3 -m scripts.backfill_narration_audio --dry-run         # list what would run, do nothing
 """
 import argparse
 import os
@@ -34,7 +41,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from meridian_agents.auth import make_agent_jwt  # noqa: E402
 
 _TIMEOUT = 20
-_TTS_TIMEOUT = 280  # matches tts-service's own gunicorn timeout for a full-article synthesis
+_TTS_TIMEOUT = 900  # matches tts-service's own gunicorn timeout for a full-article synthesis
+_CORRECT_PATH_SEGMENT = "/myblogs/audio/"
 
 
 def _strip_html(html: str) -> str:
@@ -45,8 +53,16 @@ def _admin_headers() -> dict:
     return {"Authorization": f"Bearer {make_agent_jwt()}"}
 
 
-def _fetch_items(server_base: str, kind: str) -> list[dict]:
-    """kind: 'posts' or 'stories'."""
+def _needs_audio(item: dict) -> bool:
+    """True if this item has no audio yet, or its audio predates the myblogs/audio
+    path split and deterministic-naming fix (still sitting under myblogs/uploads)."""
+    url = item.get("audioUrl")
+    if not url:
+        return True
+    return _CORRECT_PATH_SEGMENT not in url
+
+
+def _fetch_posts_or_stories(server_base: str, kind: str) -> list[dict]:
     with httpx.Client(timeout=_TIMEOUT) as client:
         r = client.get(
             f"{server_base}/api/{kind}/admin",
@@ -56,6 +72,14 @@ def _fetch_items(server_base: str, kind: str) -> list[dict]:
         r.raise_for_status()
         data = r.json()
         return data.get(kind, data) if isinstance(data, dict) else data
+
+
+def _fetch_news(server_base: str) -> list[dict]:
+    with httpx.Client(timeout=_TIMEOUT) as client:
+        r = client.get(f"{server_base}/api/news")
+        r.raise_for_status()
+        data = r.json()
+        return data.get("items", data) if isinstance(data, dict) else data
 
 
 def _synthesize_mp3(server_base: str, text: str, style: str) -> bytes:
@@ -87,7 +111,7 @@ def _upload_mp3(server_base: str, mp3: bytes, filename: str, alt: str) -> str:
         return url
 
 
-def _attach_audio_url(server_base: str, kind: str, item_id: int, url: str) -> None:
+def _attach_audio_url_put(server_base: str, kind: str, item_id: int, url: str) -> None:
     with httpx.Client(timeout=_TIMEOUT) as client:
         r = client.put(
             f"{server_base}/api/{kind}/{item_id}",
@@ -97,20 +121,46 @@ def _attach_audio_url(server_base: str, kind: str, item_id: int, url: str) -> No
         r.raise_for_status()
 
 
-def _backfill_kind(server_base: str, kind: str, style: str, filename_prefix: str, dry_run: bool) -> tuple[int, int]:
-    items = _fetch_items(server_base, kind)
-    pending = [it for it in items if not it.get("audioUrl")]
-    print(f"\n{kind}: {len(items)} published, {len(pending)} missing audio")
+def _attach_audio_url_patch_news(server_base: str, item_id: int, url: str) -> None:
+    with httpx.Client(timeout=_TIMEOUT) as client:
+        r = client.patch(
+            f"{server_base}/api/news/{item_id}",
+            json={"audioUrl": url},
+            headers=_admin_headers(),
+        )
+        r.raise_for_status()
+
+
+def _delete_old_file(server_base: str, old_url: str) -> None:
+    old_filename = old_url.rsplit("/", 1)[-1]
+    try:
+        with httpx.Client(timeout=_TIMEOUT) as client:
+            r = client.delete(
+                f"{server_base}/api/media/by-filename/{old_filename}",
+                headers=_admin_headers(),
+            )
+            r.raise_for_status()
+            print(f"      cleaned up old file: {old_filename}")
+    except Exception as exc:
+        print(f"      could not delete old file {old_filename}: {exc}")
+
+
+def _backfill_posts_or_stories(server_base: str, kind: str, style: str, prefix: str, dry_run: bool) -> tuple[int, int]:
+    items = _fetch_posts_or_stories(server_base, kind)
+    pending = [it for it in items if _needs_audio(it)]
+    print(f"\n{kind}: {len(items)} published, {len(pending)} need (re)generation")
 
     if dry_run:
         for it in pending:
-            print(f"  [dry-run] would generate {filename_prefix}_{it['id']}.mp3 for \"{it.get('title', '')[:60]}\"")
+            reason = "missing" if not it.get("audioUrl") else "wrong path"
+            print(f"  [dry-run] {prefix}_{it['id']}.mp3 ({reason}) — \"{it.get('title', '')[:60]}\"")
         return 0, len(pending)
 
     succeeded = 0
     for it in pending:
         item_id = it["id"]
         title = it.get("title", "")[:60]
+        old_url = it.get("audioUrl")
         text = _strip_html(it.get("content", "")).strip()
         if not text:
             print(f"  ✗ #{item_id} \"{title}\" — no content to narrate, skipping")
@@ -118,10 +168,48 @@ def _backfill_kind(server_base: str, kind: str, style: str, filename_prefix: str
         try:
             print(f"  → #{item_id} \"{title}\" — synthesizing...")
             mp3 = _synthesize_mp3(server_base, text, style)
-            filename = f"{filename_prefix}_{item_id}"
-            url = _upload_mp3(server_base, mp3, filename, title or f"{filename_prefix} {item_id}")
-            _attach_audio_url(server_base, kind, item_id, url)
+            filename = f"{prefix}_{item_id}"
+            url = _upload_mp3(server_base, mp3, filename, title or f"{prefix} {item_id}")
+            _attach_audio_url_put(server_base, kind, item_id, url)
             print(f"  ✓ #{item_id} — {url}")
+            if old_url:
+                _delete_old_file(server_base, old_url)
+            succeeded += 1
+        except Exception as exc:
+            print(f"  ✗ #{item_id} \"{title}\" — failed: {exc}")
+
+    return succeeded, len(pending)
+
+
+def _backfill_news(server_base: str, dry_run: bool) -> tuple[int, int]:
+    items = _fetch_news(server_base)
+    pending = [it for it in items if _needs_audio(it)]
+    print(f"\nnews: {len(items)} items, {len(pending)} need (re)generation")
+
+    if dry_run:
+        for it in pending:
+            reason = "missing" if not it.get("audioUrl") else "wrong path"
+            print(f"  [dry-run] news_{it['id']}.mp3 ({reason}) — \"{it.get('title', '')[:60]}\"")
+        return 0, len(pending)
+
+    succeeded = 0
+    for it in pending:
+        item_id = it["id"]
+        title = it.get("title", "")[:60]
+        old_url = it.get("audioUrl")
+        text = f"{it.get('title', '')}. {it.get('summary', '')}".strip()
+        if not text or text == ".":
+            print(f"  ✗ #{item_id} \"{title}\" — no content to narrate, skipping")
+            continue
+        try:
+            print(f"  → #{item_id} \"{title}\" — synthesizing...")
+            mp3 = _synthesize_mp3(server_base, text, "news")
+            filename = f"news_{item_id}"
+            url = _upload_mp3(server_base, mp3, filename, title or f"news {item_id}")
+            _attach_audio_url_patch_news(server_base, item_id, url)
+            print(f"  ✓ #{item_id} — {url}")
+            if old_url:
+                _delete_old_file(server_base, old_url)
             succeeded += 1
         except Exception as exc:
             print(f"  ✗ #{item_id} \"{title}\" — failed: {exc}")
@@ -133,22 +221,27 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--posts-only", action="store_true")
     parser.add_argument("--stories-only", action="store_true")
+    parser.add_argument("--news-only", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
     server_base = os.getenv("SERVER_BASE", "https://mishrabp-meridian.hf.space")
     print(f"Target: {server_base}")
 
-    do_posts = not args.stories_only
-    do_stories = not args.posts_only
+    only_flags = (args.posts_only, args.stories_only, args.news_only)
+    run_all = not any(only_flags)
 
     total_ok, total_pending = 0, 0
-    if do_posts:
-        ok, pending = _backfill_kind(server_base, "posts", "blog", "post", args.dry_run)
+    if run_all or args.posts_only:
+        ok, pending = _backfill_posts_or_stories(server_base, "posts", "blog", "post", args.dry_run)
         total_ok += ok
         total_pending += pending
-    if do_stories:
-        ok, pending = _backfill_kind(server_base, "stories", "story", "story", args.dry_run)
+    if run_all or args.stories_only:
+        ok, pending = _backfill_posts_or_stories(server_base, "stories", "story", "story", args.dry_run)
+        total_ok += ok
+        total_pending += pending
+    if run_all or args.news_only:
+        ok, pending = _backfill_news(server_base, args.dry_run)
         total_ok += ok
         total_pending += pending
 

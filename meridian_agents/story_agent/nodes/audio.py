@@ -24,7 +24,7 @@ from ...observability import observe
 from ...post_agent.nodes.writer import strip_html
 from ..state import StoryAgentState
 
-_TTS_TIMEOUT = 280  # matches the api-gateway's mp3-branch AbortSignal timeout
+_TTS_TIMEOUT = 900  # matches the api-gateway's mp3-branch AbortSignal timeout
 
 
 def _upload_audio(buf: bytes, alt: str, server_base: str, filename: str | None = None) -> str:

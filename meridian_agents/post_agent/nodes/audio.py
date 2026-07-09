@@ -21,7 +21,7 @@ from ...auth import make_agent_jwt
 from ..state import AgentState
 from .writer import strip_html
 
-_TTS_TIMEOUT = 280  # matches the api-gateway's mp3-branch AbortSignal timeout
+_TTS_TIMEOUT = 900  # matches the api-gateway's mp3-branch AbortSignal timeout
 
 
 def _upload_audio(buf: bytes, alt: str, server_base: str, filename: str | None = None) -> str:
