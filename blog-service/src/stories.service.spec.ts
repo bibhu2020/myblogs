@@ -82,6 +82,13 @@ describe('StoriesService', () => {
         { search: '%fox%' },
       );
     });
+
+    it('filters by category when provided', async () => {
+      const qb = makeQb();
+      mockStoryRepo.createQueryBuilder.mockReturnValue(qb);
+      await service.findAll({ category: 'AI' });
+      expect(qb.andWhere).toHaveBeenCalledWith('story.category = :category', { category: 'AI' });
+    });
   });
 
   describe('findAllAdmin', () => {

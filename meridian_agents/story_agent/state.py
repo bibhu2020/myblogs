@@ -7,12 +7,12 @@ class StoryAgentState(TypedDict):
     server_base: str
     author_name: str
 
-    # Age group + theme selected by pick_theme step
-    age_group: str              # '2-7', '8-15', or '16+'
-    theme: str
-    genre: str
+    # Age group is now fixed (always "High School+") — kept for schema/API compatibility.
+    age_group: str
+    category: str                # AI | Robotics | Quantum
+    genre: str                   # Horror | Sci-Fi | Thriller
     premise: str
-    moral_lesson: str
+    moral_lesson: str            # repurposed: states the real concept the story teaches
 
     # Writing output
     story_title: str
@@ -24,6 +24,9 @@ class StoryAgentState(TypedDict):
     # Image processing output
     featured_image_url: Optional[str]
     final_content: str          # HTML with placeholders resolved
+
+    # Audio processing output
+    audio_url: Optional[str]
 
     # Saved result
     pending_story_id: Optional[int]

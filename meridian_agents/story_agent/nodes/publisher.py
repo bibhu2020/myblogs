@@ -22,11 +22,14 @@ def save_pending_node(state: StoryAgentState) -> dict:
         "status": "pending",
         "authorName": state.get("author_name", "Meridian Storyteller"),
         "genre": state.get("genre", ""),
-        "ageGroup": state.get("age_group", "8-15"),
+        "category": state.get("category", ""),
+        "ageGroup": state.get("age_group", "High School+"),
         "moralLesson": state.get("moral_lesson", ""),
     }
     if state.get("featured_image_url"):
         payload["featuredImage"] = state["featured_image_url"]
+    if state.get("audio_url"):
+        payload["audioUrl"] = state["audio_url"]
 
     with httpx.Client(timeout=30) as client:
         r = client.post(

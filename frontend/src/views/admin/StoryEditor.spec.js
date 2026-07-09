@@ -46,7 +46,7 @@ describe('StoryEditor', () => {
         stories: [{
           id: 5, title: 'Existing Story', slug: 'existing-story', excerpt: 'e',
           content: '<p>Body</p>', featuredImage: '', status: 'draft',
-          genre: 'Adventure', ageGroup: '8-15', moralLesson: '',
+          category: 'AI', genre: 'Sci-Fi', ageGroup: 'High School+', moralLesson: '',
         }],
       },
     })
@@ -59,5 +59,15 @@ describe('StoryEditor', () => {
     const wrapper = await mountAt('/admin/stories/new')
     await wrapper.find('input[type="text"]').setValue('My New Story')
     expect(wrapper.find('input[type="text"]').element.value).toBe('My New Story')
+  })
+
+  it('offers Category and Genre selects but no free-text age-group input', async () => {
+    const wrapper = await mountAt('/admin/stories/new')
+    const selects = wrapper.findAll('select')
+    const categorySelect = selects.find(s => s.findAll('option').some(o => o.text() === 'Robotics'))
+    const genreSelect = selects.find(s => s.findAll('option').some(o => o.text() === 'Horror'))
+    expect(categorySelect).toBeTruthy()
+    expect(genreSelect).toBeTruthy()
+    expect(wrapper.text()).not.toContain('Age Group')
   })
 })

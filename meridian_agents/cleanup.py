@@ -19,7 +19,7 @@ _TIMEOUT = 20
 # The post agent's fixed taxonomy — these categories are never auto-deleted even
 # if they're temporarily empty. Any other category is a leftover that should be
 # swept once its last post has aged out.
-FIXED_CATEGORY_SLUGS = {"technology", "education", "travel", "history"}
+FIXED_CATEGORY_SLUGS = {"technology", "educational", "history"}
 
 
 def _admin_token(server_base: str) -> str:
@@ -47,12 +47,16 @@ def _uploads_filename(url: str | None) -> str | None:
 
 def _all_upload_filenames(item: dict, image_field: str = "featuredImage") -> list[str]:
     """Every /uploads/<filename> a post, story, or news item references — its hero
-    image field plus every inline image embedded in HTML body content — so a
-    deleted item never leaves orphaned files behind in the media library."""
+    image field, its pre-rendered narration mp3 (if any), plus every inline image
+    embedded in HTML body content — so a deleted item never leaves orphaned files
+    behind in the media library."""
     filenames: list[str] = []
     hero = _uploads_filename(item.get(image_field))
     if hero:
         filenames.append(hero)
+    audio = _uploads_filename(item.get("audioUrl"))
+    if audio:
+        filenames.append(audio)
     content = item.get("content") or ""
     filenames.extend(m.group(1) for m in re.finditer(r"/uploads/([^\"'?#\s]+)", content))
     return list(dict.fromkeys(filenames))  # de-duplicate, preserve order
@@ -348,6 +352,9 @@ def cleanup_old_stories(
             stories = data.get("stories", data) if isinstance(data, dict) else data
 
             for story in stories:
+                if story.get("doNotDelete"):
+                    continue
+
                 status = story.get("status", "")
                 if status != "published":
                     continue

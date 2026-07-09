@@ -24,46 +24,25 @@ _HEADERS = {
     "Accept-Language": "en-US,en;q=0.5",
 }
 
-# Per-region list of direct RSS feeds (real URLs, no Google wrappers)
+# Per-topic list of direct RSS feeds (real URLs, no Google wrappers)
 _REGION_FEEDS: dict[str, list[tuple[str, str]]] = {
-    "world": [
-        ("BBC World",   "https://feeds.bbci.co.uk/news/world/rss.xml"),
-        ("CNN",         "http://rss.cnn.com/rss/edition.rss"),
-        ("The Guardian","https://www.theguardian.com/world/rss"),
-        ("Al Jazeera",  "https://www.aljazeera.com/xml/rss/all.xml"),
-    ],
-    "usa": [
-        ("BBC US & Canada", "https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml"),
-        ("CNN",             "http://rss.cnn.com/rss/edition_us.rss"),
-        ("NPR",             "https://feeds.npr.org/1001/rss.xml"),
-    ],
-    "india": [
-        ("NDTV",       "https://feeds.feedburner.com/ndtvnews-india-news"),
-        ("Times of India", "https://timesofindia.indiatimes.com/rssfeedstopstories.cms"),
-        ("The Hindu",  "https://www.thehindu.com/news/national/feeder/default.rss"),
-    ],
-    "odisha": [
-        ("OTV",        "https://odishatv.in/feed"),
-        ("Pragativadi","https://pragativadi.com/feed"),
-        ("The Hindu Odisha", "https://www.thehindu.com/news/national/other-states/feeder/default.rss"),
-    ],
     "ai": [
         ("TechCrunch AI",        "https://techcrunch.com/category/artificial-intelligence/feed/"),
         ("The Verge AI",         "https://www.theverge.com/ai-artificial-intelligence/rss/index.xml"),
         ("MIT Technology Review","https://www.technologyreview.com/feed/"),
         ("VentureBeat AI",       "https://venturebeat.com/category/ai/feed/"),
     ],
-    "finance": [
-        ("Reuters Business",  "https://feeds.reuters.com/reuters/businessNews"),
-        ("CNBC Finance",      "https://www.cnbc.com/id/10001147/device/rss/rss.html"),
-        ("MarketWatch",       "https://feeds.content.dowjones.io/public/rss/mw_realtimeheadlines"),
-        ("Financial Times",   "https://www.ft.com/rss/home"),
+    "quantum": [
+        ("Quanta Magazine",     "https://www.quantamagazine.org/feed/"),
+        ("The Quantum Insider", "https://thequantuminsider.com/feed/"),
+        ("Phys.org Quantum Physics", "https://phys.org/rss-feed/physics-news/quantum-physics/"),
+        ("Ars Technica Science","https://arstechnica.com/science/feed/"),
     ],
-    "sports": [
-        ("BBC Sport",         "https://feeds.bbci.co.uk/sport/rss.xml"),
-        ("The Guardian Sport","https://www.theguardian.com/sport/rss"),
-        ("Sky Sports",        "https://www.skysports.com/rss/12040"),
-        ("ESPN",              "https://www.espn.com/espn/rss/news"),
+    "jobmarket": [
+        ("Reuters Business", "https://feeds.reuters.com/reuters/businessNews"),
+        ("BBC Business",     "https://feeds.bbci.co.uk/news/business/rss.xml"),
+        ("NPR Business",     "https://feeds.npr.org/1006/rss.xml"),
+        ("CNBC Economy",     "https://www.cnbc.com/id/20910258/device/rss/rss.html"),
     ],
 }
 
@@ -355,21 +334,86 @@ def _enhance_all_images(items: list[dict]) -> list[dict]:
     return result
 
 
+# ── Narration audio pipeline ──────────────────────────────────────────────────
+
+def _synthesize_and_upload_audio(idx_item: tuple[int, dict]) -> tuple[int, str | None]:
+    """Synthesize a pre-rendered mp3 for one news item's title + summary and upload it
+    to the media library. Returns (idx, url) or (idx, None) on failure — a failure here
+    never blocks the item from being published, it just publishes without narration."""
+    idx, item = idx_item
+    server_base = os.getenv("SERVER_BASE", "http://localhost:3000")
+    text = f"{item.get('title', '')}. {item.get('summary', '')}".strip()
+    if not text or text == ".":
+        return idx, None
+
+    try:
+        res = requests.post(
+            f"{server_base}/api/tts",
+            json={"text": text, "style": "news", "format": "mp3"},
+            timeout=280,
+        )
+        res.raise_for_status()
+        mp3 = res.content
+        if len(mp3) < 1024:
+            raise RuntimeError("synthesis produced no audio")
+
+        jwt = make_agent_jwt(name="News Agent", email="news-agent@meridian.internal")
+        files = {"file": (f"news-{idx}.mp3", BytesIO(mp3), "audio/mpeg")}
+        up = requests.post(
+            f"{server_base}/api/media/upload",
+            headers={"Authorization": f"Bearer {jwt}"},
+            files=files,
+            data={"alt": item.get("title", "news narration")[:200]},
+            timeout=60,
+        )
+        return idx, (up.json().get("url") if up.ok else None)
+    except Exception as exc:
+        print(f"      ✗ narration failed for item {idx}: {exc}")
+        return idx, None
+
+
+def _generate_all_audio(items: list[dict]) -> list[dict]:
+    """Synthesize and upload a numbered (0-9) narration mp3 for every news item, and
+    stamp each item with its sortOrder — the deterministic curation/playback order.
+
+    max_workers=3 (lower than _enhance_all_images' 5): TTS synthesis is heavier than an
+    image fetch and tts-service serializes actual inference behind an internal per-voice
+    lock regardless, so client-side concurrency here only overlaps network/upload time.
+    """
+    if not items:
+        return items
+
+    print(f"   🔊 Synthesizing {len(items)} narration mp3(s)…")
+    result = [dict(it) for it in items]
+    for i, it in enumerate(result):
+        it["sortOrder"] = i
+
+    with ThreadPoolExecutor(max_workers=min(len(result), 3)) as pool:
+        futures = {pool.submit(_synthesize_and_upload_audio, (i, result[i])): i for i in range(len(result))}
+        for f in as_completed(futures):
+            idx, url = f.result()
+            title = result[idx].get("title", "")[:55]
+            result[idx]["audioUrl"] = url
+            print(f"      {'✓' if url else '✗'} news-{idx}.mp3  {title}")
+
+    return result
+
+
 # ── Save tool (called by the agent) ──────────────────────────────────────────
 
 @function_tool
 def save_news(items_json: str) -> str:
     """Save the final curated list of news items to the Meridian platform.
 
-    Images missing from RSS feeds are fetched automatically from each
-    article's source page before saving.
+    Images missing from RSS feeds are fetched automatically from each article's source
+    page, and a numbered (0-9) narration mp3 is synthesized for every item, before saving.
 
     Args:
-        items_json: JSON array of exactly 16 news items. Each item must have:
+        items_json: JSON array of exactly 10 news items. Each item must have:
             - title (str): Headline
             - summary (str): ~100-word neutral journalistic summary
             - sourceUrl (str): Direct article URL (from the search results)
-            - region (str): 'world' | 'usa' | 'india' | 'odisha' | 'ai' | 'finance' | 'sports'
+            - region (str): 'ai' | 'quantum' | 'jobmarket'
             - imageUrl (str | null): Image URL from the search result, or null
             - sourceName (str): Publication name
             - publishedAt (str | null): date field from the search result
@@ -380,9 +424,11 @@ def save_news(items_json: str) -> str:
     try:
         items = json.loads(items_json)
         items = _enhance_all_images(items)
+        items = _generate_all_audio(items)
         result = _save(items)
-        got = sum(1 for it in items if it.get("imageUrl"))
-        print(f"   💾  Saved {len(items)} items ({got} with thumbnail)")
+        got_img = sum(1 for it in items if it.get("imageUrl"))
+        got_audio = sum(1 for it in items if it.get("audioUrl"))
+        print(f"   💾  Saved {len(items)} items ({got_img} with thumbnail, {got_audio} with narration)")
         return json.dumps(result)
     except Exception as exc:
         return json.dumps({"error": str(exc)})

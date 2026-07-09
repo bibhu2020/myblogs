@@ -12,313 +12,98 @@ const route = useRoute()
 const story = ref(null)
 const error = ref(null)
 
-const GENRE_ICONS = {
-  'AI & Machine Learning': '🤖',
-  'Quantum Adventure':     '⚛️',
-  'Relativity & Spacetime':'🌌',
-  'Indian Mythology':      '🙏',
-}
+const CATEGORY_ICONS = { AI: '🤖', Robotics: '🦾', Quantum: '⚛️' }
+const GENRE_ICONS = { Horror: '🕯️', 'Sci-Fi': '🚀', Thriller: '🔪' }
 
-// ── TTS player ────────────────────────────────────────────────────────────────
-const ttsState       = ref('idle')   // idle | loading | playing | paused | error
-const ttsProgress    = ref(0)        // 0–1 across all chunks
-const ttsChunkIdx    = ref(0)
-const ttsTotalChunks = ref(0)
+// ── Narration player — plays the pre-rendered mp3 (generated at publish time and
+// stored in the media library) via a plain <audio> element. No live per-chunk
+// synthesis: the browser streams and buffers the static file itself, so playback
+// starts fast and never stalls mid-story.
+const ttsState    = ref('idle')   // idle | loading | playing | paused | error | unavailable
+const ttsProgress = ref(0)        // 0–1, driven by the <audio> element's native events
+const ttsCurrentTime = ref(0)
+const ttsDuration    = ref(0)
 const ttsError       = ref('')
 const playerOpen     = ref(false)
+const audioEl        = ref(null)
 
 const { acquireWakeLock, releaseWakeLock } = useWakeLock()
 watch(ttsState, v => v === 'playing' ? acquireWakeLock() : releaseWakeLock())
 
-let sessionId             = 0
-let audioCtx              = null
-let nextStartAt           = 0
-let highlightTimers       = []
-let rafId                 = null
-let chunkStartTimes       = []
-let chunkDurations        = []
-let chunkFetches          = []
-let chunkTexts            = []
-let chunkElements         = []
-let lastHighlightedEl     = null
-let speculativeTitleFetch = null
-
-function buildChunksWithDOM(contentSelector, title, maxLen = 300) {
-  const chunks = []
-  const elements = []
-
-  if (title) { chunks.push(title); elements.push(null) }
-
-  const contentEl = document.querySelector(contentSelector)
-  if (!contentEl) return { chunks, elements }
-
-  const nodes = contentEl.querySelectorAll('p, h2, h3, h4, blockquote, li')
-  let accText = ''
-  let accEl = null
-
-  function flush() {
-    if (accText) { chunks.push(accText); elements.push(accEl); accText = ''; accEl = null }
-  }
-  function addSplit(text, el) {
-    let rem = text
-    while (rem.length > 0) {
-      if (rem.length <= maxLen) { chunks.push(rem); elements.push(el); break }
-      let cut = rem.lastIndexOf('. ', maxLen)
-      if (cut < maxLen * 0.4) cut = rem.lastIndexOf(' ', maxLen)
-      if (cut < 0) cut = maxLen; else cut += 1
-      chunks.push(rem.slice(0, cut).trim()); elements.push(el)
-      rem = rem.slice(cut).trim()
-    }
-  }
-
-  for (const node of nodes) {
-    const text = (node.textContent || '').trim()
-    if (!text) continue
-    if (!accText) {
-      if (text.length > maxLen) { addSplit(text, node) }
-      else { accText = text; accEl = node }
-    } else if (accText.length + 1 + text.length <= maxLen) {
-      accText += ' ' + text
-    } else {
-      flush()
-      if (text.length > maxLen) { addSplit(text, node) }
-      else { accText = text; accEl = node }
-    }
-  }
-  flush()
-  return { chunks, elements }
+function formatTime(sec) {
+  if (!Number.isFinite(sec) || sec < 0) return '0:00'
+  const m = Math.floor(sec / 60)
+  const s = Math.floor(sec % 60)
+  return `${m}:${String(s).padStart(2, '0')}`
 }
 
-function clearHighlight() {
-  if (lastHighlightedEl) {
-    lastHighlightedEl.style.removeProperty('background-color')
-    lastHighlightedEl.style.removeProperty('border-radius')
-    lastHighlightedEl.style.removeProperty('transition')
-    lastHighlightedEl = null
-  }
-}
-
-function highlightChunk(i) {
-  clearHighlight()
-  const el = chunkElements[i]
-  if (!el) return
-  el.style.backgroundColor = 'rgba(79, 70, 229, 0.10)'
-  el.style.borderRadius = '4px'
-  el.style.transition = 'background-color 0.35s ease'
-  lastHighlightedEl = el
-  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-}
-
-function fetchOneChunk(text) {
-  return api.post('/tts', { text, style: 'story' }, { responseType: 'blob', timeout: 90_000 })
-    .then(r => r.data)
-    .catch(e => ({ _ttsError: e?.response?.data?.message || e?.message || 'TTS unavailable' }))
-}
-
-function ensureAudioCtx() {
-  if (!audioCtx || audioCtx.state === 'closed') {
-    audioCtx = new AudioContext()
-    nextStartAt = audioCtx.currentTime
-  }
-  return audioCtx
-}
-
-function _clearTimers() {
-  highlightTimers.forEach(id => clearTimeout(id))
-  highlightTimers = []
-}
-
-function _stopRaf() {
-  if (rafId) { cancelAnimationFrame(rafId); rafId = null }
-}
-
-function _startRaf() {
-  _stopRaf()
-  function tick() {
-    const ctx = audioCtx
-    if (!ctx || ctx.state === 'closed') return
-    const now = ctx.currentTime
-    for (let j = 0; j < chunkStartTimes.length; j++) {
-      const st  = chunkStartTimes[j]
-      const dur = chunkDurations[j]
-      if (st !== undefined && dur && now >= st && now < st + dur) {
-        ttsProgress.value = (j + (now - st) / dur) / ttsTotalChunks.value
-        break
-      }
-    }
-    rafId = requestAnimationFrame(tick)
-  }
-  rafId = requestAnimationFrame(tick)
-}
-
-async function _decodeAndSchedule(blob, i) {
-  const ctx = audioCtx
-  try {
-    const arrayBuf = await blob.arrayBuffer()
-    const audioBuf = await ctx.decodeAudioData(arrayBuf)
-    const source = ctx.createBufferSource()
-    source.buffer = audioBuf
-    source.connect(ctx.destination)
-    const startAt = Math.max(ctx.currentTime + 0.02, nextStartAt)
-    source.start(startAt)
-    nextStartAt = startAt + audioBuf.duration
-    chunkStartTimes[i] = startAt
-    chunkDurations[i]  = audioBuf.duration
-    const ms = Math.max(0, (startAt - ctx.currentTime) * 1000)
-    highlightTimers.push(setTimeout(() => highlightChunk(i), ms))
-    return source
-  } catch { return null }
-}
-
-async function runFrom(startIdx, session) {
-  for (let i = startIdx; i < ttsTotalChunks.value; i++) {
-    if (session !== sessionId) return
-    ttsChunkIdx.value = i
-    if (i === startIdx) ttsState.value = 'loading'
-
-    if (!chunkFetches[i]) chunkFetches[i] = fetchOneChunk(chunkTexts[i])
-    for (let p = 1; p <= 4; p++) {
-      const ahead = i + p
-      if (ahead < ttsTotalChunks.value && !chunkFetches[ahead])
-        chunkFetches[ahead] = fetchOneChunk(chunkTexts[ahead])
-    }
-    const result = await chunkFetches[i]
-    if (session !== sessionId) return
-    if (!result || result._ttsError) {
-      clearHighlight()
-      ttsState.value = 'error'
-      ttsError.value = result?._ttsError || 'TTS unavailable'
-      return
-    }
-    const source = await _decodeAndSchedule(result, i)
-    if (session !== sessionId) return
-    if (!source) {
-      clearHighlight()
-      ttsState.value = 'error'
-      ttsError.value = 'Audio decode failed'
-      return
-    }
-    if (i === startIdx) { ttsState.value = 'playing'; _startRaf() }
-    await new Promise(resolve => {
-      source.onended = resolve
-      const watchdog = setInterval(() => {
-        if (session !== sessionId || !audioCtx || audioCtx.state === 'closed') {
-          clearInterval(watchdog)
-          resolve(null)
-        }
-      }, 200)
-      source.addEventListener('ended', () => clearInterval(watchdog), { once: true })
-    })
-    if (session !== sessionId) return
-  }
-  clearHighlight()
-  _stopRaf()
-  _clearTimers()
-  ttsState.value = 'idle'
-  ttsProgress.value = 0
-  ttsChunkIdx.value = 0
-}
-
-async function openPlayer() {
+function openPlayer() {
   playerOpen.value = true
   ttsError.value = ''
-  if (ttsState.value !== 'idle' && ttsState.value !== 'error') return
-  ttsState.value = 'idle'
-  ensureAudioCtx()
-
-  await nextTick()
-  const { chunks, elements } = buildChunksWithDOM('.story-content', story.value.title, 200)
-  if (!chunks.length) return
-
-  chunkTexts = chunks
-  chunkElements = elements
-  ttsTotalChunks.value = chunks.length
-  ttsProgress.value = 0
-  ttsChunkIdx.value = 0
-  chunkFetches = new Array(chunks.length).fill(null)
-  nextStartAt = audioCtx.currentTime + 0.05
-  chunkStartTimes = []
-  chunkDurations = []
-  _clearTimers()
-
-  if (speculativeTitleFetch && chunks[0] === story.value.title) {
-    chunkFetches[0] = speculativeTitleFetch
-  }
-  speculativeTitleFetch = null
-  for (let k = 0; k < Math.min(4, chunks.length); k++)
-    if (!chunkFetches[k]) chunkFetches[k] = fetchOneChunk(chunkTexts[k])
-
+  if (!story.value?.audioUrl) { ttsState.value = 'unavailable'; return }
+  if (ttsState.value === 'playing' || ttsState.value === 'paused') return
   ttsState.value = 'loading'
-  const session = ++sessionId
-  await runFrom(0, session)
+  audioEl.value?.play().catch(() => {
+    ttsState.value = 'error'
+    ttsError.value = 'Playback failed'
+  })
 }
 
 function togglePlayPause() {
-  if (!audioCtx) return
-  if (ttsState.value === 'playing') { audioCtx.suspend(); ttsState.value = 'paused' }
-  else if (ttsState.value === 'paused') { audioCtx.resume(); ttsState.value = 'playing' }
+  if (!audioEl.value) return
+  if (ttsState.value === 'playing') audioEl.value.pause()
+  else if (ttsState.value === 'paused') audioEl.value.play()
 }
 
 function stopPlayback() {
-  sessionId++
-  _clearTimers()
-  _stopRaf()
-  clearHighlight()
-  if (audioCtx) { audioCtx.close(); audioCtx = null }
-  nextStartAt = 0; chunkStartTimes = []; chunkDurations = []
+  if (!audioEl.value) return
+  audioEl.value.pause()
+  audioEl.value.currentTime = 0
   ttsState.value = 'idle'
   ttsProgress.value = 0
-  ttsChunkIdx.value = 0
+  ttsCurrentTime.value = 0
 }
 
-async function seekTo(fraction) {
-  if (!ttsTotalChunks.value || !chunkTexts.length) return
-  const target = Math.max(0, Math.min(Math.floor(fraction * ttsTotalChunks.value), ttsTotalChunks.value - 1))
-  _clearTimers()
-  _stopRaf()
-  clearHighlight()
-  if (audioCtx) { audioCtx.close(); audioCtx = null }
-  nextStartAt = 0; chunkStartTimes = []; chunkDurations = []
-  ttsProgress.value = target / ttsTotalChunks.value
-  ttsChunkIdx.value = target
-  ttsState.value = 'loading'
-  ensureAudioCtx()
-  const session = ++sessionId
-  await new Promise(r => setTimeout(r, 0))
-  if (session !== sessionId) return
-  await runFrom(target, session)
+function seekTo(fraction) {
+  if (!audioEl.value || !ttsDuration.value) return
+  audioEl.value.currentTime = fraction * ttsDuration.value
 }
 
 function closePlayer() {
-  sessionId++
-  _clearTimers()
-  _stopRaf()
-  clearHighlight()
-  if (audioCtx) { audioCtx.close(); audioCtx = null }
-  nextStartAt = 0
-  chunkFetches = []; chunkTexts = []; chunkElements = []
-  chunkStartTimes = []; chunkDurations = []
-  ttsTotalChunks.value = 0
-  ttsState.value = 'idle'
-  ttsProgress.value = 0
-  ttsChunkIdx.value = 0
+  stopPlayback()
   playerOpen.value = false
 }
-// ── end TTS ───────────────────────────────────────────────────────────────────
+
+// Native <audio> element event handlers
+function onAudioTimeUpdate() {
+  if (!audioEl.value) return
+  ttsCurrentTime.value = audioEl.value.currentTime
+  if (ttsDuration.value) ttsProgress.value = ttsCurrentTime.value / ttsDuration.value
+}
+function onAudioLoadedMetadata() {
+  ttsDuration.value = audioEl.value?.duration || 0
+}
+function onAudioPlay() { ttsState.value = 'playing' }
+function onAudioPause() { if (ttsState.value !== 'idle') ttsState.value = 'paused' }
+function onAudioEnded() {
+  ttsState.value = 'idle'
+  ttsProgress.value = 0
+  ttsCurrentTime.value = 0
+}
+function onAudioWaiting() { if (ttsState.value !== 'idle') ttsState.value = 'loading' }
+function onAudioError() {
+  ttsState.value = 'error'
+  ttsError.value = 'Audio unavailable'
+}
 
 onUnmounted(() => {
-  sessionId++
-  _clearTimers()
-  _stopRaf()
-  if (audioCtx) { audioCtx.close(); audioCtx = null }
-  speculativeTitleFetch = null
+  audioEl.value?.pause()
 })
 
 onMounted(async () => {
   try {
     const res = await api.get(`/stories/${route.params.slug}`)
     story.value = res.data
-    if (story.value?.title) speculativeTitleFetch = fetchOneChunk(story.value.title)
     await nextTick()
     const codeBlocks = document.querySelectorAll('.story-content pre code')
     if (codeBlocks.length) {
@@ -365,16 +150,19 @@ onMounted(async () => {
         <span class="text-gray-600 truncate max-w-xs">{{ story.title }}</span>
       </nav>
 
-      <!-- Genre + age + read-time badges -->
+      <!-- Category + genre + age + read-time badges -->
       <div class="flex items-center gap-3 mb-4 flex-wrap">
-        <span v-if="story.genre" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold bg-indigo-100 text-indigo-700">
+        <span v-if="story.category" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold bg-indigo-100 text-indigo-700">
+          {{ CATEGORY_ICONS[story.category] || '📖' }} {{ story.category }}
+        </span>
+        <span v-if="story.genre" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold bg-violet-100 text-violet-700">
           {{ GENRE_ICONS[story.genre] || '📖' }} {{ story.genre }}
         </span>
         <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold bg-pink-100 text-pink-700">
-          👦👧 Ages {{ story.ageGroup || '8–15' }}
+          🎓 {{ story.ageGroup || 'High School+' }}
         </span>
         <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold bg-amber-100 text-amber-700">
-          ⏱ {{ story.readTime || '20' }} min read
+          ⏱ {{ story.readTime || '7' }} min read
         </span>
       </div>
 
@@ -443,6 +231,14 @@ onMounted(async () => {
       </div>
     </article>
 
+    <!-- Pre-rendered narration audio — a plain static file, so the browser handles
+         streaming/buffering itself; no manual chunk fetch/decode needed. -->
+    <audio v-if="story?.audioUrl" ref="audioEl" :src="story.audioUrl" preload="none"
+      class="hidden"
+      @timeupdate="onAudioTimeUpdate" @loadedmetadata="onAudioLoadedMetadata"
+      @play="onAudioPlay" @pause="onAudioPause" @ended="onAudioEnded"
+      @waiting="onAudioWaiting" @error="onAudioError"></audio>
+
     <!-- Mobile TTS fixed bottom bar -->
     <Teleport to="body">
       <div v-if="playerOpen && story" class="sm:hidden fixed bottom-0 left-0 right-0 z-50 shadow-2xl bg-white border-t border-indigo-100">
@@ -454,12 +250,15 @@ onMounted(async () => {
                 :style="ttsState === 'playing' ? `animation-delay:${i * 80}ms` : ''"></span>
             </div>
             <p class="text-xs font-semibold text-gray-800 truncate flex-1">{{ story.title }}</p>
-            <span v-if="ttsTotalChunks" class="text-xs text-gray-500 flex-shrink-0">{{ ttsChunkIdx + 1 }}/{{ ttsTotalChunks }}</span>
+            <span v-if="ttsDuration" class="text-xs text-gray-500 flex-shrink-0">{{ formatTime(ttsCurrentTime) }} / {{ formatTime(ttsDuration) }}</span>
             <button @click="closePlayer" class="flex-shrink-0 ml-2 text-gray-400 hover:text-gray-600" title="Close">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
           </div>
-          <div v-if="ttsState === 'error'" class="flex items-center gap-2 mt-1">
+          <div v-if="ttsState === 'unavailable'" class="text-xs text-gray-500">
+            Audio unavailable for this story.
+          </div>
+          <div v-else-if="ttsState === 'error'" class="flex items-center gap-2 mt-1">
             <span class="text-xs text-red-600 flex-1">Audio unavailable — {{ ttsError }}</span>
             <button @click="openPlayer" class="text-xs text-indigo-600 underline flex-shrink-0">Retry</button>
           </div>
@@ -529,8 +328,12 @@ onMounted(async () => {
                 :style="ttsState === 'playing' ? `animation-delay:${i * 60}ms` : ''"></span>
             </div>
 
+            <!-- Unavailable state -->
+            <div v-if="ttsState === 'unavailable'" class="text-center">
+              <p class="text-xs text-gray-500">Audio unavailable for this story.</p>
+            </div>
             <!-- Error state -->
-            <div v-if="ttsState === 'error'" class="text-center">
+            <div v-else-if="ttsState === 'error'" class="text-center">
               <p class="text-xs text-red-500 mb-2">{{ ttsError }}</p>
               <button @click="openPlayer" class="text-xs text-indigo-600 underline">Retry</button>
             </div>
@@ -543,7 +346,7 @@ onMounted(async () => {
                 class="tts-slider w-full"
                 @change="seekTo($event.target.value / 100)" />
               <div class="flex justify-between mt-1.5 text-xs text-gray-500">
-                <span v-if="ttsTotalChunks">Segment {{ ttsChunkIdx + 1 }} / {{ ttsTotalChunks }}</span>
+                <span v-if="ttsDuration">{{ formatTime(ttsCurrentTime) }} / {{ formatTime(ttsDuration) }}</span>
                 <span v-else>—</span>
                 <span>{{ Math.round(ttsProgress * 100) }}%</span>
               </div>

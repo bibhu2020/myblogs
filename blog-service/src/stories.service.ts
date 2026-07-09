@@ -13,12 +13,13 @@ export class StoriesService {
   ) {}
 
   async findAll(query: any = {}) {
-    const { genre, search, page = 1, limit = 12 } = query;
+    const { genre, category, search, page = 1, limit = 12 } = query;
     const qb = this.storyRepo.createQueryBuilder('story')
       .where('story.status = :status', { status: StoryStatus.PUBLISHED })
       .orderBy('story.createdAt', 'DESC');
 
     if (genre) qb.andWhere('story.genre = :genre', { genre });
+    if (category) qb.andWhere('story.category = :category', { category });
     if (search) qb.andWhere(
       '(story.title ILIKE :search OR story.excerpt ILIKE :search OR story.content ILIKE :search)',
       { search: `%${search}%` },

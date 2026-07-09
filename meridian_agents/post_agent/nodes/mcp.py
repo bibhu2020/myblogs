@@ -95,7 +95,7 @@ def ensure_author_node(state: AgentState) -> dict:
 
 
 def _create_category(server_base: str, name: str) -> dict | None:
-    """Create a missing fixed category (Technology/Education/Travel/History) via a direct
+    """Create a missing fixed category (Technology/Educational/History) via a direct
     REST call, self-signing an admin JWT — no MCP tool exists for category creation."""
     try:
         jwt = make_agent_jwt()
@@ -122,8 +122,8 @@ def pick_taxonomy_node(state: AgentState) -> dict:
     tags = _parse_mcp_items(raw_tags)
 
     # ── Category matching ─────────────────────────────────────────────────────
-    # category_name is one of the 4 fixed categories (Technology/Education/Travel/
-    # History) — match it exactly first, creating it if it doesn't exist yet, rather
+    # category_name is one of the 3 fixed categories (Technology/Educational/History) —
+    # match it exactly first, creating it if it doesn't exist yet, rather
     # than fuzzy-matching keywords against whatever happens to be in the DB.
     category_id = None
     matched_cat = None
@@ -225,6 +225,15 @@ def save_pending_node(state: AgentState) -> dict:
         args["tag_ids"] = state["tag_ids"]
     if state.get("featured_image_url"):
         args["featured_image"] = state["featured_image_url"]
+    if state.get("audio_url"):
+        args["audio_url"] = state["audio_url"]
+    # resolve_curriculum_node stashes series_key/series_index on EVERY run (it doesn't yet
+    # know which category the weighted pick will land on) — only persist them onto the post
+    # when this run's post actually is Educational, so Technology/History posts never get a
+    # stray series tag.
+    if state.get("category_name") == "Educational" and state.get("series_key") is not None:
+        args["series_key"] = state["series_key"]
+        args["series_index"] = state["series_index"]
 
     raw = mcp_call("create_blog", args)
     slug, post_id = _extract_slug_id(raw)

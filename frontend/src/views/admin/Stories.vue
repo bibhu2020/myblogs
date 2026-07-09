@@ -173,7 +173,10 @@ const pendingCount = computed(() => stats.value.pending || 0)
               </div>
             </td>
             <td class="px-6 py-4 hidden sm:table-cell">
-              <span v-if="story.genre" class="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">{{ story.genre }}</span>
+              <div class="flex flex-wrap gap-1">
+                <span v-if="story.category" class="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{{ story.category }}</span>
+                <span v-if="story.genre" class="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">{{ story.genre }}</span>
+              </div>
             </td>
             <td class="px-6 py-4 hidden md:table-cell">
               <span v-if="story.status === 'pending'" class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 inline-flex items-center gap-1">⏸ Pending</span>

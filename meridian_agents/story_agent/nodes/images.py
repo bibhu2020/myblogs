@@ -1,4 +1,4 @@
-"""Image generation for story illustrations — children's book watercolour style."""
+"""Image generation for story illustrations — genre-matched mature digital art style."""
 import os
 import re
 import time
@@ -6,22 +6,36 @@ import time
 from ...observability import observe
 from ...post_agent.nodes.images import _generate_image, _upload_image
 
-# Prefix injected before every illustration prompt to enforce child-friendly art style
-_STYLE_PREFIX = (
-    "Children's book watercolour illustration, warm and vibrant colours, "
-    "friendly and whimsical style, safe for all ages, detailed storybook art: "
-)
+# Prefix injected before every illustration prompt — matches the story's genre so the
+# art style reinforces the mood (dark/ominous for Horror, clean/futuristic for Sci-Fi,
+# high-contrast/moody for Thriller).
+_STYLE_PREFIXES = {
+    "Horror": (
+        "Dark, atmospheric digital illustration, ominous lighting, unsettling mood, "
+        "high detail, cinematic horror art style: "
+    ),
+    "Sci-Fi": (
+        "Clean, cinematic science-fiction digital illustration, futuristic technology, "
+        "dramatic lighting, high detail, photorealistic sci-fi concept art style: "
+    ),
+    "Thriller": (
+        "High-contrast, tense cinematic digital illustration, dramatic shadows, moody "
+        "colour grading, high detail, psychological-thriller film-still style: "
+    ),
+}
+_DEFAULT_STYLE_PREFIX = _STYLE_PREFIXES["Thriller"]
 
 
 @observe(name="generate_story_images")
 def generate_story_images_node(state: dict) -> dict:
     server_base = os.getenv("SERVER_BASE", "https://mishrabp-meridian.hf.space")
     content = state["story_content"]
+    style_prefix = _STYLE_PREFIXES.get(state.get("genre", ""), _DEFAULT_STYLE_PREFIX)
 
     # Featured cover image
-    print("🎨 Generating story cover image...")
+    print(f"🎨 Generating story cover image ({state.get('genre', 'Thriller')} style)...")
     cover_url = None
-    cover_prompt = _STYLE_PREFIX + state["featured_image_prompt"]
+    cover_prompt = style_prefix + state["featured_image_prompt"]
     result = _generate_image(cover_prompt, size="1792x1024")
     if result:
         buf, mime = result
@@ -38,7 +52,7 @@ def generate_story_images_node(state: dict) -> dict:
             full_match = match.group(0)
             raw_prompt = match.group(1).strip()
             alt = re.sub(r"\s+", " ", raw_prompt)[:120]
-            styled_prompt = _STYLE_PREFIX + raw_prompt[:450]
+            styled_prompt = style_prefix + raw_prompt[:450]
             try:
                 print(f'  → "{alt[:65]}"')
                 img_result = _generate_image(styled_prompt, size="1024x1024")

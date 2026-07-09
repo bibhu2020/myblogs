@@ -51,6 +51,19 @@ export class Post {
   @Column({ default: false })
   doNotDelete: boolean;
 
+  // URL of the pre-rendered TTS mp3 for this post (media library /uploads/ path), or null
+  // if audio generation failed/was skipped at publish time.
+  @Column({ nullable: true })
+  audioUrl: string;
+
+  // Curriculum series tracking (Educational category only) — e.g. "general-relativity".
+  @Column({ nullable: true })
+  seriesKey: string;
+
+  // 0-based position within the seriesKey track's ordered topic list.
+  @Column({ nullable: true, type: 'int' })
+  seriesIndex: number;
+
   /* istanbul ignore next -- lazy relation resolver, only invoked by a live TypeORM connection */
   @ManyToOne(() => Category, cat => cat.posts, { nullable: true, eager: true })
   category: Category;

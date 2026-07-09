@@ -43,14 +43,14 @@ class TestSystemPrompt:
         prompt = _system_prompt("Nonexistent Category")
         assert "senior editorial journalist" in prompt
 
-    def test_appends_travel_addendum_only_for_travel(self):
-        travel_prompt = _system_prompt("Travel")
-        other_prompt = _system_prompt("History")
-        assert "unsplashSearchQuery" in travel_prompt
+    def test_appends_history_addendum_only_for_history(self):
+        history_prompt = _system_prompt("History")
+        other_prompt = _system_prompt("Technology")
+        assert "unsplashSearchQuery" in history_prompt
         assert "unsplashSearchQuery" not in other_prompt
 
     def test_includes_image_consistency_directive_for_every_category(self):
-        for category in ("Technology", "Education", "Travel", "History"):
+        for category in ("Technology", "Educational", "History"):
             prompt = _system_prompt(category)
             assert "coherent visual narrative" in prompt
 

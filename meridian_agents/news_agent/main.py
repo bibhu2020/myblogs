@@ -20,35 +20,33 @@ init_observability("news_agent")
 
 _TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-_REGIONS = ["world", "usa", "india", "odisha", "ai", "finance", "sports"]
+_REGIONS = ["ai", "quantum", "jobmarket"]
 
 _INSTRUCTIONS = """\
 You are the Meridian News Agent. You have been given a batch of freshly-fetched news
-articles across seven regions. Your job is to curate exactly 16 stories, write a crisp
-summary for each, and save them via save_news().
+articles across three topics: artificial intelligence, quantum computing, and the job
+market. Your job is to curate exactly 10 stories, write a crisp summary for each, and
+save them via save_news().
 
 SELECTION RULES:
-- Target: 3 world, 3 usa, 2 india, 2 odisha, 2 ai, 2 finance, 2 sports
-- The 2 "ai" stories MUST come from the ai region and cover the latest AI developments
-- The 2 "finance" stories MUST come from the finance region (markets, economy, banking, trade)
-- The 2 "sports" stories MUST come from the sports region and cover the most talked-about
-  sporting events globally (major tournaments, record-breaking performances, transfer news,
-  championship results — prioritise the sport with the most current global buzz)
-- If a region has fewer articles than needed, take what's available and
-  fill the gap from whichever region has the most articles
-- No duplicate topics across regions
+- Target: 4 ai, 3 quantum, 3 jobmarket
+- The 4 "ai" stories MUST come from the ai topic and cover the latest AI developments
+  (product launches, model releases, regulation, or major research)
+- The 3 "quantum" stories MUST come from the quantum topic and cover quantum computing
+  or quantum technology (hardware milestones, error correction, research breakthroughs,
+  real-world applications)
+- The 3 "jobmarket" stories MUST come from the jobmarket topic and cover employment,
+  hiring, layoffs, wages, labor policy, or workforce trends
+- If a topic has fewer articles than needed, take what's available and fill the gap from
+  whichever topic has the most articles
+- No duplicate stories across topics
 - Prefer articles with a non-null image field
 
 BUZZ & IMPACT CRITERION (most important selection filter):
-- Within each region's quota, always pick the stories with the HIGHEST public interest
+- Within each topic's quota, always pick the stories with the HIGHEST public interest
 - Signals of a high-buzz story: affects many people, involves a major institution/country/company,
   has market-moving implications, represents a significant first or reversal, or is breaking news
-- Avoid niche/local stories when a more impactful alternative exists in the same region
-- Within AI: prefer stories about product launches, model releases, regulation, or major research
-- Within Finance: prefer stories about stock markets, central bank decisions, major earnings,
-  economic indicators, or large-scale mergers/acquisitions
-- Within Sports: prefer stories about ongoing major tournaments (World Cup, Olympics, Grand Slams,
-  Champions League, IPL, NBA playoffs) or athletes/teams generating the most global conversation
+- Avoid niche/local stories when a more impactful alternative exists within the same topic
 
 SUMMARY RULES:
 - Each summary: ~100 words, neutral journalistic tone
@@ -56,7 +54,9 @@ SUMMARY RULES:
 - Do NOT start with "The"
 - Use only facts present in the article's title/body — do not fabricate
 
-TTS WRITING STYLE (summaries will be read aloud by a news-anchor AI voice):
+TTS WRITING STYLE (each item's title + summary will be read aloud as its own standalone
+audio clip by a news-anchor AI voice — it must make sense on its own, with no dependency
+on a spoken introduction or the items around it):
 - Short, declarative sentences — maximum 20 words each
 - Active voice always: "The court ruled..." not "It was ruled by the court..."
 - One idea per sentence — no compound clauses joined by semicolons
@@ -66,12 +66,12 @@ TTS WRITING STYLE (summaries will be read aloud by a news-anchor AI voice):
 - Each sentence should be a complete broadcast-ready thought
 
 OUTPUT:
-Call save_news() once with a JSON array of exactly 16 items, each with:
+Call save_news() once with a JSON array of exactly 10 items, each with:
   {
     "title":       "<headline verbatim or lightly improved>",
     "summary":     "<~100-word summary>",
     "sourceUrl":   "<url from the article>",
-    "region":      "<world|usa|india|odisha|ai|finance|sports>",
+    "region":      "<ai|quantum|jobmarket>",
     "imageUrl":    "<image field value, or null>",
     "sourceName":  "<source field value>",
     "publishedAt": "<date field value, or null>"
@@ -106,7 +106,7 @@ def _build_agent() -> Agent:
 
 
 def _gather_articles() -> list[dict]:
-    """Fetch from direct RSS feeds for all 4 regions before starting the agent."""
+    """Fetch from direct RSS feeds for all 3 topics before starting the agent."""
     print("🔍 Fetching news feeds (all regions)...")
     all_articles = []
     for region in _REGIONS:
@@ -121,7 +121,7 @@ async def _run(articles: list[dict]) -> str:
     prompt = (
         f"Today is {_TODAY}. Here are the freshly fetched news articles:\n\n"
         f"```json\n{json.dumps(articles, indent=2)}\n```\n\n"
-        "Select 16 stories (3 world, 3 usa, 2 india, 2 odisha, 2 ai, 2 finance, 2 sports), write summaries, and call save_news()."
+        "Select 10 stories (4 ai, 3 quantum, 3 jobmarket), write summaries, and call save_news()."
     )
     result = await Runner.run(agent, input=prompt, max_turns=10)
     return result.final_output or "(no output)"

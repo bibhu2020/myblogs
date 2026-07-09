@@ -42,10 +42,12 @@ const dbConfig: any = DB_URL
         },
       }),
       fileFilter: (req, file, cb) => {
-        const allowed = /jpeg|jpg|png|gif|webp|svg/;
+        const allowed = /jpeg|jpg|png|gif|webp|svg|mp3/;
         cb(null, allowed.test(extname(file.originalname).toLowerCase()));
       },
-      limits: { fileSize: 10 * 1024 * 1024 },
+      // 25MB — comfortably covers a several-minute spoken-word mp3 (~96kbps ≈ 1MB/min)
+      // on top of the original image use case.
+      limits: { fileSize: 25 * 1024 * 1024 },
     }),
   ],
   controllers: [MediaController],

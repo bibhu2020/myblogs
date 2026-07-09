@@ -19,31 +19,24 @@ _PERSONAS: dict[str, tuple] = {
         "→ Expert Voices → Real-World Impact → Challenges & Considerations → Key Takeaways → "
         "Conclusion",
     ),
-    "Education": (
+    "Educational": (
         "senior physics writer and science educator",
         "a science-education publication exploring relativity, quantum physics, and the ideas "
         "that shape our understanding of the universe",
-        '["education", "physics", "science"]',
-        '["relativity", "quantum-physics", "spacetime", "semiconductors", "einstein", '
+        '["educational", "physics", "science"]',
+        '["relativity", "quantum-physics", "spacetime", "einstein", '
         '"entanglement", "quantum-mechanics"]',
         "Hook → Core Concept Explained → The Physics Behind It → Real-World Evidence or "
         "Application → Common Misconceptions → Why It Matters → Key Takeaways → Conclusion",
     ),
     "History": (
-        "senior history writer and cultural journalist",
-        "a longform editorial magazine covering world history and human civilization",
+        "senior history writer and cultural journalist, writing for a high-school-level audience",
+        "a longform editorial magazine covering world history and human civilization, written "
+        "to be accessible to high-school readers",
         '["history", "civilization", "world-history"]',
-        '["ancient-history", "empire", "revolution", "discovery", "archaeology"]',
+        '["ancient-history", "empire", "war", "culture", "human-evolution", "archaeology"]',
         "Hook → Historical Context → The Event / Era → Key Figures → Causes & Consequences → "
         "Global Impact → Legacy & Lessons → Key Takeaways → Conclusion",
-    ),
-    "Travel": (
-        "senior travel writer",
-        "a premium travel publication covering global destinations and experiences",
-        '["travel", "destinations", "adventure"]',
-        '["adventure", "culture", "food", "photography", "budget-travel"]',
-        "Hook → Destination Overview → Getting There → What to See & Do → Food & Culture → "
-        "Practical Tips → When to Go → Key Takeaways → Conclusion",
     ),
 }
 _DEFAULT_PERSONA = (
@@ -79,7 +72,9 @@ TTS WRITING STYLE (this content is read aloud by an AI voice as an educational l
   spell out "A.I." or "artificial intelligence" not just "AI" on first use
 
 IMAGE PLACEHOLDERS — RELEVANCE & CONSISTENCY ARE MANDATORY:
-Place 4–6 image placeholders throughout using this EXACT format (on its own line):
+Place as many image placeholders as the content needs for clarity — typically 5–10, more for
+topics with multiple distinct sub-concepts (e.g. a multi-stage physics derivation or a
+multi-service cloud architecture), never fewer than 4. Use this EXACT format (on its own line):
 [[IMAGE: vivid visual description of what the image should show — style, subject, composition, mood]]
 
 Every image prompt in this post — the featured image AND every [[IMAGE: ...]] placeholder —
@@ -105,21 +100,23 @@ OUTPUT FORMAT — return a single JSON object with these exact keys:
 
 Do not include markdown, only valid HTML in the content field. Escape all quotes inside JSON strings."""
 
-_TRAVEL_ADDENDUM = """
+_HISTORY_ADDENDUM = """
 
-TRAVEL CATEGORY — REAL PHOTO INSTRUCTIONS:
-This post will use real photographs downloaded from Unsplash, NOT AI-generated images.
+HISTORY CATEGORY — REAL PHOTO INSTRUCTIONS:
+This post will use real photographs downloaded from Unsplash where possible (real civilizations,
+artifacts, ruins, and landmarks genuinely exist as photographs), NOT AI-generated images.
 
 For the "featuredImagePrompt" field: describe what the ideal hero photograph would show (the actual
-place, landmark, or scene), starting with the destination name. Example: "Santorini Greece:
-white-washed cycladic buildings with blue domes overlooking the Aegean Sea at sunset, aerial view".
+site, artifact, monument, or scene), starting with its specific name. Example: "Colosseum Rome:
+ancient amphitheater ruins at golden hour, weathered stone arches".
 
-Add a REQUIRED extra field "unsplashSearchQuery": a 3-5 word location phrase that will be used to
-search Unsplash for a real photo. Name the specific place and country. Examples: "Santorini Greece
-sunset", "Kyoto Japan cherry blossoms".
+Add a REQUIRED extra field "unsplashSearchQuery": a 3-5 word phrase naming the specific place,
+artifact, or monument that will be used to search Unsplash for a real photo. Examples: "Colosseum
+Rome ruins", "Terracotta Army Xi'an", "Machu Picchu Peru".
 
-For all [[IMAGE: ...]] placeholders inside the content: start each prompt with the specific location
-name followed by a colon, then describe the scene.
+For all [[IMAGE: ...]] placeholders inside the content: start each prompt with the specific named
+site, artifact, or monument followed by a colon, then describe the scene — never a generic,
+unnamed "ancient ruins" or "old battlefield" description.
 
 Add "unsplashSearchQuery" to the OUTPUT FORMAT JSON alongside the other fields."""
 
@@ -132,13 +129,18 @@ def _system_prompt(category: str) -> str:
         cat_kw_example=cat_kw,
         tag_kw_example=tag_kw,
     )
-    if category == "Travel":
-        system += _TRAVEL_ADDENDUM
+    if category == "History":
+        system += _HISTORY_ADDENDUM
     return system
 
 
+def strip_html(html: str) -> str:
+    """Plain text with tags removed — shared with nodes/audio.py for TTS input."""
+    return re.sub(r"<[^>]+>", " ", html)
+
+
 def _word_count(html: str) -> int:
-    return len(re.sub(r"<[^>]+>", " ", html).split())
+    return len(strip_html(html).split())
 
 
 def _user_prompt(state: AgentState) -> str:

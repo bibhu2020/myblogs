@@ -14,14 +14,12 @@ const route = useRoute()
 const router = useRouter()
 const isEdit = computed(() => !!route.params.id)
 
-const GENRES = [
-  'Panchatantra Tales', 'Popular Cartoon Adventure', 'Superhero Adventure',
-  'Indian Mythology', 'Quantum Adventure', 'Relativity & Spacetime',
-]
+const CATEGORIES = ['AI', 'Robotics', 'Quantum']
+const GENRES = ['Horror', 'Sci-Fi', 'Thriller']
 
 const form = ref({
   title: '', excerpt: '', content: '', featuredImage: '', status: 'draft',
-  genre: 'Indian Mythology', ageGroup: '8-15', moralLesson: '',
+  category: 'AI', genre: 'Sci-Fi', ageGroup: 'High School+', moralLesson: '',
 })
 
 const saving = ref(false)
@@ -52,8 +50,9 @@ onMounted(async () => {
         content: story.content || '',
         featuredImage: story.featuredImage || '',
         status: story.status || 'draft',
-        genre: story.genre || 'Adventure',
-        ageGroup: story.ageGroup || '8-15',
+        category: story.category || 'AI',
+        genre: story.genre || 'Sci-Fi',
+        ageGroup: story.ageGroup || 'High School+',
         moralLesson: story.moralLesson || '',
       }
       editor.value?.commands.setContent(story.content || '')
@@ -148,15 +147,17 @@ function insertImage() {
       <div class="space-y-4">
         <div class="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
           <div>
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Genre</label>
-            <select v-model="form.genre" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option v-for="g in GENRES" :key="g" :value="g">{{ g }}</option>
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Category</label>
+            <select v-model="form.category" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option v-for="c in CATEGORIES" :key="c" :value="c">{{ c }}</option>
             </select>
           </div>
 
           <div>
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Age Group</label>
-            <input v-model="form.ageGroup" type="text" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Genre</label>
+            <select v-model="form.genre" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option v-for="g in GENRES" :key="g" :value="g">{{ g }}</option>
+            </select>
           </div>
 
           <div>
@@ -167,8 +168,8 @@ function insertImage() {
         </div>
 
         <div class="bg-white rounded-2xl border border-gray-200 p-5">
-          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Moral Lesson</label>
-          <textarea v-model="form.moralLesson" rows="4" placeholder="The lesson or value this story teaches…" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">What This Story Teaches</label>
+          <textarea v-model="form.moralLesson" rows="4" placeholder="The real AI/Robotics/Quantum concept this story teaches…" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
         </div>
 
         <!-- Preview link (edit mode with slug only) -->
