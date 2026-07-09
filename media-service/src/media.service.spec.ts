@@ -44,6 +44,27 @@ const mockFile = {
   buffer: Buffer.from(''),
 } as Express.Multer.File;
 
+const mockAudioFile = {
+  path: '/tmp/narration-1.mp3',
+  filename: 'narration-1.mp3',
+  originalname: 'narration.mp3',
+  mimetype: 'audio/mpeg',
+  size: 4096,
+  buffer: Buffer.from(''),
+} as Express.Multer.File;
+
+const mockAudioMedia = {
+  id: 2,
+  filename: 'narration-1.mp3',
+  originalName: 'narration.mp3',
+  mimetype: 'audio/mpeg',
+  size: 4096,
+  url: '/uploads/narration-1.mp3',
+  alt: 'narration.mp3',
+  uploadedBy: 1,
+  createdAt: new Date(),
+};
+
 describe('MediaService', () => {
   let service: MediaService;
 
@@ -146,6 +167,32 @@ describe('MediaService', () => {
       const arg = mockMediaRepo.create.mock.calls[0][0];
       expect(arg.url).toBe('/uploads/abc123.jpg');
     });
+
+    it('uploads audio files to the myblogs/audio GitHub path, not myblogs/uploads', async () => {
+      process.env.SECRET_TOKEN_GITHUB = 'gh-token';
+      (global.fetch as jest.Mock).mockResolvedValue({ ok: true });
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      mockMediaRepo.create.mockReturnValue(mockAudioMedia);
+      mockMediaRepo.save.mockResolvedValue(mockAudioMedia);
+      await service.save(mockAudioFile, 1, 'alt');
+      const putUrl = (global.fetch as jest.Mock).mock.calls[0][0];
+      expect(putUrl).toContain('/contents/myblogs/audio/');
+      expect(putUrl).not.toContain('myblogs/uploads');
+      const arg = mockMediaRepo.create.mock.calls[0][0];
+      expect(arg.url).toContain('raw.githubusercontent.com');
+      expect(arg.url).toContain('/myblogs/audio/');
+    });
+
+    it('still uploads image files to the myblogs/uploads GitHub path', async () => {
+      process.env.SECRET_TOKEN_GITHUB = 'gh-token';
+      (global.fetch as jest.Mock).mockResolvedValue({ ok: true });
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      mockMediaRepo.create.mockReturnValue(mockMedia);
+      mockMediaRepo.save.mockResolvedValue(mockMedia);
+      await service.save(mockFile, 1, 'alt');
+      const putUrl = (global.fetch as jest.Mock).mock.calls[0][0];
+      expect(putUrl).toContain('/contents/myblogs/uploads/');
+    });
   });
 
   describe('remove', () => {
@@ -182,6 +229,18 @@ describe('MediaService', () => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
       expect(mockMediaRepo.remove).toHaveBeenCalledWith(mockMedia);
       expect(result).toEqual({ message: 'Media deleted' });
+    });
+
+    it('looks up audio files under the myblogs/audio GitHub path', async () => {
+      process.env.SECRET_TOKEN_GITHUB = 'gh-token';
+      mockMediaRepo.findOne.mockResolvedValue(mockAudioMedia);
+      mockMediaRepo.remove.mockResolvedValue(undefined);
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ sha: 'abc' }) })
+        .mockResolvedValueOnce({ ok: true });
+      await service.remove(2);
+      const getUrl = (global.fetch as jest.Mock).mock.calls[0][0];
+      expect(getUrl).toContain('/contents/myblogs/audio/narration-1.mp3');
     });
   });
 });

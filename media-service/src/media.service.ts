@@ -7,9 +7,20 @@ import * as fs from 'fs';
 const GH_OWNER = 'bibhu2020';
 const GH_REPO  = 'media';
 const GH_BRANCH = 'main';
-const GH_PATH   = 'myblogs/uploads';
-const RAW_BASE  = `https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/${GH_BRANCH}/${GH_PATH}`;
-const API_BASE  = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`;
+// Images/other files go under myblogs/uploads; audio narration mp3s get their own
+// folder so the media repo stays organised by content type.
+const GH_UPLOADS_PATH = 'myblogs/uploads';
+const GH_AUDIO_PATH   = 'myblogs/audio';
+
+function ghPathFor(mimetype: string): string {
+  return mimetype?.startsWith('audio/') ? GH_AUDIO_PATH : GH_UPLOADS_PATH;
+}
+function rawBaseFor(mimetype: string): string {
+  return `https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/${GH_BRANCH}/${ghPathFor(mimetype)}`;
+}
+function apiBaseFor(mimetype: string): string {
+  return `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${ghPathFor(mimetype)}`;
+}
 
 @Injectable()
 export class MediaService {
@@ -33,13 +44,13 @@ export class MediaService {
     let url = `/uploads/${file.filename}`;
     try {
       const headers = this.ghHeaders();
-      const res = await fetch(`${API_BASE}/${file.filename}`, {
+      const res = await fetch(`${apiBaseFor(file.mimetype)}/${file.filename}`, {
         method: 'PUT',
         headers,
         body: JSON.stringify({ message: `Upload ${file.filename}`, content, branch: GH_BRANCH }),
       });
       if (res.ok) {
-        url = `${RAW_BASE}/${file.filename}`;
+        url = `${rawBaseFor(file.mimetype)}/${file.filename}`;
         if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
       } else {
         const body = await res.text();
@@ -70,7 +81,7 @@ export class MediaService {
     if (!media) throw new NotFoundException('Media not found');
 
     const headers = this.ghHeaders();
-    const apiUrl = `${API_BASE}/${media.filename}`;
+    const apiUrl = `${apiBaseFor(media.mimetype)}/${media.filename}`;
 
     const getRes = await fetch(apiUrl, { headers });
     if (getRes.ok) {
