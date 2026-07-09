@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { StoriesService } from './stories.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { JwtService } from '@nestjs/jwt';
 import { Story, StoryStatus } from './story.entity';
 import { PushService } from './push.service';
 import { NotFoundException } from '@nestjs/common';
@@ -29,6 +30,7 @@ const mockStoryRepo = {
 };
 
 const mockPushService = { send: jest.fn() };
+const mockJwtService = { sign: jest.fn().mockReturnValue('mock-jwt') };
 
 const mockStory = {
   id: 1,
@@ -54,11 +56,14 @@ describe('StoriesService', () => {
         StoriesService,
         { provide: getRepositoryToken(Story), useValue: mockStoryRepo },
         { provide: PushService, useValue: mockPushService },
+        { provide: JwtService, useValue: mockJwtService },
       ],
     }).compile();
     service = module.get<StoriesService>(StoriesService);
     jest.clearAllMocks();
     mockStoryRepo.createQueryBuilder.mockReturnValue(makeQb());
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+    mockJwtService.sign.mockReturnValue('mock-jwt');
   });
 
   describe('findAll', () => {
@@ -197,6 +202,36 @@ describe('StoriesService', () => {
       const result = await service.remove(1);
       expect(result).toEqual({ message: 'Story deleted' });
     });
+
+    it('cascade-deletes referenced media (image and audio) via media-service', async () => {
+      const withMedia = {
+        ...mockStory,
+        featuredImage: '/uploads/cover.jpg',
+        audioUrl: '/uploads/story_1.mp3',
+      };
+      mockStoryRepo.findOne.mockResolvedValue(withMedia);
+      mockStoryRepo.remove.mockResolvedValue(undefined);
+      await service.remove(1);
+      await new Promise((r) => setImmediate(r));
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/media/by-filename/cover.jpg'),
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/media/by-filename/story_1.mp3'),
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+
+    it('does not throw when the media cascade-delete call fails', async () => {
+      const withMedia = { ...mockStory, featuredImage: '/uploads/cover.jpg' };
+      mockStoryRepo.findOne.mockResolvedValue(withMedia);
+      mockStoryRepo.remove.mockResolvedValue(undefined);
+      (global.fetch as jest.Mock).mockRejectedValue(new Error('media-service down'));
+      const result = await service.remove(1);
+      await new Promise((r) => setImmediate(r));
+      expect(result).toEqual({ message: 'Story deleted' });
+    });
   });
 
   describe('approve', () => {
@@ -227,6 +262,18 @@ describe('StoriesService', () => {
       mockStoryRepo.remove.mockResolvedValue(undefined);
       const result = await service.reject(1);
       expect(result.message).toContain('rejected');
+    });
+
+    it('cascade-deletes referenced media', async () => {
+      const pending = { ...mockStory, status: StoryStatus.PENDING, audioUrl: '/uploads/story_1.mp3' };
+      mockStoryRepo.findOne.mockResolvedValue(pending);
+      mockStoryRepo.remove.mockResolvedValue(undefined);
+      await service.reject(1);
+      await new Promise((r) => setImmediate(r));
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/media/by-filename/story_1.mp3'),
+        expect.objectContaining({ method: 'DELETE' }),
+      );
     });
   });
 

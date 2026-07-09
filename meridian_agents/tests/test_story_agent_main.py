@@ -101,8 +101,9 @@ class TestRunAgent:
              patch.object(main_mod, "write_story_node", return_value={"story_title": "T", "word_count": 5000}), \
              patch.object(main_mod, "expand_story_node") as mock_expand, \
              patch.object(main_mod, "generate_story_images_node", return_value={"featured_image_url": None, "final_content": "c"}), \
-             patch.object(main_mod, "generate_story_audio_node", return_value={"audio_url": None}), \
              patch.object(main_mod, "save_pending_node", return_value={"pending_story_id": 9, "pending_story_slug": "t"}), \
+             patch.object(main_mod, "generate_story_audio_node", return_value={"audio_url": None}), \
+             patch.object(main_mod, "attach_story_audio_node", return_value={}), \
              patch.object(main_mod, "complete_run") as mock_complete:
             result = run_agent()
         mock_cleanup.assert_called_once()
@@ -119,8 +120,9 @@ class TestRunAgent:
              patch.object(main_mod, "write_story_node", return_value={"story_title": "T", "word_count": 100}), \
              patch.object(main_mod, "expand_story_node", return_value={"word_count": 900}) as mock_expand, \
              patch.object(main_mod, "generate_story_images_node", return_value={"featured_image_url": None, "final_content": "c"}), \
-             patch.object(main_mod, "generate_story_audio_node", return_value={"audio_url": None}), \
              patch.object(main_mod, "save_pending_node", return_value={"pending_story_id": 9, "pending_story_slug": "t"}), \
+             patch.object(main_mod, "generate_story_audio_node", return_value={"audio_url": None}), \
+             patch.object(main_mod, "attach_story_audio_node", return_value={}), \
              patch.object(main_mod, "complete_run"):
             run_agent()
         mock_expand.assert_called_once()

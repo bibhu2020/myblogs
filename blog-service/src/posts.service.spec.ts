@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PostsService } from './posts.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { JwtService } from '@nestjs/jwt';
 import { Post, PostStatus } from './post.entity';
 import { Category } from './category.entity';
 import { Tag } from './tag.entity';
@@ -35,6 +36,7 @@ const mockPostRepo = {
 const mockCatRepo = { findOne: jest.fn() };
 const mockTagRepo = { findByIds: jest.fn() };
 const mockPushService = { send: jest.fn() };
+const mockJwtService = { sign: jest.fn().mockReturnValue('mock-jwt') };
 
 const mockPost = {
   id: 1,
@@ -62,12 +64,14 @@ describe('PostsService', () => {
         { provide: getRepositoryToken(Category), useValue: mockCatRepo },
         { provide: getRepositoryToken(Tag), useValue: mockTagRepo },
         { provide: PushService, useValue: mockPushService },
+        { provide: JwtService, useValue: mockJwtService },
       ],
     }).compile();
     service = module.get<PostsService>(PostsService);
     jest.clearAllMocks();
     mockPostRepo.createQueryBuilder.mockReturnValue(makeQb());
-    global.fetch = jest.fn();
+    global.fetch = jest.fn().mockResolvedValue({ ok: true });
+    mockJwtService.sign.mockReturnValue('mock-jwt');
   });
 
   describe('findOne', () => {
@@ -290,6 +294,49 @@ describe('PostsService', () => {
       mockPostRepo.findOne.mockResolvedValue(null);
       await expect(service.remove(999)).rejects.toThrow(NotFoundException);
     });
+
+    it('cascade-deletes referenced media (image and audio) via media-service', async () => {
+      const withMedia = {
+        ...mockPost,
+        featuredImage: '/uploads/hero.jpg',
+        audioUrl: '/uploads/post_1.mp3',
+        content: '<p>text</p><img src="/uploads/inline.jpg">',
+      };
+      mockPostRepo.findOne.mockResolvedValue(withMedia);
+      mockPostRepo.remove.mockResolvedValue(undefined);
+      await service.remove(1);
+      await new Promise((r) => setImmediate(r));
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/media/by-filename/hero.jpg'),
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/media/by-filename/post_1.mp3'),
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/media/by-filename/inline.jpg'),
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+
+    it('does not throw when the media cascade-delete call fails', async () => {
+      const withMedia = { ...mockPost, featuredImage: '/uploads/hero.jpg' };
+      mockPostRepo.findOne.mockResolvedValue(withMedia);
+      mockPostRepo.remove.mockResolvedValue(undefined);
+      (global.fetch as jest.Mock).mockRejectedValue(new Error('media-service down'));
+      const result = await service.remove(1);
+      await new Promise((r) => setImmediate(r));
+      expect(result).toEqual({ message: 'Post deleted' });
+    });
+
+    it('does not call media-service when the post has no media references', async () => {
+      mockPostRepo.findOne.mockResolvedValue(mockPost);
+      mockPostRepo.remove.mockResolvedValue(undefined);
+      await service.remove(1);
+      await new Promise((r) => setImmediate(r));
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
   });
 
   describe('getStats', () => {
@@ -376,6 +423,19 @@ describe('PostsService', () => {
       mockPostRepo.remove.mockResolvedValue(undefined);
       const result = await service.reject(1);
       expect(result.message).toContain('rejected');
+    });
+
+    it('cascade-deletes referenced media in-process, independent of the GitHub dispatch', async () => {
+      delete process.env.SECRET_TOKEN_GITHUB;
+      const pending = { ...mockPost, status: PostStatus.PENDING, featuredImage: '/uploads/hero.jpg' };
+      mockPostRepo.findOne.mockResolvedValue(pending);
+      mockPostRepo.remove.mockResolvedValue(undefined);
+      await service.reject(1);
+      await new Promise((r) => setImmediate(r));
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/media/by-filename/hero.jpg'),
+        expect.objectContaining({ method: 'DELETE' }),
+      );
     });
   });
 

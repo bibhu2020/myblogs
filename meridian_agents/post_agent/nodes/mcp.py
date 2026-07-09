@@ -225,8 +225,9 @@ def save_pending_node(state: AgentState) -> dict:
         args["tag_ids"] = state["tag_ids"]
     if state.get("featured_image_url"):
         args["featured_image"] = state["featured_image_url"]
-    if state.get("audio_url"):
-        args["audio_url"] = state["audio_url"]
+    # audio_url is intentionally NOT set here — narration is generated and attached by
+    # generate_audio_node/attach_audio_node *after* this save, since the mp3 filename is
+    # named deterministically from the post id this call returns (post_<id>.mp3).
     # resolve_curriculum_node stashes series_key/series_index on EVERY run (it doesn't yet
     # know which category the weighted pick will land on) — only persist them onto the post
     # when this run's post actually is Educational, so Technology/History posts never get a
@@ -241,6 +242,32 @@ def save_pending_node(state: AgentState) -> dict:
     print(f"✅ Pending post saved — ID: {post_id}, slug: {slug}")
     return {"pending_post_id": post_id, "pending_post_slug": slug,
             "approved": None, "published_slug": None, "published_id": None}
+
+
+def attach_audio_node(state: AgentState) -> dict:
+    """Attach the narration mp3 (generated after save_pending_node, once the post id is
+    known — see nodes/audio.py) to the just-created post via a direct PUT, mirroring
+    _create_category's precedent of bypassing MCP for deterministic, non-LLM-driven
+    steps. No-op if audio generation failed or was skipped."""
+    audio_url = state.get("audio_url")
+    post_id = state.get("pending_post_id")
+    if not audio_url or not post_id:
+        return {}
+
+    server_base = state.get("server_base", "")
+    try:
+        jwt = make_agent_jwt()
+        with httpx.Client(timeout=15.0) as client:
+            res = client.put(
+                f"{server_base}/api/posts/{post_id}",
+                json={"audioUrl": audio_url},
+                headers={"Authorization": f"Bearer {jwt}"},
+            )
+            res.raise_for_status()
+        print(f"✅ Narration attached to post #{post_id}")
+    except Exception as exc:
+        print(f"⚠️  Could not attach narration to post #{post_id}: {exc}")
+    return {}
 
 
 def publish_approved_node(state: AgentState) -> dict:

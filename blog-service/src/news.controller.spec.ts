@@ -5,6 +5,7 @@ describe('NewsController', () => {
   const mockNewsService = {
     findAll: jest.fn(),
     refresh: jest.fn(),
+    updateOne: jest.fn(),
   } as unknown as NewsService;
 
   let controller: NewsController;
@@ -28,5 +29,11 @@ describe('NewsController', () => {
   it('defaults refresh items to an empty array when omitted', () => {
     controller.refresh({} as any);
     expect(mockNewsService.refresh).toHaveBeenCalledWith([]);
+  });
+
+  it('delegates updateOne to NewsService with a numeric id and the body', () => {
+    const body = { audioUrl: '/uploads/news_7.mp3' };
+    controller.updateOne('7', body);
+    expect(mockNewsService.updateOne).toHaveBeenCalledWith(7, body);
   });
 });

@@ -14,6 +14,23 @@ class TestUploadAudio:
             url = _upload_audio(b"data", "My Story Title", "https://server")
         assert url == "/uploads/x.mp3"
 
+    def test_sends_the_filename_as_a_query_param_when_provided(self):
+        with patch.object(audio_mod, "make_agent_jwt", return_value="jwt-token"), \
+             patch("meridian_agents.story_agent.nodes.audio.requests.post") as mock_post:
+            mock_post.return_value = MagicMock(ok=True, json=lambda: {"url": "/uploads/story_3.mp3"})
+            _upload_audio(b"data", "alt", "https://server", filename="story_3")
+        _, kwargs = mock_post.call_args
+        assert kwargs["params"] == {"filename": "story_3"}
+        assert kwargs["files"]["file"][0] == "story_3.mp3"
+
+    def test_omits_the_filename_query_param_when_not_provided(self):
+        with patch.object(audio_mod, "make_agent_jwt", return_value="jwt-token"), \
+             patch("meridian_agents.story_agent.nodes.audio.requests.post") as mock_post:
+            mock_post.return_value = MagicMock(ok=True, json=lambda: {"url": "/uploads/x.mp3"})
+            _upload_audio(b"data", "alt", "https://server")
+        _, kwargs = mock_post.call_args
+        assert kwargs["params"] == {}
+
     def test_raises_when_upload_fails(self):
         with patch.object(audio_mod, "make_agent_jwt", return_value="jwt-token"), \
              patch("meridian_agents.story_agent.nodes.audio.requests.post") as mock_post:
@@ -50,6 +67,23 @@ class TestGenerateStoryAudioNode:
         assert "<p>" not in tts_call.kwargs["json"]["text"]
         assert "Hello" in tts_call.kwargs["json"]["text"]
         mock_upload.assert_called_once()
+
+    def test_names_the_mp3_by_the_story_id_once_it_exists(self, monkeypatch):
+        monkeypatch.setenv("SERVER_BASE", "https://server")
+        state = {**self.STATE, "pending_story_id": 7}
+        with patch("meridian_agents.story_agent.nodes.audio.requests.post") as mock_post, \
+             patch.object(audio_mod, "_upload_audio", return_value="https://server/uploads/story_7.mp3") as mock_upload:
+            mock_post.return_value = MagicMock(content=b"x" * 2048, raise_for_status=lambda: None)
+            generate_story_audio_node(state)
+        assert mock_upload.call_args[0][3] == "story_7"
+
+    def test_uses_no_filename_when_story_id_is_unknown(self, monkeypatch):
+        monkeypatch.setenv("SERVER_BASE", "https://server")
+        with patch("meridian_agents.story_agent.nodes.audio.requests.post") as mock_post, \
+             patch.object(audio_mod, "_upload_audio", return_value="https://server/uploads/x.mp3") as mock_upload:
+            mock_post.return_value = MagicMock(content=b"x" * 2048, raise_for_status=lambda: None)
+            generate_story_audio_node(self.STATE)
+        assert mock_upload.call_args[0][3] is None
 
     def test_skips_gracefully_when_tts_request_fails(self, monkeypatch):
         monkeypatch.setenv("SERVER_BASE", "https://server")

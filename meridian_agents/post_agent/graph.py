@@ -5,6 +5,7 @@ from .nodes.audio import generate_audio_node
 from .nodes.curriculum import resolve_curriculum_node
 from .nodes.images import generate_images_node
 from .nodes.mcp import (
+    attach_audio_node,
     ensure_author_node,
     init_mcp_node,
     pick_taxonomy_node,
@@ -31,9 +32,10 @@ def build_graph(checkpointer=None):
     builder.add_node("write_post",        write_post_node)
     builder.add_node("expand_post",       expand_post_node)
     builder.add_node("generate_images",   generate_images_node)
-    builder.add_node("generate_audio",    generate_audio_node)
     builder.add_node("pick_taxonomy",     pick_taxonomy_node)
     builder.add_node("save_pending",      save_pending_node)
+    builder.add_node("generate_audio",    generate_audio_node)
+    builder.add_node("attach_audio",      attach_audio_node)
     builder.add_node("publish_approved",  publish_approved_node)
 
     builder.add_edge(START,               "init_mcp")
@@ -44,11 +46,15 @@ def build_graph(checkpointer=None):
     builder.add_edge("deep_research",     "write_post")
     builder.add_conditional_edges("write_post", _needs_expansion)
     builder.add_edge("expand_post",       "generate_images")
-    builder.add_edge("generate_images",   "generate_audio")
-    builder.add_edge("generate_audio",    "pick_taxonomy")
+    builder.add_edge("generate_images",   "pick_taxonomy")
     builder.add_edge("pick_taxonomy",     "save_pending")
+    # Audio runs *after* save_pending so the post already has an id — generate_audio_node
+    # names the mp3 post_<id>.mp3 and attach_audio_node PUTs the resulting audioUrl onto
+    # the post that was just created.
+    builder.add_edge("save_pending",      "generate_audio")
+    builder.add_edge("generate_audio",    "attach_audio")
     # Graph pauses here — human approval required before publish_approved runs
-    builder.add_edge("save_pending",      END)
+    builder.add_edge("attach_audio",      END)
     builder.add_edge("publish_approved",  END)
 
     # interrupt_before publish_approved: the node only runs on the resume invocation

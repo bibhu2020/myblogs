@@ -3,6 +3,7 @@ import { NewsService } from './news.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { NewsItem } from './news-item.entity';
 import { PushService } from './push.service';
+import { NotFoundException } from '@nestjs/common';
 
 const makeQb = () => ({
   orderBy: jest.fn().mockReturnThis(),
@@ -15,6 +16,7 @@ const mockNewsRepo = {
   clear: jest.fn(),
   create: jest.fn(),
   save: jest.fn(),
+  findOne: jest.fn(),
 };
 
 const mockPushService = { send: jest.fn() };
@@ -82,7 +84,31 @@ describe('NewsService', () => {
       expect(mockNewsRepo.clear).toHaveBeenCalled();
       expect(mockNewsRepo.save).toHaveBeenCalledWith(entities);
       expect(mockPushService.send).toHaveBeenCalled();
-      expect(result).toEqual({ count: 1 });
+      expect(result).toEqual({ count: 1, items: entities });
+    });
+
+    it('returns the saved entities with their assigned ids', async () => {
+      const savedWithIds = [{ ...mockItem, id: 42 }];
+      mockNewsRepo.create.mockReturnValue(savedWithIds);
+      mockNewsRepo.save.mockResolvedValue(savedWithIds);
+      const result = await service.refresh([{ title: 'Breaking news' } as any]);
+      expect(result.items[0].id).toBe(42);
+    });
+  });
+
+  describe('updateOne', () => {
+    it('applies the partial update and saves it', async () => {
+      const item = { ...mockItem };
+      mockNewsRepo.findOne.mockResolvedValue(item);
+      mockNewsRepo.save.mockImplementation(async (i) => i);
+      const result = await service.updateOne(1, { audioUrl: '/uploads/news_1.mp3' } as any);
+      expect(result.audioUrl).toBe('/uploads/news_1.mp3');
+      expect(mockNewsRepo.save).toHaveBeenCalledWith(expect.objectContaining({ audioUrl: '/uploads/news_1.mp3' }));
+    });
+
+    it('throws NotFoundException when the item does not exist', async () => {
+      mockNewsRepo.findOne.mockResolvedValue(null);
+      await expect(service.updateOne(999, {})).rejects.toThrow(NotFoundException);
     });
   });
 });

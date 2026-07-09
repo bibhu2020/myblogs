@@ -94,6 +94,26 @@ describe('ProxyService', () => {
       expect(axios.post).toHaveBeenCalled();
     });
 
+    it('appends query params (e.g. a requested filename) to the forwarded URL', async () => {
+      (axios.post as jest.Mock).mockResolvedValue({ data: {} });
+      await service.forwardWithFile('/api/media/upload', mockFile, {}, 'Bearer jwt', { filename: 'post_123' });
+      expect(axios.post).toHaveBeenCalledWith(
+        'http://localhost:3003/api/media/upload?filename=post_123',
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it('omits the query string when no query params are provided', async () => {
+      (axios.post as jest.Mock).mockResolvedValue({ data: {} });
+      await service.forwardWithFile('/api/media/upload', mockFile, {}, 'Bearer jwt');
+      expect(axios.post).toHaveBeenCalledWith(
+        'http://localhost:3003/api/media/upload',
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
     it('throws HttpException with upstream status on error', async () => {
       (axios.post as jest.Mock).mockRejectedValue({ response: { status: 413, data: { message: 'Too large' } } });
       await expect(

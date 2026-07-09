@@ -1,10 +1,12 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { JwtService } from '@nestjs/jwt';
 import { Repository, Like } from 'typeorm';
 import { Post, PostStatus } from './post.entity';
 import { Category } from './category.entity';
 import { Tag } from './tag.entity';
 import { PushService } from './push.service';
+import { deleteAssociatedMedia } from './media-cascade.util';
 import slugify from 'slugify';
 
 // Fallback repo slug — non-sensitive (repo is public), avoids silent no-op
@@ -20,6 +22,7 @@ export class PostsService {
     @InjectRepository(Category) private catRepo: Repository<Category>,
     @InjectRepository(Tag) private tagRepo: Repository<Tag>,
     private readonly pushService: PushService,
+    private readonly jwt: JwtService,
   ) {}
 
   async findAll(query: any = {}) {
@@ -130,6 +133,7 @@ export class PostsService {
   async remove(id: number) {
     const post = await this.findOne(id);
     await this.postRepo.remove(post);
+    void deleteAssociatedMedia(this.jwt, post, this.logger);
     return { message: 'Post deleted' };
   }
 
@@ -152,7 +156,10 @@ export class PostsService {
     }
     const title = post.title;
     await this.postRepo.remove(post);
-    // Fire-and-forget: triggers the resume workflow which runs media cleanup
+    void deleteAssociatedMedia(this.jwt, post, this.logger);
+    // Fire-and-forget: also triggers the resume workflow (additive — the in-process
+    // cascade above is the reliable path; this external mechanism is best-effort on
+    // top of it and requires SECRET_TOKEN_GITHUB with repo/Actions:write scope).
     void this.dispatchPostDecision('reject', id);
     return { message: `Post "${title}" rejected and removed.` };
   }

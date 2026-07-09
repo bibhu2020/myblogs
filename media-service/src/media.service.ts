@@ -44,11 +44,30 @@ export class MediaService {
     let url = `/uploads/${file.filename}`;
     try {
       const headers = this.ghHeaders();
-      const res = await fetch(`${apiBaseFor(file.mimetype)}/${file.filename}`, {
+      const apiUrl = `${apiBaseFor(file.mimetype)}/${file.filename}`;
+      let res = await fetch(apiUrl, {
         method: 'PUT',
         headers,
         body: JSON.stringify({ message: `Upload ${file.filename}`, content, branch: GH_BRANCH }),
       });
+
+      // A deterministic filename (e.g. post_123.mp3, requested via ?filename= on the
+      // upload URL — see app.module.ts's buildFilename) can already exist at this path
+      // if an agent run is retried. GitHub's Contents API requires the existing blob's
+      // sha to overwrite it (422 otherwise) — fetch it once and retry as an upsert.
+      // Harmless no-op for the normal random-UUID case, which can never collide.
+      if (!res.ok && res.status === 422) {
+        const getRes = await fetch(apiUrl, { headers });
+        if (getRes.ok) {
+          const { sha } = (await getRes.json()) as { sha: string };
+          res = await fetch(apiUrl, {
+            method: 'PUT',
+            headers,
+            body: JSON.stringify({ message: `Update ${file.filename}`, content, branch: GH_BRANCH, sha }),
+          });
+        }
+      }
+
       if (res.ok) {
         url = `${rawBaseFor(file.mimetype)}/${file.filename}`;
         if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
@@ -99,5 +118,39 @@ export class MediaService {
 
     await this.mediaRepo.remove(media);
     return { message: 'Media deleted' };
+  }
+
+  /** Best-effort delete-by-filename for internal service-to-service cascade calls (e.g.
+   * blog-service removing a post's associated media). Unlike remove(id), this never
+   * throws when SECRET_TOKEN_GITHUB isn't configured or a GitHub call fails — it just
+   * skips the GitHub side and still removes the local DB record, since the caller
+   * (cleanup.py, blog-service's cascade delete) treats this as fire-and-forget cleanup
+   * that must never block the content deletion it's attached to. No-ops (does not throw)
+   * when no matching record exists. */
+  async removeByFilename(filename: string): Promise<{ message: string; deleted: boolean }> {
+    const media = await this.mediaRepo.findOne({ where: { filename } });
+    if (!media) return { message: 'Media not found', deleted: false };
+
+    const token = process.env.SECRET_TOKEN_GITHUB;
+    if (token) {
+      try {
+        const headers = this.ghHeaders();
+        const apiUrl = `${apiBaseFor(media.mimetype)}/${media.filename}`;
+        const getRes = await fetch(apiUrl, { headers });
+        if (getRes.ok) {
+          const { sha } = (await getRes.json()) as { sha: string };
+          await fetch(apiUrl, {
+            method: 'DELETE',
+            headers,
+            body: JSON.stringify({ message: `Delete ${media.filename}`, sha, branch: GH_BRANCH }),
+          });
+        }
+      } catch (err) {
+        console.warn(`GitHub delete error for ${media.filename}: ${err.message}`);
+      }
+    }
+
+    await this.mediaRepo.remove(media);
+    return { message: 'Media deleted', deleted: true };
   }
 }
