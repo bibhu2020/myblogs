@@ -196,16 +196,19 @@ def _generate_image(
     category: str = "",
     unsplash_query: str = "",
 ) -> tuple[bytes, str] | None:
-    if category == "Travel":
+    if category == "History":
+        # Real civilizations, artifacts, ruins, and landmarks genuinely exist as photographs —
+        # prefer a real Unsplash photo over an AI render, falling back to AI generation only
+        # if no real photo is found for the named site/artifact.
         try:
             buf, mime, credit = _try_unsplash(unsplash_query or prompt)
             if _is_good_image(buf):
                 note = f" (photo by {credit} on Unsplash)" if credit else " (Unsplash)"
-                print(f"  ✓ Real travel photo{note}")
+                print(f"  ✓ Real historical photo{note}")
                 return buf, mime
-            print("  ⚠️  Unsplash (travel): blank image — falling back to AI generation")
+            print("  ⚠️  Unsplash (history): blank image — falling back to AI generation")
         except Exception as e:
-            print(f"  ⚠️  Unsplash (travel): {e} — falling back to AI generation")
+            print(f"  ⚠️  Unsplash (history): {e} — falling back to AI generation")
 
     ai_prompt = f"{prompt}. Professional, high-quality, no text overlays, no watermarks."
     providers: list[tuple[str, object]] = [
@@ -242,8 +245,8 @@ def generate_images_node(state: AgentState) -> dict:
     server_base = os.getenv("SERVER_BASE", "https://mishrabp-meridian.hf.space")
 
     # Featured image
-    is_travel = category == "Travel"
-    label = "📸 Fetching real travel photo..." if is_travel else "🎨 Generating featured image (1792×1024)..."
+    is_history = category == "History"
+    label = "📸 Fetching real historical photo..." if is_history else "🎨 Generating featured image (1792×1024)..."
     print(label)
 
     featured_url = None
@@ -264,7 +267,7 @@ def generate_images_node(state: AgentState) -> dict:
     content = state["post_content"]
     placeholders = list(re.finditer(r"\[\[IMAGE:\s*([\s\S]*?)\]\]", content))
     if placeholders:
-        icon = "📸" if is_travel else "🖼️"
+        icon = "📸" if is_history else "🖼️"
         print(f"{icon}  Processing {len(placeholders)} inline image(s)...")
         for match in placeholders:
             full_match = match.group(0)

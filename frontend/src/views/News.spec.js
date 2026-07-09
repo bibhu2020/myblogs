@@ -5,13 +5,15 @@ import News from './News.vue'
 vi.mock('../api', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
 import api from '../api'
 
-const worldItem = {
-  id: 1, title: 'World Event', summary: 'Something happened.', region: 'world',
+const aiItem = {
+  id: 1, title: 'AI Event', summary: 'Something happened.', region: 'ai',
   sourceUrl: 'https://example.com/1', sourceName: 'Example', publishedAt: '2026-01-01T12:00:00.000Z',
+  audioUrl: '/uploads/news-0.mp3',
 }
-const usaItem = {
-  id: 2, title: 'USA Event', summary: 'Something else happened.', region: 'usa',
+const quantumItem = {
+  id: 2, title: 'Quantum Event', summary: 'Something else happened.', region: 'quantum',
   sourceUrl: 'https://example.com/2', sourceName: 'Example', publishedAt: null,
+  audioUrl: '/uploads/news-1.mp3',
 }
 const mysteryItem = { id: 3, title: 'Odd item', summary: 'x', region: 'mystery-region', sourceUrl: '#' }
 
@@ -19,56 +21,37 @@ function mountNews() {
   return mount(News, { global: { stubs: { Navbar: true, Footer: true, Teleport: true } } })
 }
 
-// Minimal Web Audio API mock: buffer sources "finish" on the next macrotask,
-// which is enough to drive the TTS playback loop's await points forward.
-class FakeBufferSource {
-  connect() {}
-  start() {
-    setTimeout(() => this.onended?.(), 0)
-  }
-  addEventListener(name, cb) {
-    if (name === 'ended') this._endedListener = cb
-  }
-}
-class FakeAudioContext {
-  constructor() {
-    this.currentTime = 0
-    this.state = 'running'
-  }
-  createBufferSource() { return new FakeBufferSource() }
-  decodeAudioData() { return Promise.resolve({ duration: 0.01 }) }
-  suspend() { this.state = 'suspended' }
-  resume() { this.state = 'running' }
-  close() { this.state = 'closed' }
-}
-
 describe('News', () => {
-  let originalAudioContext, originalRaf, originalCaf
+  let originalPlay, originalPause
 
   beforeEach(() => {
     vi.clearAllMocks()
-    originalAudioContext = global.AudioContext
-    originalRaf = global.requestAnimationFrame
-    originalCaf = global.cancelAnimationFrame
-    global.AudioContext = FakeAudioContext
-    global.requestAnimationFrame = vi.fn(() => 1)
-    global.cancelAnimationFrame = vi.fn()
+    // jsdom doesn't implement real media playback — stub play()/pause() to fire the
+    // same events a real <audio> element would, driving the component's event handlers.
+    originalPlay = HTMLMediaElement.prototype.play
+    originalPause = HTMLMediaElement.prototype.pause
+    HTMLMediaElement.prototype.play = vi.fn(function () {
+      this.dispatchEvent(new Event('play'))
+      return Promise.resolve()
+    })
+    HTMLMediaElement.prototype.pause = vi.fn(function () {
+      this.dispatchEvent(new Event('pause'))
+    })
   })
 
   afterEach(() => {
-    global.AudioContext = originalAudioContext
-    global.requestAnimationFrame = originalRaf
-    global.cancelAnimationFrame = originalCaf
+    HTMLMediaElement.prototype.play = originalPlay
+    HTMLMediaElement.prototype.pause = originalPause
   })
 
   describe('rendering and filtering', () => {
     it('shows a loading skeleton, then the news list', async () => {
-      api.get.mockResolvedValue({ data: { items: [worldItem, usaItem], lastUpdated: '2026-01-01T00:00:00.000Z' } })
+      api.get.mockResolvedValue({ data: { items: [aiItem, quantumItem], lastUpdated: '2026-01-01T00:00:00.000Z' } })
       const wrapper = mountNews()
-      expect(wrapper.text()).not.toContain('World Event')
+      expect(wrapper.text()).not.toContain('AI Event')
       await flushPromises()
-      expect(wrapper.text()).toContain('World Event')
-      expect(wrapper.text()).toContain('USA Event')
+      expect(wrapper.text()).toContain('AI Event')
+      expect(wrapper.text()).toContain('Quantum Event')
     })
 
     it('shows an empty state when there are no items', async () => {
@@ -85,14 +68,14 @@ describe('News', () => {
       expect(wrapper.text()).toContain('No news yet')
     })
 
-    it('filters items by region tab', async () => {
-      api.get.mockResolvedValue({ data: { items: [worldItem, usaItem] } })
+    it('filters items by topic tab', async () => {
+      api.get.mockResolvedValue({ data: { items: [aiItem, quantumItem] } })
       const wrapper = mountNews()
       await flushPromises()
-      const usaTab = wrapper.findAll('button').find(b => b.text().includes('USA'))
-      await usaTab.trigger('click')
-      expect(wrapper.text()).toContain('USA Event')
-      expect(wrapper.text()).not.toContain('World Event')
+      const quantumTab = wrapper.findAll('button').find(b => b.text().includes('Quantum'))
+      await quantumTab.trigger('click')
+      expect(wrapper.text()).toContain('Quantum Event')
+      expect(wrapper.text()).not.toContain('AI Event')
     })
 
     it('falls back to a generic icon and label for an unmapped region', async () => {
@@ -103,14 +86,14 @@ describe('News', () => {
     })
 
     it('formats the published date when present', async () => {
-      api.get.mockResolvedValue({ data: { items: [worldItem] } })
+      api.get.mockResolvedValue({ data: { items: [aiItem] } })
       const wrapper = mountNews()
       await flushPromises()
       expect(wrapper.text()).toContain('Jan 1, 2026')
     })
 
     it('omits the date line when publishedAt is missing', async () => {
-      api.get.mockResolvedValue({ data: { items: [usaItem] } })
+      api.get.mockResolvedValue({ data: { items: [quantumItem] } })
       const wrapper = mountNews()
       await flushPromises()
       const article = wrapper.find('article')
@@ -118,7 +101,7 @@ describe('News', () => {
     })
   })
 
-  describe('TTS player', () => {
+  describe('narration playlist player', () => {
     it('does not show the Listen button when there are no items', async () => {
       api.get.mockResolvedValue({ data: { items: [] } })
       const wrapper = mountNews()
@@ -126,59 +109,76 @@ describe('News', () => {
       expect(wrapper.text()).not.toContain('Listen to all')
     })
 
-    it('plays through all chunks and returns to idle', async () => {
-      vi.useFakeTimers({ shouldAdvanceTime: true })
-      api.get.mockResolvedValue({ data: { items: [worldItem] } })
-      api.post.mockResolvedValue({ data: { arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) } })
-      const wrapper = mountNews()
-      await flushPromises()
-
-      const listenBtn = wrapper.findAll('button').find(b => b.text().includes('Listen to all'))
-      const playPromise = listenBtn.trigger('click')
-      // Drain the chunk-by-chunk playback loop (several chunks for one item).
-      for (let i = 0; i < 10; i++) {
-        await vi.advanceTimersByTimeAsync(50)
-        await flushPromises()
-      }
-      await playPromise
-      await flushPromises()
-      expect(wrapper.text()).not.toContain('Now playing')
-      vi.useRealTimers()
-    })
-
-    it('shows an error state when TTS fetching fails', async () => {
-      vi.useFakeTimers({ shouldAdvanceTime: true })
-      api.get.mockResolvedValue({ data: { items: [worldItem] } })
-      api.post.mockRejectedValue({ response: { data: { message: 'TTS down' } } })
+    it('plays the narration playlist starting from the first item', async () => {
+      api.get.mockResolvedValue({ data: { items: [aiItem, quantumItem] } })
       const wrapper = mountNews()
       await flushPromises()
 
       const listenBtn = wrapper.findAll('button').find(b => b.text().includes('Listen to all'))
       await listenBtn.trigger('click')
-      await vi.advanceTimersByTimeAsync(100)
       await flushPromises()
-      expect(wrapper.text()).toContain('TTS down')
-      vi.useRealTimers()
+
+      expect(wrapper.find('audio').exists()).toBe(true)
+      expect(HTMLMediaElement.prototype.play).toHaveBeenCalled()
+      expect(wrapper.text()).not.toContain('Audio unavailable')
     })
 
-    it('stops playback when the region changes mid-playback', async () => {
-      vi.useFakeTimers({ shouldAdvanceTime: true })
-      api.get.mockResolvedValue({ data: { items: [worldItem, usaItem] } })
-      api.post.mockReturnValue(new Promise(() => {})) // never resolves — stays "loading"
+    it('auto-advances to the next item when the current track ends', async () => {
+      api.get.mockResolvedValue({ data: { items: [aiItem, quantumItem] } })
       const wrapper = mountNews()
       await flushPromises()
 
       const listenBtn = wrapper.findAll('button').find(b => b.text().includes('Listen to all'))
       await listenBtn.trigger('click')
-      await vi.advanceTimersByTimeAsync(10)
       await flushPromises()
 
-      const usaTab = wrapper.findAll('button').find(b => b.text().includes('USA'))
-      await usaTab.trigger('click')
+      const audio = wrapper.find('audio')
+      expect(audio.element.src).toContain('news-0.mp3')
+
+      await audio.trigger('ended')
+      await flushPromises()
+      expect(audio.element.src).toContain('news-1.mp3')
+    })
+
+    it('shows an unavailable state when no item has a pre-rendered narration', async () => {
+      api.get.mockResolvedValue({ data: { items: [mysteryItem] } })
+      const wrapper = mountNews()
+      await flushPromises()
+
+      const listenBtn = wrapper.findAll('button').find(b => b.text().includes('Listen to all'))
+      await listenBtn.trigger('click')
+      await flushPromises()
+      expect(wrapper.text()).toContain('Audio unavailable for these stories.')
+    })
+
+    it('shows an error state when the audio element fails to load', async () => {
+      api.get.mockResolvedValue({ data: { items: [aiItem] } })
+      const wrapper = mountNews()
+      await flushPromises()
+
+      const listenBtn = wrapper.findAll('button').find(b => b.text().includes('Listen to all'))
+      await listenBtn.trigger('click')
+      await flushPromises()
+
+      await wrapper.find('audio').trigger('error')
+      await flushPromises()
+      expect(wrapper.text()).toContain('Audio unavailable')
+    })
+
+    it('stops playback when the topic changes mid-playback', async () => {
+      api.get.mockResolvedValue({ data: { items: [aiItem, quantumItem] } })
+      const wrapper = mountNews()
+      await flushPromises()
+
+      const listenBtn = wrapper.findAll('button').find(b => b.text().includes('Listen to all'))
+      await listenBtn.trigger('click')
+      await flushPromises()
+
+      const quantumTab = wrapper.findAll('button').find(b => b.text().includes('Quantum'))
+      await quantumTab.trigger('click')
       await flushPromises()
       // Player closed -> the Listen button should be back.
       expect(wrapper.findAll('button').some(b => b.text().includes('Listen to all'))).toBe(true)
-      vi.useRealTimers()
     })
   })
 })

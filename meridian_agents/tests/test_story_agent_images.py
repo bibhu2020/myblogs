@@ -49,3 +49,23 @@ class TestGenerateStoryImagesNode:
              patch.object(story_images_mod, "_upload_image", return_value="https://server/cover.jpg"):
             result = generate_story_images_node(state)
         assert result["final_content"] == "No placeholders."
+
+    def test_applies_the_genre_matched_style_prefix(self, monkeypatch):
+        monkeypatch.setenv("SERVER_BASE", "https://server")
+        state = {**STATE, "genre": "Horror"}
+        with patch.object(story_images_mod, "_generate_image", return_value=(b"data", "image/jpeg")) as mock_gen, \
+             patch.object(story_images_mod, "_upload_image", side_effect=["https://server/cover.jpg", "https://server/inline.jpg"]), \
+             patch.object(story_images_mod, "time"):
+            generate_story_images_node(state)
+        cover_prompt = mock_gen.call_args_list[0].args[0]
+        assert cover_prompt.startswith(story_images_mod._STYLE_PREFIXES["Horror"])
+
+    def test_falls_back_to_default_style_prefix_for_unknown_genre(self, monkeypatch):
+        monkeypatch.setenv("SERVER_BASE", "https://server")
+        state = {**STATE, "genre": "Not A Real Genre"}
+        with patch.object(story_images_mod, "_generate_image", return_value=(b"data", "image/jpeg")) as mock_gen, \
+             patch.object(story_images_mod, "_upload_image", side_effect=["https://server/cover.jpg", "https://server/inline.jpg"]), \
+             patch.object(story_images_mod, "time"):
+            generate_story_images_node(state)
+        cover_prompt = mock_gen.call_args_list[0].args[0]
+        assert cover_prompt.startswith(story_images_mod._DEFAULT_STYLE_PREFIX)

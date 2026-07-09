@@ -19,6 +19,8 @@ from meridian_agents.news_agent.tools import (
     _upload_to_media,
     _fetch_item_image,
     _enhance_all_images,
+    _synthesize_and_upload_audio,
+    _generate_all_audio,
 )
 
 
@@ -135,12 +137,12 @@ class TestFetchRegionNews:
         recent = format_datetime(datetime.now(timezone.utc) - timedelta(hours=1))
         older = format_datetime(datetime.now(timezone.utc) - timedelta(hours=2))
         articles = [
-            {"title": "Same Story", "url": "u1", "body": "b", "image": None, "date": older, "source": "A", "region": "world"},
-            {"title": "Same Story", "url": "u2", "body": "b", "image": None, "date": recent, "source": "B", "region": "world"},
-            {"title": "Different Story", "url": "u3", "body": "b", "image": None, "date": recent, "source": "C", "region": "world"},
+            {"title": "Same Story", "url": "u1", "body": "b", "image": None, "date": older, "source": "A", "region": "ai"},
+            {"title": "Same Story", "url": "u2", "body": "b", "image": None, "date": recent, "source": "B", "region": "ai"},
+            {"title": "Different Story", "url": "u3", "body": "b", "image": None, "date": recent, "source": "C", "region": "ai"},
         ]
         with patch.object(tools_mod, "_parse_feed", return_value=articles):
-            result = fetch_region_news("world", max_results=10)
+            result = fetch_region_news("ai", max_results=10)
         titles = [a["title"] for a in result]
         assert titles.count("Same Story") == 1  # deduplicated, first-seen kept
         assert "Different Story" in titles
@@ -276,3 +278,69 @@ class TestEnhanceAllImages:
         assert result[1]["imageUrl"] == "https://hosted/1.jpg"
         # original list must not be mutated
         assert items[0]["imageUrl"] is None
+
+
+class TestSynthesizeAndUploadAudio:
+    def test_returns_the_uploaded_url(self, monkeypatch):
+        monkeypatch.setenv("SERVER_BASE", "https://server")
+        item = {"title": "Headline", "summary": "Something happened."}
+        with patch.object(tools_mod, "make_agent_jwt", return_value="jwt-token"), \
+             patch("meridian_agents.news_agent.tools.requests.post") as mock_post:
+            mock_post.side_effect = [
+                MagicMock(content=b"x" * 2048, raise_for_status=lambda: None),
+                MagicMock(ok=True, json=lambda: {"url": "https://server/uploads/news-3.mp3"}),
+            ]
+            idx, url = _synthesize_and_upload_audio((3, item))
+        assert idx == 3
+        assert url == "https://server/uploads/news-3.mp3"
+        tts_call = mock_post.call_args_list[0]
+        assert tts_call.args[0] == "https://server/api/tts"
+        assert tts_call.kwargs["json"] == {
+            "text": "Headline. Something happened.", "style": "news", "format": "mp3",
+        }
+
+    def test_returns_none_when_tts_request_fails(self, monkeypatch):
+        monkeypatch.setenv("SERVER_BASE", "https://server")
+        with patch("meridian_agents.news_agent.tools.requests.post", side_effect=Exception("tts down")):
+            idx, url = _synthesize_and_upload_audio((0, {"title": "A", "summary": "B"}))
+        assert idx == 0
+        assert url is None
+
+    def test_returns_none_when_synthesis_produces_almost_no_audio(self, monkeypatch):
+        monkeypatch.setenv("SERVER_BASE", "https://server")
+        with patch("meridian_agents.news_agent.tools.requests.post") as mock_post:
+            mock_post.return_value = MagicMock(content=b"x" * 10, raise_for_status=lambda: None)
+            idx, url = _synthesize_and_upload_audio((1, {"title": "A", "summary": "B"}))
+        assert idx == 1
+        assert url is None
+
+    def test_returns_none_for_empty_text(self):
+        idx, url = _synthesize_and_upload_audio((0, {"title": "", "summary": ""}))
+        assert idx == 0
+        assert url is None
+
+
+class TestGenerateAllAudio:
+    def test_returns_items_unchanged_when_empty(self):
+        assert _generate_all_audio([]) == []
+
+    def test_assigns_sort_order_and_audio_url_for_every_item(self):
+        items = [{"title": "A"}, {"title": "B"}, {"title": "C"}]
+        with patch.object(tools_mod, "_synthesize_and_upload_audio",
+                           side_effect=lambda pair: (pair[0], f"https://hosted/news-{pair[0]}.mp3")):
+            result = _generate_all_audio(items)
+        assert [it["sortOrder"] for it in result] == [0, 1, 2]
+        assert [it["audioUrl"] for it in result] == [
+            "https://hosted/news-0.mp3", "https://hosted/news-1.mp3", "https://hosted/news-2.mp3",
+        ]
+        # original list must not be mutated
+        assert "sortOrder" not in items[0]
+
+    def test_leaves_audio_url_none_for_items_that_fail(self):
+        items = [{"title": "A"}, {"title": "B"}]
+        with patch.object(tools_mod, "_synthesize_and_upload_audio",
+                           side_effect=[(0, None), (1, "https://hosted/news-1.mp3")]):
+            result = _generate_all_audio(items)
+        by_order = {it["sortOrder"]: it["audioUrl"] for it in result}
+        assert by_order[0] is None
+        assert by_order[1] == "https://hosted/news-1.mp3"

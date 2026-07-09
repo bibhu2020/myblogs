@@ -4,6 +4,7 @@ import pytest
 
 from meridian_agents.post_agent.nodes.research import (
     CATEGORIES,
+    EDUCATIONAL_TRACKS,
     _CATEGORY_WEIGHTS,
     _pick_category,
     _web_search_gemini,
@@ -43,16 +44,17 @@ class TestPickCategory:
         mock_choices.assert_called_once_with(CATEGORIES, weights=_CATEGORY_WEIGHTS, k=1)
         assert result == CATEGORIES[1]
 
-    def test_exactly_four_categories_in_priority_order(self):
+    def test_exactly_three_categories_in_priority_order(self):
         names = [c["name"] for c in CATEGORIES]
-        assert names == ["Technology", "Education", "Travel", "History"]
+        assert names == ["Technology", "Educational", "History"]
 
-    def test_technology_and_education_carry_subtopic_pools(self):
+    def test_technology_and_history_carry_subtopic_pools_educational_carries_tracks(self):
         by_name = {c["name"]: c for c in CATEGORIES}
-        assert len(by_name["Technology"]["subtopics"]) == 6
-        assert len(by_name["Education"]["subtopics"]) == 3
-        assert "subtopics" not in by_name["Travel"]
-        assert "subtopics" not in by_name["History"]
+        assert len(by_name["Technology"]["subtopics"]) == 8
+        assert len(by_name["History"]["subtopics"]) == 4
+        assert "subtopics" not in by_name["Educational"]
+        assert by_name["Educational"]["tracks"] == EDUCATIONAL_TRACKS
+        assert set(EDUCATIONAL_TRACKS) == {"general-relativity", "special-relativity", "quantum-physics"}
 
 
 class TestWebSearchGemini:
@@ -145,14 +147,27 @@ class TestDiscoverTrendNode:
         assert result["category_name"] == CATEGORIES[0]["name"] == "Technology"
         assert result["trend"] == "Discovered trend text"
 
-    def test_returns_category_metadata_and_trend_for_a_category_without_subtopics(self, monkeypatch):
+    def test_educational_uses_curriculum_state_when_present(self, monkeypatch):
         monkeypatch.delenv("TOPIC_MODE", raising=False)
-        travel = next(c for c in CATEGORIES if c["name"] == "Travel")
-        with patch("meridian_agents.post_agent.nodes.research._pick_category", return_value=travel), \
-             patch("meridian_agents.post_agent.nodes.research._web_search", return_value="Travel trend text"):
+        educational = next(c for c in CATEGORIES if c["name"] == "Educational")
+        state = {
+            "series_key": "special-relativity",
+            "series_topic": EDUCATIONAL_TRACKS["special-relativity"][1],
+        }
+        with patch("meridian_agents.post_agent.nodes.research._pick_category", return_value=educational), \
+             patch("meridian_agents.post_agent.nodes.research._web_search", return_value="Educational trend text"):
+            result = discover_trend_node(state)
+        assert result["category_name"] == "Educational"
+        assert result["trend"] == "Educational trend text"
+
+    def test_educational_falls_back_to_first_track_topic_without_curriculum_state(self, monkeypatch):
+        monkeypatch.delenv("TOPIC_MODE", raising=False)
+        educational = next(c for c in CATEGORIES if c["name"] == "Educational")
+        with patch("meridian_agents.post_agent.nodes.research._pick_category", return_value=educational), \
+             patch("meridian_agents.post_agent.nodes.research._web_search", return_value="fallback trend"):
             result = discover_trend_node({})
-        assert result["category_name"] == "Travel"
-        assert result["trend"] == "Travel trend text"
+        assert result["category_name"] == "Educational"
+        assert result["trend"] == "fallback trend"
 
 
 class TestDeepResearchNode:

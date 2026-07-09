@@ -9,6 +9,12 @@ class AgentState(TypedDict):
     author_email: str
     author_password: str
 
+    # Curriculum lookup — resolved by resolve_curriculum_node, before category is picked.
+    # Only consumed by discover_trend_node when the weighted pick lands on Educational.
+    series_key: Optional[str]
+    series_index: Optional[int]
+    series_topic: Optional[str]
+
     # Category selected by discover_trend_node
     category_name: str
     category_pool: str

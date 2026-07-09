@@ -238,6 +238,22 @@ class TestCleanupOldStories:
         assert deleted == 0
         client.delete.assert_not_called()
 
+    def test_skips_stories_marked_do_not_delete(self, monkeypatch):
+        monkeypatch.setenv("AGENT_JWT_TOKEN", "t")
+        old_date = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+        with patch("meridian_agents.cleanup.httpx.Client") as MockClient:
+            client = MockClient.return_value.__enter__.return_value
+            client.get.return_value = _resp({"stories": [
+                {"id": 1, "title": "Kept", "status": "published", "createdAt": old_date, "doNotDelete": True},
+                {"id": 2, "title": "Not kept", "status": "published", "createdAt": old_date, "doNotDelete": False},
+            ]})
+            client.delete.return_value = _resp()
+            deleted = cleanup_old_stories("https://server", days=30)
+        assert deleted == 1
+        client.delete.assert_called_once_with(
+            "https://server/api/stories/2", headers={"Authorization": "Bearer t"}, timeout=20,
+        )
+
     def test_swallows_top_level_errors(self, monkeypatch):
         monkeypatch.setenv("AGENT_JWT_TOKEN", "t")
         with patch("meridian_agents.cleanup.httpx.Client") as MockClient:
@@ -260,9 +276,8 @@ class TestCleanupEmptyCategories:
             client = MockClient.return_value.__enter__.return_value
             client.get.return_value = _resp([
                 {"id": 1, "name": "Technology", "slug": "technology"},
-                {"id": 2, "name": "Education", "slug": "education"},
-                {"id": 3, "name": "Travel", "slug": "travel"},
-                {"id": 4, "name": "History", "slug": "history"},
+                {"id": 2, "name": "Educational", "slug": "educational"},
+                {"id": 3, "name": "History", "slug": "history"},
             ])
             deleted = cleanup_empty_categories("https://server")
         assert deleted == 0

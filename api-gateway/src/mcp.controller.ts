@@ -233,6 +233,21 @@ const TOOL_DEFINITIONS = [
             'Display name shown as the author on the post. Defaults to "MCP Agent". ' +
             'Set this to the actual author\'s name when posting on behalf of someone.',
         },
+        audio_url: {
+          type: 'string',
+          description:
+            'URL or /uploads/ path of a pre-rendered TTS mp3 for this post, if one was generated.',
+        },
+        series_key: {
+          type: 'string',
+          description:
+            'Curriculum track identifier for Educational-category posts (e.g. "general-relativity"), ' +
+            'used to track fundamental-to-advanced progression across posts.',
+        },
+        series_index: {
+          type: 'integer',
+          description: '0-based position of this post within its series_key track\'s topic list.',
+        },
       },
       required: ['title', 'content', 'excerpt'],
     },
@@ -590,6 +605,7 @@ export class McpController {
       title, content, excerpt,
       category_id, tag_ids, featured_image,
       status = 'draft', author_name = 'MCP Agent',
+      audio_url, series_key, series_index,
     } = args;
 
     if (!title)   return this.toolErr('"title" is required.');
@@ -607,6 +623,9 @@ export class McpController {
         featuredImage: featured_image ?? null,
         status,
         authorName:    author_name,
+        audioUrl:      audio_url    ?? null,
+        seriesKey:     series_key   ?? null,
+        seriesIndex:   series_index ?? null,
       }, { Authorization: auth });
 
       const tags = post.tags?.map((t: any) => t.name).join(', ') || 'None';

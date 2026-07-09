@@ -318,13 +318,20 @@ export class AppController {
     return this.proxy.forward('blog', `/agent-runs/${runId}`, 'GET', null, { Authorization: this.getAuthHeader(req) });
   }
 
-  // TEXT-TO-SPEECH — one chunk per request; style selects the voice/pace.
+  // TEXT-TO-SPEECH — one chunk per request (live playback); style selects the voice/pace.
+  // format: 'wav' (default, live per-chunk playback) or 'mp3' (whole-post pre-rendered
+  // narration for the media library — mp3 encoding only exists on the local Kokoro path,
+  // so an mp3 request skips the HF fallbacks rather than silently returning the wrong format.
   // News:  Primary: maya-research/maya1 (HF) → Secondary: Kokoro-82M → Tertiary: facebook/mms-tts-eng (HF)
   // Other: Primary: Kokoro-82M local → Fallback: facebook/mms-tts-eng (HF)
   @Post('tts')
-  async textToSpeech(@Body() body: { text: string; style?: string }, @Res() res: Response) {
-    const text  = (body.text  || '').trim();
-    const style = (body.style || '').trim();
+  async textToSpeech(
+    @Body() body: { text: string; style?: string; format?: string },
+    @Res() res: Response,
+  ) {
+    const text   = (body.text   || '').trim();
+    const style  = (body.style  || '').trim();
+    const format = (body.format || 'wav').trim().toLowerCase() === 'mp3' ? 'mp3' : 'wav';
     if (!text) { res.status(400).json({ message: 'text is required' }); return; }
 
     const localTts = process.env.TTS_SERVICE_URL;
@@ -373,7 +380,13 @@ export class AppController {
     };
 
     // ── News primary: maya-research/maya1 (HF) ──────────────────────────────
-    if (style === 'news' && hfToken) {
+    // (mp3 output only exists on the local Kokoro path — skip HF branches entirely.)
+    if (format === 'mp3') {
+      if (!localTts) {
+        res.status(503).json({ message: 'mp3 TTS requires TTS_SERVICE_URL (local Kokoro)' });
+        return;
+      }
+    } else if (style === 'news' && hfToken) {
       try {
         const { buf, ct } = await hfInfer('maya-research/maya1');
         res.set({ 'Content-Type': ct, 'Content-Length': String(buf.length) });
@@ -384,20 +397,29 @@ export class AppController {
     }
 
     // ── Primary (all styles): Kokoro-82M local service ───────────────────────
+    // mp3 requests (whole-post pre-rendered narration) take much longer than a short live
+    // chunk, so they get a longer timeout matching tts-service's own gunicorn timeout.
     if (localTts) {
       try {
         const r = await fetch(`${localTts}/tts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, style }),
-          signal: AbortSignal.timeout(120_000),
+          body: JSON.stringify({ text, style, format }),
+          signal: AbortSignal.timeout(format === 'mp3' ? 280_000 : 120_000),
         });
         if (!r.ok) throw new Error(`Kokoro: ${r.status}`);
         const buf = Buffer.from(await r.arrayBuffer());
-        res.set({ 'Content-Type': 'audio/wav', 'Content-Length': String(buf.length) });
+        res.set({
+          'Content-Type': format === 'mp3' ? 'audio/mpeg' : 'audio/wav',
+          'Content-Length': String(buf.length),
+        });
         return res.send(buf);
       } catch (e) {
         errors.push((e as Error).message);
+        if (format === 'mp3') {
+          res.status(503).json({ message: `mp3 TTS unavailable: ${errors.join(' | ')}` });
+          return;
+        }
       }
     }
 

@@ -97,10 +97,11 @@ class TestRunAgent:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
         with patch.object(main_mod, "cleanup_old_stories") as mock_cleanup, \
              patch.object(main_mod, "start_run", return_value="run-1"), \
-             patch.object(main_mod, "pick_theme_node", return_value={"age_group": "8-15", "genre": "Adventure"}), \
+             patch.object(main_mod, "pick_theme_node", return_value={"age_group": "High School+", "category": "AI", "genre": "Thriller"}), \
              patch.object(main_mod, "write_story_node", return_value={"story_title": "T", "word_count": 5000}), \
              patch.object(main_mod, "expand_story_node") as mock_expand, \
              patch.object(main_mod, "generate_story_images_node", return_value={"featured_image_url": None, "final_content": "c"}), \
+             patch.object(main_mod, "generate_story_audio_node", return_value={"audio_url": None}), \
              patch.object(main_mod, "save_pending_node", return_value={"pending_story_id": 9, "pending_story_slug": "t"}), \
              patch.object(main_mod, "complete_run") as mock_complete:
             result = run_agent()
@@ -114,10 +115,11 @@ class TestRunAgent:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
         with patch.object(main_mod, "cleanup_old_stories"), \
              patch.object(main_mod, "start_run", return_value="run-1"), \
-             patch.object(main_mod, "pick_theme_node", return_value={"age_group": "8-15", "genre": "Adventure"}), \
+             patch.object(main_mod, "pick_theme_node", return_value={"age_group": "High School+", "category": "AI", "genre": "Thriller"}), \
              patch.object(main_mod, "write_story_node", return_value={"story_title": "T", "word_count": 100}), \
              patch.object(main_mod, "expand_story_node", return_value={"word_count": 900}) as mock_expand, \
              patch.object(main_mod, "generate_story_images_node", return_value={"featured_image_url": None, "final_content": "c"}), \
+             patch.object(main_mod, "generate_story_audio_node", return_value={"audio_url": None}), \
              patch.object(main_mod, "save_pending_node", return_value={"pending_story_id": 9, "pending_story_slug": "t"}), \
              patch.object(main_mod, "complete_run"):
             run_agent()

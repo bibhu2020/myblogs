@@ -18,20 +18,6 @@ const post = {
 const relatedPost = { id: 2, title: 'Another Post', slug: 'another' }
 const comment = { id: 1, authorName: 'Jane', content: 'Nice post!', createdAt: '2026-01-01T00:00:00.000Z' }
 
-class FakeBufferSource {
-  connect() {}
-  start() { setTimeout(() => this.onended?.(), 0) }
-  addEventListener(name, cb) { if (name === 'ended') this._endedListener = cb }
-}
-class FakeAudioContext {
-  constructor() { this.currentTime = 0; this.state = 'running' }
-  createBufferSource() { return new FakeBufferSource() }
-  decodeAudioData() { return Promise.resolve({ duration: 0.01 }) }
-  suspend() { this.state = 'suspended' }
-  resume() { this.state = 'running' }
-  close() { this.state = 'closed' }
-}
-
 // onMounted: blog.fetchPost() [api.get /posts/:slug], then (if category)
 // blog.fetchPosts() [api.get /posts?...], then api.get /comments/post/:id.
 function mockOnMountCalls({ postData = post, related = { posts: [], total: 0, page: 1, pages: 1 }, commentsData = [] } = {}) {
@@ -50,9 +36,6 @@ async function mountAt(slug = 'hello-world') {
   router.push(`/blog/${slug}`)
   await router.isReady()
   const wrapper = mount(BlogPost, {
-    // buildChunksWithDOM() queries document.querySelector('.post-content'),
-    // which only finds anything if the component is actually attached to
-    // the document (VTU doesn't do this by default).
     attachTo: document.body,
     global: {
       plugins: [router],
@@ -64,24 +47,27 @@ async function mountAt(slug = 'hello-world') {
 }
 
 describe('BlogPost', () => {
-  let originalAudioContext, originalRaf, originalCaf
+  let originalPlay, originalPause
 
   beforeEach(() => {
     vi.clearAllMocks()
-    api.post.mockResolvedValue({ data: { arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) } })
-    originalAudioContext = global.AudioContext
-    originalRaf = global.requestAnimationFrame
-    originalCaf = global.cancelAnimationFrame
-    global.AudioContext = FakeAudioContext
-    global.requestAnimationFrame = vi.fn(() => 1)
-    global.cancelAnimationFrame = vi.fn()
+    // jsdom doesn't implement real media playback — stub play()/pause() to fire the
+    // same events a real <audio> element would, driving the component's event handlers.
+    originalPlay = HTMLMediaElement.prototype.play
+    originalPause = HTMLMediaElement.prototype.pause
+    HTMLMediaElement.prototype.play = vi.fn(function () {
+      this.dispatchEvent(new Event('play'))
+      return Promise.resolve()
+    })
+    HTMLMediaElement.prototype.pause = vi.fn(function () {
+      this.dispatchEvent(new Event('pause'))
+    })
     Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn() }, configurable: true })
   })
 
   afterEach(() => {
-    global.AudioContext = originalAudioContext
-    global.requestAnimationFrame = originalRaf
-    global.cancelAnimationFrame = originalCaf
+    HTMLMediaElement.prototype.play = originalPlay
+    HTMLMediaElement.prototype.pause = originalPause
     document.body.innerHTML = ''
   })
 
@@ -154,80 +140,62 @@ describe('BlogPost', () => {
   })
 
   describe('TTS player', () => {
-    it('plays through all chunks and returns to idle', async () => {
-      vi.useFakeTimers({ shouldAdvanceTime: true })
-      mockOnMountCalls()
-      const wrapper = await mountAt()
-
-      const listenTab = wrapper.findAll('button').find(b => b.text().includes('LISTEN'))
-      const playPromise = listenTab.trigger('click')
-      for (let i = 0; i < 10; i++) {
-        await vi.advanceTimersByTimeAsync(50)
-        await flushPromises()
-      }
-      await playPromise
-      await flushPromises()
-      expect(wrapper.text()).not.toContain('Loading…')
-      vi.useRealTimers()
-    })
-
-    it('shows an error state when TTS fetching fails', async () => {
-      vi.useFakeTimers({ shouldAdvanceTime: true })
-      mockOnMountCalls()
-      // Must be rejected before mount: onMounted() speculatively pre-fetches
-      // chunk 0 (the title), and openPlayer() reuses that same promise —
-      // rejecting only after mount would leave the speculative fetch
-      // resolved and mask the failure.
-      api.post.mockReset()
-      api.post.mockRejectedValue({ response: { data: { message: 'TTS down' } } })
+    it('plays the pre-rendered narration audio when available', async () => {
+      mockOnMountCalls({ postData: { ...post, audioUrl: '/uploads/narration.mp3' } })
       const wrapper = await mountAt()
 
       const listenTab = wrapper.findAll('button').find(b => b.text().includes('LISTEN'))
       await listenTab.trigger('click')
-      await vi.advanceTimersByTimeAsync(100)
       await flushPromises()
-      expect(wrapper.text()).toContain('TTS down')
-      vi.useRealTimers()
+
+      expect(wrapper.find('audio').exists()).toBe(true)
+      expect(HTMLMediaElement.prototype.play).toHaveBeenCalled()
+      expect(wrapper.text()).not.toContain('Audio unavailable')
     })
 
-    it('stays in loading state while the first chunk is still in flight', async () => {
-      vi.useFakeTimers({ shouldAdvanceTime: true })
-      mockOnMountCalls()
-      api.post.mockImplementation(() => new Promise(() => {})) // never resolves
+    it('shows an unavailable state when the post has no pre-rendered audio', async () => {
+      mockOnMountCalls({ postData: { ...post, audioUrl: null } })
       const wrapper = await mountAt()
 
       const listenTab = wrapper.findAll('button').find(b => b.text().includes('LISTEN'))
       await listenTab.trigger('click')
-      await vi.advanceTimersByTimeAsync(10)
       await flushPromises()
-      expect(wrapper.text()).toContain('Loading…')
-      vi.useRealTimers()
+
+      expect(wrapper.text()).toContain('Audio unavailable for this post.')
+      expect(wrapper.find('audio').exists()).toBe(false)
     })
 
-    it('seeks to a later chunk after a completed playback', async () => {
-      vi.useFakeTimers({ shouldAdvanceTime: true })
-      mockOnMountCalls({
-        postData: { ...post, content: '<p>First paragraph.</p><p>Second paragraph.</p><p>Third paragraph.</p>' },
-      })
-      api.post.mockResolvedValue({ data: { arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) } })
+    it('shows an error state when the audio element fails to load', async () => {
+      mockOnMountCalls({ postData: { ...post, audioUrl: '/uploads/narration.mp3' } })
       const wrapper = await mountAt()
 
       const listenTab = wrapper.findAll('button').find(b => b.text().includes('LISTEN'))
-      const playPromise = listenTab.trigger('click')
-      for (let i = 0; i < 15; i++) {
-        await vi.advanceTimersByTimeAsync(50)
-        await flushPromises()
-      }
-      await playPromise
+      await listenTab.trigger('click')
+      await flushPromises()
+
+      await wrapper.find('audio').trigger('error')
+      await flushPromises()
+      expect(wrapper.text()).toContain('Audio unavailable')
+    })
+
+    it('seeks within the narration when the slider is dragged', async () => {
+      mockOnMountCalls({ postData: { ...post, audioUrl: '/uploads/narration.mp3' } })
+      const wrapper = await mountAt()
+
+      const listenTab = wrapper.findAll('button').find(b => b.text().includes('LISTEN'))
+      await listenTab.trigger('click')
+      await flushPromises()
+
+      const audioElement = wrapper.find('audio').element
+      Object.defineProperty(audioElement, 'duration', { value: 120, configurable: true })
+      await wrapper.find('audio').trigger('loadedmetadata')
       await flushPromises()
 
       const slider = wrapper.findAll('input[type="range"]')[0]
       await slider.setValue('50')
       await slider.trigger('change')
-      await vi.advanceTimersByTimeAsync(50)
-      await flushPromises()
-      expect(wrapper.text()).toContain('Segment')
-      vi.useRealTimers()
+
+      expect(audioElement.currentTime).toBeCloseTo(60, 0)
     })
   })
 })

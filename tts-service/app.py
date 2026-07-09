@@ -1,6 +1,7 @@
 import io
 import os
 import re
+import subprocess
 import threading
 from functools import lru_cache
 
@@ -87,6 +88,17 @@ def _synthesize(text: str, lang_code: str, voice: str, speed_str: str) -> bytes:
     return buf.getvalue()
 
 
+def _wav_to_mp3(wav_bytes: bytes) -> bytes:
+    """Encode WAV bytes to mp3 (96kbps, mono — plenty for spoken word) via ffmpeg.
+    Not cached: called once per post at publish time, not worth the memory."""
+    proc = subprocess.run(
+        ['ffmpeg', '-f', 'wav', '-i', 'pipe:0', '-codec:a', 'libmp3lame',
+         '-b:a', '96k', '-ac', '1', '-f', 'mp3', 'pipe:1'],
+        input=wav_bytes, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
+    )
+    return proc.stdout
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 @app.route('/health')
 def health():
@@ -98,9 +110,12 @@ def synthesize():
     body = request.get_json(silent=True) or {}
     text = (body.get('text') or '').strip()
     style = (body.get('style') or '').strip()
+    fmt = (body.get('format') or 'wav').strip().lower()
 
     if not text:
         return jsonify({'error': 'text required'}), 400
+    if fmt not in ('wav', 'mp3'):
+        return jsonify({'error': 'format must be "wav" or "mp3"'}), 400
 
     lang_code, voice, speed = _STYLE_MAP.get(style, _DEFAULT)
     text = _normalize_text(text)
@@ -109,6 +124,10 @@ def synthesize():
         wav = _synthesize(text, lang_code, voice, str(speed))
         if not wav:
             return jsonify({'error': 'synthesis produced no audio'}), 500
+        if fmt == 'mp3':
+            mp3 = _wav_to_mp3(wav)
+            return send_file(io.BytesIO(mp3), mimetype='audio/mpeg',
+                             as_attachment=False, download_name='speech.mp3')
         return send_file(io.BytesIO(wav), mimetype='audio/wav',
                          as_attachment=False, download_name='speech.wav')
     except Exception as exc:

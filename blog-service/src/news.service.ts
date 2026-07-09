@@ -13,7 +13,9 @@ export class NewsService {
   ) {}
 
   async findAll(region?: string): Promise<{ items: NewsItem[]; lastUpdated: Date | null }> {
-    const qb = this.repo.createQueryBuilder('n').orderBy('n.createdAt', 'DESC');
+    // sortOrder reflects the agent's intentional curation order and is always set by the
+    // only writer (refresh()) — createdAt would tie across all items in the same batch.
+    const qb = this.repo.createQueryBuilder('n').orderBy('n.sortOrder', 'ASC');
     if (region && region !== 'all') qb.where('n.region = :region', { region });
     const items = await qb.getMany();
     const lastUpdated = items.length ? items[0].createdAt : null;

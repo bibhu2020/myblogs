@@ -23,9 +23,10 @@ RUN npm prune --production --legacy-peer-deps
 # ── Production ────────────────────────────────────────────────────────────────
 FROM node:20-slim
 
-# System packages: nginx, supervisor, Python for local TTS service
+# System packages: nginx, supervisor, Python for local TTS service.
+# ffmpeg: encodes pre-rendered blog-post narration to mp3 for the media library.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nginx supervisor python3 python3-venv espeak-ng \
+    nginx supervisor python3 python3-venv espeak-ng ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /var/log/supervisor /run/nginx
 

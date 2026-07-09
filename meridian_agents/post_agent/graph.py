@@ -1,6 +1,8 @@
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
+from .nodes.audio import generate_audio_node
+from .nodes.curriculum import resolve_curriculum_node
 from .nodes.images import generate_images_node
 from .nodes.mcp import (
     ensure_author_node,
@@ -23,23 +25,27 @@ def build_graph(checkpointer=None):
 
     builder.add_node("init_mcp",          init_mcp_node)
     builder.add_node("ensure_author",     ensure_author_node)
+    builder.add_node("resolve_curriculum", resolve_curriculum_node)
     builder.add_node("discover_trend",    discover_trend_node)
     builder.add_node("deep_research",     deep_research_node)
     builder.add_node("write_post",        write_post_node)
     builder.add_node("expand_post",       expand_post_node)
     builder.add_node("generate_images",   generate_images_node)
+    builder.add_node("generate_audio",    generate_audio_node)
     builder.add_node("pick_taxonomy",     pick_taxonomy_node)
     builder.add_node("save_pending",      save_pending_node)
     builder.add_node("publish_approved",  publish_approved_node)
 
     builder.add_edge(START,               "init_mcp")
     builder.add_edge("init_mcp",          "ensure_author")
-    builder.add_edge("ensure_author",     "discover_trend")
+    builder.add_edge("ensure_author",     "resolve_curriculum")
+    builder.add_edge("resolve_curriculum", "discover_trend")
     builder.add_edge("discover_trend",    "deep_research")
     builder.add_edge("deep_research",     "write_post")
     builder.add_conditional_edges("write_post", _needs_expansion)
     builder.add_edge("expand_post",       "generate_images")
-    builder.add_edge("generate_images",   "pick_taxonomy")
+    builder.add_edge("generate_images",   "generate_audio")
+    builder.add_edge("generate_audio",    "pick_taxonomy")
     builder.add_edge("pick_taxonomy",     "save_pending")
     # Graph pauses here — human approval required before publish_approved runs
     builder.add_edge("save_pending",      END)

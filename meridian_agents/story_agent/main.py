@@ -1,8 +1,9 @@
 """
-Meridian Story Agent — weekly children's story generator.
+Meridian Story Agent — educational horror/sci-fi/thriller story generator.
 
-Generates a 4000+ word illustrated story for ages 8–15 and saves it as PENDING
-for admin review. The admin approves or rejects it from /admin/stories in the panel.
+Generates an illustrated story teaching a real AI, Robotics, or Quantum concept through
+fiction, for a high-school-and-above audience, and saves it as PENDING for admin review.
+The admin approves or rejects it from /admin/stories in the panel.
 
 Usage:
   python3 -m meridian_agents.story_agent            # generate one story
@@ -21,6 +22,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
+from .nodes.audio import generate_story_audio_node                                # noqa: E402
 from .nodes.writer import pick_theme_node, write_story_node, expand_story_node, _MIN_WORDS  # noqa: E402
 from .nodes.images import generate_story_images_node                              # noqa: E402
 from .nodes.publisher import save_pending_node                                    # noqa: E402
@@ -70,7 +72,7 @@ def _remove_pending(story_id: int) -> None:
 def run_agent() -> dict:
     print("\n╔═══════════════════════════════════════════════╗")
     print("║   Meridian Story Agent — Story Run            ║")
-    print("║   Ages 2-7 / 8-15 / 16+ (random pick)         ║")
+    print("║   AI / Robotics / Quantum (random pick)       ║")
     print("╚═══════════════════════════════════════════════╝\n")
 
     if not os.getenv("OPENAI_API_KEY"):
@@ -85,7 +87,7 @@ def run_agent() -> dict:
         "server_base": SERVER_BASE,
         "author_name": AUTHOR_NAME,
         "age_group": "",
-        "theme": "",
+        "category": "",
         "genre": "",
         "premise": "",
         "moral_lesson": "",
@@ -96,6 +98,7 @@ def run_agent() -> dict:
         "word_count": 0,
         "featured_image_url": None,
         "final_content": "",
+        "audio_url": None,
         "pending_story_id": None,
         "pending_story_slug": None,
     }
@@ -105,10 +108,11 @@ def run_agent() -> dict:
             state.update(pick_theme_node(state))
             state.update(write_story_node(state))
 
-            if state["word_count"] < _MIN_WORDS.get(state.get("age_group", "8-15"), 4000):
+            if state["word_count"] < _MIN_WORDS:
                 state.update(expand_story_node(state))
 
             state.update(generate_story_images_node(state))
+            state.update(generate_story_audio_node(state))
             state.update(save_pending_node(state))
 
     except Exception as exc:
@@ -126,6 +130,7 @@ def run_agent() -> dict:
         "story_id": story_id,
         "slug": story_slug,
         "title": title,
+        "category": state.get("category", ""),
         "genre": state.get("genre", ""),
         "run_id": run_id,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -139,9 +144,10 @@ def run_agent() -> dict:
     print(f"\n╔═══════════════════════════════════════════════════════╗")
     print(f"║  ⏸️   Story saved — AWAITING ADMIN APPROVAL           ║")
     print(f"╚═══════════════════════════════════════════════════════╝")
-    print(f"  Title  : {title}")
-    print(f"  Genre  : {state.get('genre', '—')}")
-    print(f"  Words  : {state['word_count']}")
+    print(f"  Title    : {title}")
+    print(f"  Category : {state.get('category', '—')}")
+    print(f"  Genre    : {state.get('genre', '—')}")
+    print(f"  Words    : {state['word_count']}")
     print(f"  Story ID: {story_id}")
     print(f"  Time   : {elapsed}s\n")
     print(f"  Review in admin panel:")
@@ -192,10 +198,10 @@ def list_pending() -> None:
     if not entries:
         print("  No pending stories.\n")
         return
-    print(f"\n{'ID':>6}  {'Genre':<16}  {'Title':<45}  {'Generated'}")
-    print("-" * 82)
+    print(f"\n{'ID':>6}  {'Category':<10}  {'Genre':<10}  {'Title':<40}  {'Generated'}")
+    print("-" * 90)
     for e in entries:
-        print(f"  {e.get('story_id', '?'):>4}  {e.get('genre', '?'):<16}  {e.get('title', '?')[:45]:<45}  {e.get('generated_at', '?')}")
+        print(f"  {e.get('story_id', '?'):>4}  {e.get('category', '?'):<10}  {e.get('genre', '?'):<10}  {e.get('title', '?')[:40]:<40}  {e.get('generated_at', '?')}")
     print()
 
 

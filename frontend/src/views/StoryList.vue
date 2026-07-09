@@ -8,27 +8,29 @@ import { format } from 'date-fns'
 
 const store = useStoryStore()
 const page = ref(1)
-const genre = ref('')
+const category = ref('')
 
-const GENRES = [
-  { value: '', label: 'All Stories', icon: '📚' },
-  { value: 'Adventure', label: 'Adventure', icon: '🏕️' },
-  { value: 'Fantasy', label: 'Fantasy', icon: '🧙' },
-  { value: 'Mystery', label: 'Mystery', icon: '🔍' },
-  { value: 'Fable', label: 'Fable', icon: '🦁' },
-  { value: 'Science Fiction', label: 'Sci-Fi', icon: '🚀' },
-  { value: 'Historical Fiction', label: 'Historical', icon: '🏛️' },
-  { value: 'Mythology', label: 'Mythology', icon: '⚡' },
+const CATEGORIES = [
+  { value: '',         label: 'All Stories', icon: '📚' },
+  { value: 'AI',        label: 'AI',         icon: '🤖' },
+  { value: 'Robotics',  label: 'Robotics',   icon: '🦾' },
+  { value: 'Quantum',   label: 'Quantum',    icon: '⚛️' },
 ]
 
+const CATEGORY_COLORS = {
+  AI:       'bg-indigo-100 text-indigo-700',
+  Robotics: 'bg-emerald-100 text-emerald-700',
+  Quantum:  'bg-cyan-100 text-cyan-700',
+}
+
 const GENRE_COLORS = {
-  'Adventure': 'bg-orange-100 text-orange-700',
-  'Fantasy': 'bg-purple-100 text-purple-700',
-  'Mystery': 'bg-blue-100 text-blue-700',
-  'Fable': 'bg-green-100 text-green-700',
-  'Science Fiction': 'bg-cyan-100 text-cyan-700',
-  'Historical Fiction': 'bg-amber-100 text-amber-700',
-  'Mythology': 'bg-yellow-100 text-yellow-700',
+  Horror:    'bg-slate-200 text-slate-700',
+  'Sci-Fi':  'bg-violet-100 text-violet-700',
+  Thriller:  'bg-rose-100 text-rose-700',
+}
+
+function categoryColor(c) {
+  return CATEGORY_COLORS[c] || 'bg-gray-100 text-gray-700'
 }
 
 function genreColor(g) {
@@ -38,13 +40,13 @@ function genreColor(g) {
 onMounted(() => loadStories())
 
 async function loadStories() {
-  await store.fetchStories({ page: page.value, limit: 12, ...(genre.value ? { genre: genre.value } : {}) })
+  await store.fetchStories({ page: page.value, limit: 12, ...(category.value ? { category: category.value } : {}) })
 }
 
 watch(page, loadStories)
 
-function setGenre(g) {
-  genre.value = g
+function setCategory(c) {
+  category.value = c
   page.value = 1
   loadStories()
 }
@@ -59,23 +61,23 @@ function setGenre(g) {
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 text-center">
         <div class="text-5xl mb-4">📖</div>
         <h1 class="text-4xl sm:text-5xl font-bold mb-3" style="font-family:'Playfair Display',serif">Story Corner</h1>
-        <p class="text-indigo-100 text-lg max-w-xl mx-auto">Magical stories for curious minds, ages 8–15. Each tale is a 20-minute adventure!</p>
+        <p class="text-indigo-100 text-lg max-w-xl mx-auto">Educational horror, sci-fi, and thriller fiction for curious minds — high school and beyond. Each story teaches a real AI, Robotics, or Quantum concept.</p>
       </div>
     </div>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
 
-      <!-- Genre filter -->
+      <!-- Category filter -->
       <div class="flex flex-wrap gap-2 mb-8 justify-center">
         <button
-          v-for="g in GENRES" :key="g.value"
-          @click="setGenre(g.value)"
-          :class="genre === g.value
+          v-for="c in CATEGORIES" :key="c.value"
+          @click="setCategory(c.value)"
+          :class="category === c.value
             ? 'bg-indigo-600 text-white shadow-md scale-105'
             : 'bg-white text-gray-600 border border-gray-200 hover:border-indigo-300 hover:text-indigo-600'"
           class="px-4 py-2 rounded-full text-sm font-medium transition-all duration-150 flex items-center gap-1.5"
         >
-          <span>{{ g.icon }}</span> {{ g.label }}
+          <span>{{ c.icon }}</span> {{ c.label }}
         </button>
       </div>
 
@@ -115,23 +117,29 @@ function setGenre(g) {
               class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
             <div v-else class="w-full h-full flex items-center justify-center text-6xl">
-              {{ { Adventure: '🏕️', Fantasy: '🧙', Mystery: '🔍', Fable: '🦁', 'Science Fiction': '🚀', 'Historical Fiction': '🏛️', Mythology: '⚡' }[story.genre] || '📖' }}
+              {{ { AI: '🤖', Robotics: '🦾', Quantum: '⚛️' }[story.category] || '📖' }}
             </div>
-            <!-- Genre badge -->
-            <span v-if="story.genre"
-              class="absolute top-3 left-3 px-2.5 py-1 rounded-full text-xs font-semibold"
-              :class="genreColor(story.genre)"
-            >{{ story.genre }}</span>
+            <!-- Category + genre badges -->
+            <div class="absolute top-3 left-3 flex gap-1.5">
+              <span v-if="story.category"
+                class="px-2.5 py-1 rounded-full text-xs font-semibold"
+                :class="categoryColor(story.category)"
+              >{{ story.category }}</span>
+              <span v-if="story.genre"
+                class="px-2.5 py-1 rounded-full text-xs font-semibold"
+                :class="genreColor(story.genre)"
+              >{{ story.genre }}</span>
+            </div>
             <!-- Read time badge -->
             <span class="absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-semibold bg-white/90 text-gray-700">
-              ⏱ {{ story.readTime || '20' }} min
+              ⏱ {{ story.readTime || '7' }} min
             </span>
           </div>
 
           <!-- Card content -->
           <div class="p-5">
             <div class="flex items-center gap-1.5 text-xs text-indigo-500 font-medium mb-2">
-              <span>👦👧 Ages {{ story.ageGroup || '8–15' }}</span>
+              <span>🎓 {{ story.ageGroup || 'High School+' }}</span>
               <span class="text-gray-300">·</span>
               <span>{{ format(new Date(story.createdAt), 'MMM d, yyyy') }}</span>
             </div>
