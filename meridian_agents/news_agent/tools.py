@@ -366,7 +366,7 @@ def _synthesize_and_upload_audio(id_item: tuple[int, dict]) -> tuple[int, str | 
         res = requests.post(
             f"{server_base}/api/tts",
             json={"text": text, "style": "news", "format": "mp3"},
-            timeout=280,
+            timeout=900,
         )
         res.raise_for_status()
         mp3 = res.content
