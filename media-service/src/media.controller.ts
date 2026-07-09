@@ -18,6 +18,14 @@ export class MediaController {
     return this.mediaService.save(file, req.user.id, alt);
   }
 
+  // Declared before ':id' — Express/Nest route matching is order-sensitive, and ':id'
+  // would otherwise greedily match the literal segment "by-filename" first.
+  @Delete('by-filename/:filename')
+  @UseGuards(AuthGuard('jwt'))
+  removeByFilename(@Param('filename') filename: string) {
+    return this.mediaService.removeByFilename(filename);
+  }
+
   @Delete(':id')
   @UseGuards(AuthGuard('jwt'))
   remove(@Param('id') id: string) { return this.mediaService.remove(+id); }

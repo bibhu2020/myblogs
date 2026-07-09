@@ -1,15 +1,20 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { JwtService } from '@nestjs/jwt';
 import { Repository } from 'typeorm';
 import { Story, StoryStatus } from './story.entity';
 import { PushService } from './push.service';
+import { deleteAssociatedMedia } from './media-cascade.util';
 import slugify from 'slugify';
 
 @Injectable()
 export class StoriesService {
+  private readonly logger = new Logger(StoriesService.name);
+
   constructor(
     @InjectRepository(Story) private storyRepo: Repository<Story>,
     private readonly pushService: PushService,
+    private readonly jwt: JwtService,
   ) {}
 
   async findAll(query: any = {}) {
@@ -90,6 +95,7 @@ export class StoriesService {
   async remove(id: number) {
     const story = await this.findOne(id);
     await this.storyRepo.remove(story);
+    void deleteAssociatedMedia(this.jwt, story, this.logger);
     return { message: 'Story deleted' };
   }
 
@@ -111,6 +117,7 @@ export class StoriesService {
     }
     const title = story.title;
     await this.storyRepo.remove(story);
+    void deleteAssociatedMedia(this.jwt, story, this.logger);
     return { message: `Story "${title}" rejected and removed.` };
   }
 

@@ -17,6 +17,29 @@ import * as fs from 'fs';
 const uploadDir = join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
+// Callers (e.g. the content agents naming a narration mp3 "post_123") can request a
+// deterministic filename via ?filename=<name> on the upload URL — read from the query
+// string rather than a body field, since query params are available synchronously
+// before Multer starts streaming the multipart body (unlike form fields, which would
+// require the caller to guarantee field ordering). Only a bare alphanumeric/-/_ name is
+// accepted; the real file extension is always re-appended, never trusted from the query
+// param, so a caller can't smuggle in an unexpected extension. Falls back to the
+// existing random UUID scheme when absent or invalid — every other upload caller
+// (admin manual uploads, inline post/story images) is unaffected.
+const SAFE_FILENAME = /^[a-zA-Z0-9_-]+$/;
+
+export function buildFilename(req: any, file: Express.Multer.File): string {
+  const ext = extname(file.originalname);
+  const requested = (req.query?.filename as string | undefined)?.trim();
+  if (requested) {
+    const base = requested.replace(/\.[a-zA-Z0-9]+$/, '');
+    if (SAFE_FILENAME.test(base)) {
+      return `${base}${ext}`;
+    }
+  }
+  return `${uuidv4()}${ext}`;
+}
+
 const DB_URL = process.env.DATABASE_URL;
 
 const dbConfig: any = DB_URL
@@ -37,8 +60,7 @@ const dbConfig: any = DB_URL
       storage: diskStorage({
         destination: uploadDir,
         filename: (req, file, cb) => {
-          const ext = extname(file.originalname);
-          cb(null, `${uuidv4()}${ext}`);
+          cb(null, buildFilename(req, file));
         },
       }),
       fileFilter: (req, file, cb) => {

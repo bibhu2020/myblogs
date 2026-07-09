@@ -25,7 +25,7 @@ load_dotenv(Path(__file__).parent.parent.parent / ".env")
 from .nodes.audio import generate_story_audio_node                                # noqa: E402
 from .nodes.writer import pick_theme_node, write_story_node, expand_story_node, _MIN_WORDS  # noqa: E402
 from .nodes.images import generate_story_images_node                              # noqa: E402
-from .nodes.publisher import save_pending_node                                    # noqa: E402
+from .nodes.publisher import save_pending_node, attach_story_audio_node           # noqa: E402
 from .tracer import start_run, complete_run                                       # noqa: E402
 from ..cleanup import cleanup_old_stories  # noqa: E402
 from ..observability import flush_observability, init_observability, traced_run  # noqa: E402
@@ -112,8 +112,13 @@ def run_agent() -> dict:
                 state.update(expand_story_node(state))
 
             state.update(generate_story_images_node(state))
-            state.update(generate_story_audio_node(state))
             state.update(save_pending_node(state))
+            # Audio runs *after* save_pending so the story already has an id —
+            # generate_story_audio_node names the mp3 story_<id>.mp3 and
+            # attach_story_audio_node PUTs the resulting audioUrl onto the story that
+            # was just created.
+            state.update(generate_story_audio_node(state))
+            state.update(attach_story_audio_node(state))
 
     except Exception as exc:
         complete_run(run_id, str(exc), failed=True)

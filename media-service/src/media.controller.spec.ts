@@ -6,6 +6,7 @@ describe('MediaController', () => {
     findAll: jest.fn(),
     save: jest.fn(),
     remove: jest.fn(),
+    removeByFilename: jest.fn(),
   } as unknown as MediaService;
 
   let controller: MediaController;
@@ -30,5 +31,10 @@ describe('MediaController', () => {
   it('delegates remove to MediaService with a numeric id', () => {
     controller.remove('12');
     expect(mockMediaService.remove).toHaveBeenCalledWith(12);
+  });
+
+  it('delegates removeByFilename to MediaService with the filename', () => {
+    controller.removeByFilename('post_123.mp3');
+    expect(mockMediaService.removeByFilename).toHaveBeenCalledWith('post_123.mp3');
   });
 });

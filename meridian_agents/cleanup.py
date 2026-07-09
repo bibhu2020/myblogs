@@ -38,10 +38,16 @@ def _admin_token(server_base: str) -> str:
 
 
 def _uploads_filename(url: str | None) -> str | None:
-    """Extract bare filename from a /uploads/<uuid.ext> path, or None."""
+    """Extract the bare filename from a hero image / audioUrl field, or None if the
+    URL isn't one of our own hosted media files (e.g. a direct external Unsplash URL,
+    which featuredImage may legitimately hold — see CLAUDE.md).
+
+    Matches both local /uploads/<file> paths and GitHub raw URLs (media.service.ts
+    uploads images under myblogs/uploads/ and narration mp3s under myblogs/audio/,
+    both of which end with /uploads/<file> or /audio/<file>)."""
     if not url:
         return None
-    m = re.search(r"/uploads/([^/?#]+)", url)
+    m = re.search(r"/(?:uploads|audio)/([^/?#]+)", url)
     return m.group(1) if m else None
 
 

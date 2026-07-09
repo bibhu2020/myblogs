@@ -23,11 +23,12 @@ export class ProxyService {
     }
   }
 
-  async forwardWithFile(path: string, file: Express.Multer.File, body: any, authHeader: string) {
+  async forwardWithFile(path: string, file: Express.Multer.File, body: any, authHeader: string, query?: Record<string, string>) {
     const form = new FormData();
     form.append('file', file.buffer, { filename: file.originalname, contentType: file.mimetype });
     if (body.alt) form.append('alt', body.alt);
-    const url = `${SERVICES.media}${path}`;
+    const qs = query && Object.keys(query).length ? `?${new URLSearchParams(query).toString()}` : '';
+    const url = `${SERVICES.media}${path}${qs}`;
     try {
       const response = await axios.post(url, form, {
         headers: { ...form.getHeaders(), Authorization: authHeader },

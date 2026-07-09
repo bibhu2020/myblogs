@@ -192,8 +192,19 @@ export class AppController {
   @Post('media/upload')
   @UseGuards(AuthGuard('jwt'))
   @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
-  uploadMedia(@UploadedFile() file: Express.Multer.File, @Body() body: any, @Request() req: any) {
-    return this.proxy.forwardWithFile('/media/upload', file, body, this.getAuthHeader(req));
+  uploadMedia(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: any,
+    @Query('filename') filename: string,
+    @Request() req: any,
+  ) {
+    return this.proxy.forwardWithFile(
+      '/media/upload',
+      file,
+      body,
+      this.getAuthHeader(req),
+      filename ? { filename } : undefined,
+    );
   }
 
   @Delete('media/:id')
@@ -271,6 +282,12 @@ export class AppController {
   @UseGuards(AuthGuard('jwt'))
   refreshNews(@Body() body: any, @Request() req: any) {
     return this.proxy.forward('blog', '/news/refresh', 'POST', body, { Authorization: this.getAuthHeader(req) });
+  }
+
+  @Patch('news/:id')
+  @UseGuards(AuthGuard('jwt'))
+  updateNewsItem(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.proxy.forward('blog', `/news/${id}`, 'PATCH', body, { Authorization: this.getAuthHeader(req) });
   }
 
   // PUSH NOTIFICATION ROUTES

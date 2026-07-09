@@ -72,6 +72,16 @@ class TestUploadsFilename:
     def test_extracts_filename_ignoring_query_string(self):
         assert _uploads_filename("/uploads/abc123.jpg?w=200") == "abc123.jpg"
 
+    def test_extracts_filename_from_github_raw_uploads_path(self):
+        assert _uploads_filename(
+            "https://raw.githubusercontent.com/bibhu2020/media/main/myblogs/uploads/abc123.jpg"
+        ) == "abc123.jpg"
+
+    def test_extracts_filename_from_github_raw_audio_path(self):
+        assert _uploads_filename(
+            "https://raw.githubusercontent.com/bibhu2020/media/main/myblogs/audio/narration-1.mp3"
+        ) == "narration-1.mp3"
+
 
 class TestDeleteMediaByFilename:
     def test_deletes_when_found_by_filename(self):

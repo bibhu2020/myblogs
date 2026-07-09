@@ -192,8 +192,17 @@ describe('AppController', () => {
     it('forwards uploadMedia via forwardWithFile', () => {
       const file = { originalname: 'a.jpg' } as Express.Multer.File;
       const body = { alt: 'photo' };
-      controller.uploadMedia(file, body, req);
-      expect(mockProxy.forwardWithFile).toHaveBeenCalledWith('/media/upload', file, body, 'Bearer jwt-token');
+      controller.uploadMedia(file, body, undefined as any, req);
+      expect(mockProxy.forwardWithFile).toHaveBeenCalledWith('/media/upload', file, body, 'Bearer jwt-token', undefined);
+    });
+
+    it('forwards uploadMedia with a requested filename as a query param', () => {
+      const file = { originalname: 'a.mp3' } as Express.Multer.File;
+      const body = {};
+      controller.uploadMedia(file, body, 'post_123', req);
+      expect(mockProxy.forwardWithFile).toHaveBeenCalledWith(
+        '/media/upload', file, body, 'Bearer jwt-token', { filename: 'post_123' },
+      );
     });
 
     it('forwards deleteMedia', () => {
@@ -268,6 +277,12 @@ describe('AppController', () => {
       const body = { items: [] };
       controller.refreshNews(body, req);
       expect(mockProxy.forward).toHaveBeenCalledWith('blog', '/news/refresh', 'POST', body, { Authorization: 'Bearer jwt-token' });
+    });
+
+    it('forwards updateNewsItem', () => {
+      const body = { audioUrl: '/uploads/news_7.mp3' };
+      controller.updateNewsItem('7', body, req);
+      expect(mockProxy.forward).toHaveBeenCalledWith('blog', '/news/7', 'PATCH', body, { Authorization: 'Bearer jwt-token' });
     });
   });
 

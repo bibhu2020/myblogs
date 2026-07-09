@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { NewsItem } from './news-item.entity';
@@ -22,15 +22,25 @@ export class NewsService {
     return { items, lastUpdated };
   }
 
-  async refresh(items: Partial<NewsItem>[]): Promise<{ count: number }> {
+  async refresh(items: Partial<NewsItem>[]): Promise<{ count: number; items: NewsItem[] }> {
     await this.repo.clear();
     const entities = this.repo.create(items);
-    await this.repo.save(entities);
+    // save() returns the entities with their TypeORM-assigned auto-increment ids —
+    // the news agent needs these to name each item's narration mp3 deterministically
+    // (news_<id>.mp3) and to attach the resulting audioUrl via updateOne() afterwards.
+    const saved = await this.repo.save(entities);
     void this.pushService.send({
-      title: `News — ${entities.length} new articles`,
+      title: `News — ${saved.length} new articles`,
       body: 'Tap to read the latest news on Meridian',
       url: '/news',
     });
-    return { count: entities.length };
+    return { count: saved.length, items: saved };
+  }
+
+  async updateOne(id: number, dto: Partial<NewsItem>): Promise<NewsItem> {
+    const item = await this.repo.findOne({ where: { id } });
+    if (!item) throw new NotFoundException('News item not found');
+    Object.assign(item, dto);
+    return this.repo.save(item);
   }
 }
