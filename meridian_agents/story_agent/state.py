@@ -25,9 +25,6 @@ class StoryAgentState(TypedDict):
     featured_image_url: Optional[str]
     final_content: str          # HTML with placeholders resolved
 
-    # Audio processing output
-    audio_url: Optional[str]
-
     # Saved result
     pending_story_id: Optional[int]
     pending_story_slug: Optional[str]

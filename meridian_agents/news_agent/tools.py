@@ -338,102 +338,11 @@ def _enhance_all_images(items: list[dict]) -> list[dict]:
 
 def _assign_sort_order(items: list[dict]) -> list[dict]:
     """Stamp each item with its 0-based curation/playback order. Runs before save() so
-    sortOrder is part of the same insert as everything else — unlike audioUrl, it doesn't
-    depend on the item having a database id yet."""
+    sortOrder is part of the same insert as everything else."""
     result = [dict(it) for it in items]
     for i, it in enumerate(result):
         it["sortOrder"] = i
     return result
-
-
-# ── Narration audio pipeline ────────────────────────────────────────────────────
-# Runs *after* save() so every item already has a real database id — the mp3 is named
-# deterministically as news_<id>.mp3 (collision-free, trivially locatable for the 30-day
-# retention cleanup) instead of an index that gets reused (and would collide on GitHub)
-# every refresh cycle.
-
-def _synthesize_and_upload_audio(id_item: tuple[int, dict]) -> tuple[int, str | None]:
-    """Synthesize a pre-rendered mp3 for one saved news item's title + summary and upload
-    it to the media library. Returns (id, url) or (id, None) on failure — a failure here
-    never blocks the item from being published, it just publishes without narration."""
-    item_id, item = id_item
-    server_base = os.getenv("SERVER_BASE", "http://localhost:3000")
-    text = f"{item.get('title', '')}. {item.get('summary', '')}".strip()
-    if not text or text == ".":
-        return item_id, None
-
-    try:
-        res = requests.post(
-            f"{server_base}/api/tts",
-            json={"text": text, "style": "news", "format": "mp3"},
-            timeout=900,
-        )
-        res.raise_for_status()
-        mp3 = res.content
-        if len(mp3) < 1024:
-            raise RuntimeError("synthesis produced no audio")
-
-        jwt = make_agent_jwt(name="News Agent", email="news-agent@meridian.internal")
-        filename = f"news_{item_id}"
-        files = {"file": (f"{filename}.mp3", BytesIO(mp3), "audio/mpeg")}
-        up = requests.post(
-            f"{server_base}/api/media/upload",
-            headers={"Authorization": f"Bearer {jwt}"},
-            files=files,
-            data={"alt": item.get("title", "news narration")[:200]},
-            params={"filename": filename},
-            timeout=60,
-        )
-        return item_id, (up.json().get("url") if up.ok else None)
-    except Exception as exc:
-        print(f"      ✗ narration failed for item {item_id}: {exc}")
-        return item_id, None
-
-
-def _generate_all_audio_by_id(saved_items: list[dict]) -> dict[int, str]:
-    """Synthesize and upload a narration mp3 for every already-saved news item, keyed by
-    its real database id. Returns {id: audioUrl} for only the items that succeeded — the
-    caller attaches these via a follow-up PATCH per item.
-
-    max_workers=3 (lower than _enhance_all_images' 5): TTS synthesis is heavier than an
-    image fetch and tts-service serializes actual inference behind an internal per-voice
-    lock regardless, so client-side concurrency here only overlaps network/upload time.
-    """
-    candidates = [(it["id"], it) for it in saved_items if it.get("id") is not None]
-    if not candidates:
-        return {}
-
-    print(f"   🔊 Synthesizing {len(candidates)} narration mp3(s)…")
-    audio_by_id: dict[int, str] = {}
-
-    with ThreadPoolExecutor(max_workers=min(len(candidates), 3)) as pool:
-        futures = {pool.submit(_synthesize_and_upload_audio, pair): pair[0] for pair in candidates}
-        for f in as_completed(futures):
-            item_id, url = f.result()
-            if url:
-                audio_by_id[item_id] = url
-            print(f"      {'✓' if url else '✗'} news_{item_id}.mp3")
-
-    return audio_by_id
-
-
-def _attach_audio_urls(server_base: str, audio_by_id: dict[int, str]) -> None:
-    """Best-effort PATCH of each successfully-generated narration URL onto its news item.
-    Never raises — a failure here just leaves that one item without audio."""
-    if not audio_by_id:
-        return
-    jwt = make_agent_jwt(name="News Agent", email="news-agent@meridian.internal")
-    for item_id, url in audio_by_id.items():
-        try:
-            res = requests.patch(
-                f"{server_base}/api/news/{item_id}",
-                json={"audioUrl": url},
-                headers={"Authorization": f"Bearer {jwt}"},
-                timeout=15,
-            )
-            res.raise_for_status()
-        except Exception as exc:
-            print(f"      ✗ could not attach narration to news item {item_id}: {exc}")
 
 
 # ── Save tool (called by the agent) ──────────────────────────────────────────
@@ -443,8 +352,7 @@ def save_news(items_json: str) -> str:
     """Save the final curated list of news items to the Meridian platform.
 
     Images missing from RSS feeds are fetched automatically from each article's source
-    page before saving. Once saved, a narration mp3 is synthesized for every item (named
-    by its real database id) and attached via a follow-up update.
+    page before saving.
 
     Args:
         items_json: JSON array of exactly 10 news items. Each item must have:
@@ -465,14 +373,8 @@ def save_news(items_json: str) -> str:
         items = _assign_sort_order(items)
         result = _save(items)
 
-        saved_items = result.get("items", []) if isinstance(result, dict) else []
-        server_base = os.getenv("SERVER_BASE", "http://localhost:3000")
-        audio_by_id = _generate_all_audio_by_id(saved_items)
-        _attach_audio_urls(server_base, audio_by_id)
-
         got_img = sum(1 for it in items if it.get("imageUrl"))
-        got_audio = len(audio_by_id)
-        print(f"   💾  Saved {len(items)} items ({got_img} with thumbnail, {got_audio} with narration)")
+        print(f"   💾  Saved {len(items)} items ({got_img} with thumbnail)")
         return json.dumps(result)
     except Exception as exc:
         return json.dumps({"error": str(exc)})
