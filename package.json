@@ -60,7 +60,7 @@
     "@tiptap/extension-heading": "^3.27.1",
     "@tiptap/extension-horizontal-rule": "^3.27.1",
     "@tiptap/extension-image": "^3.27.1",
-    "@tiptap/extension-italic": "^3.27.1",
+    "@tiptap/extension-italic": "^3.27.3",
     "@tiptap/extension-link": "^3.27.1",
     "@tiptap/extension-list": "^3.27.1",
     "@tiptap/extension-list-item": "^3.27.1",
