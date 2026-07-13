@@ -105,7 +105,7 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
-    "@nestjs/cli": "^11.0.0",
+    "@nestjs/cli": "^11.0.24",
     "@nestjs/testing": "^11.1.27",
     "@sonar/scan": "^4.3.8",
     "@types/bcryptjs": "^3.0.0",
