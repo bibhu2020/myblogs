@@ -17,7 +17,7 @@ observability = [
 ]
 post_agent = [
     "langgraph>=1.2.7",
-    "langchain-core>=1.4.7",
+    "langchain-core>=1.4.9",
     "openai>=1.0",
     "huggingface_hub>=0.23",
     "python-dotenv>=1.2.2",
@@ -61,7 +61,7 @@ story_agent = [
     "Pillow>=10.0",
     "croniter>=2.0",
     "langgraph>=1.2.7",
-    "langchain-core>=1.4.7",
+    "langchain-core>=1.4.9",
     "meridian[observability]",
 ]
 news_agent = [
