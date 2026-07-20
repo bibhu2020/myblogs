@@ -75,7 +75,7 @@ news_agent = [
     "meridian[observability]",
 ]
 test = [
-    "pytest>=8.0",
+    "pytest>=9.1.1",
     "pytest-cov>=5.0",
 ]
 all = ["meridian[post_agent,tts,maintenance,rebranding,story_agent,news_agent,test,observability]"]
