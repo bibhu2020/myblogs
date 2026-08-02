@@ -130,7 +130,7 @@ def _extract_fields(text: str) -> dict:
         )
         if m:
             val = m.group(1)  # None if matched null
-            result[field] = _html.unescape(val) if val is not None else None
+            result[field] = _html.unescape(_json_unescape(val)) if val is not None else None
 
     # 'content' field: take everything between '"content": "' and the last '"'
     # that immediately precedes optional whitespace and the closing '}'.
@@ -150,10 +150,33 @@ def _extract_fields(text: str) -> dict:
                 raw = raw[:-1].rstrip()
             if raw.endswith('"'):
                 raw = raw[:-1]
-        # Unescape \" sequences the LLM may have correctly written
-        result["content"] = raw.replace('\\"', '"')
+        # Unescape JSON backslash sequences (\n, \t, \", \\, \uXXXX, ...) the
+        # LLM may have correctly written, since this fragment was pulled out
+        # by regex rather than json.loads.
+        result["content"] = _json_unescape(raw)
 
     return result
+
+
+def _json_unescape(raw: str) -> str:
+    """Decode standard JSON backslash escapes in a raw string fragment that
+    was extracted via regex rather than json.loads (because the surrounding
+    text contains unescaped literal quotes elsewhere and can't be parsed as
+    a whole). Without this, sequences like '\\n' pass through as the two
+    literal characters backslash+n instead of a real newline.
+    """
+    simple = {
+        "n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f",
+        "\\": "\\", "/": "/", '"': '"',
+    }
+
+    def repl(m: "re.Match") -> str:
+        esc = m.group(1)
+        if esc.startswith("u"):
+            return chr(int(esc[1:], 16))
+        return simple.get(esc, "\\" + esc)
+
+    return re.sub(r"\\(u[0-9a-fA-F]{4}|.)", repl, raw)
 
 
 def _inject_json_instruction(messages: list[dict]) -> list[dict]:
