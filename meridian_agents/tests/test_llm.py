@@ -39,6 +39,17 @@ def test_extract_json_field_by_field_fallback_for_truncated_response():
     assert result["content"] == "Some unfinished text"
 
 
+def test_extract_json_field_by_field_fallback_unescapes_newlines():
+    # Same trigger as the unescaped-quote fallback above (an embedded literal
+    # quote forces regex extraction instead of json.loads), but here the
+    # content also contains a JSON-escaped newline that must become a real
+    # newline rather than passing through as literal backslash-n.
+    text = '{"title": "My Post", "content": "<h2>1. Start</h2>\\n<p>He said "hi" to me</p>"}'
+    result = extract_json(text)
+    assert result["title"] == "My Post"
+    assert result["content"] == '<h2>1. Start</h2>\n<p>He said "hi" to me</p>'
+
+
 def test_extract_json_raises_when_no_fields_recoverable():
     with pytest.raises(ValueError):
         extract_json("not json at all")
