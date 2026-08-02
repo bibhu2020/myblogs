@@ -42,13 +42,13 @@ describe('Navbar', () => {
   it('shows the layout-A holiday banner by default', async () => {
     localStorage.setItem('meridian_ab_variant', 'a')
     const { wrapper } = await mountAt('/')
-    expect(wrapper.text()).toContain('Join global celebrations')
+    expect(wrapper.text()).toContain('Celebrate Sporting Excellence and Independence!')
   })
 
   it('shows the layout-B holiday banner when variant is b', async () => {
     localStorage.setItem('meridian_ab_variant', 'b')
     const { wrapper } = await mountAt('/')
-    expect(wrapper.text()).toContain('Celebrate with the world')
+    expect(wrapper.text()).toContain('Celebrate Global Sports and Milestones!')
   })
 
   it('toggles the topics dropdown open and closed', async () => {
