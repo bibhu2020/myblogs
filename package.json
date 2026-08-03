@@ -102,7 +102,7 @@
     "vue": "^3.5.38",
     "vue-router": "^4.6.4",
     "web-push": "^3.6.7",
-    "ws": "^8.21.0"
+    "ws": "^8.21.1"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
