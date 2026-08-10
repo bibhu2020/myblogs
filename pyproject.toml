@@ -23,7 +23,7 @@ post_agent = [
     "python-dotenv>=1.2.2",
     "httpx>=0.28.1",
     "requests>=2.31",
-    "google-genai>=2.10.0",
+    "google-genai>=2.17.0",
     "Pillow>=10.0",
     "croniter>=2.0",
     "meridian[observability]",
@@ -57,7 +57,7 @@ story_agent = [
     "python-dotenv>=1.2.2",
     "httpx>=0.28.1",
     "requests>=2.31",
-    "google-genai>=2.10.0",
+    "google-genai>=2.17.0",
     "Pillow>=10.0",
     "croniter>=2.0",
     "langgraph>=1.2.7",
@@ -71,7 +71,7 @@ news_agent = [
     "PyJWT>=2.8",
     "requests>=2.31",
     "python-dotenv>=1.2.2",
-    "google-genai>=2.10.0",
+    "google-genai>=2.17.0",
     "meridian[observability]",
 ]
 test = [
