@@ -45,7 +45,7 @@ maintenance = [
     "meridian[observability]",
 ]
 rebranding = [
-    "openai-agents>=0.17.6",
+    "openai-agents>=0.19.4",
     "openai>=1.0",
     "python-dotenv>=1.2.2",
     "requests>=2.31",
@@ -65,7 +65,7 @@ story_agent = [
     "meridian[observability]",
 ]
 news_agent = [
-    "openai-agents>=0.17.6",
+    "openai-agents>=0.19.4",
     "openai>=1.0",
     "feedparser>=6.0",
     "PyJWT>=2.8",
