@@ -16,7 +16,7 @@ observability = [
     "openinference-instrumentation-openai-agents>=0.1",
 ]
 post_agent = [
-    "langgraph>=1.2.7",
+    "langgraph>=1.2.10",
     "langchain-core>=1.4.7",
     "openai>=1.0",
     "huggingface_hub>=0.23",
@@ -60,7 +60,7 @@ story_agent = [
     "google-genai>=2.10.0",
     "Pillow>=10.0",
     "croniter>=2.0",
-    "langgraph>=1.2.7",
+    "langgraph>=1.2.10",
     "langchain-core>=1.4.7",
     "meridian[observability]",
 ]
