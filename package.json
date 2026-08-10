@@ -118,7 +118,7 @@
     "@types/uuid": "^9.0.7",
     "@types/web-push": "^3.6.4",
     "@types/ws": "^8.5.14",
-    "@vitejs/plugin-vue": "^6.0.6",
+    "@vitejs/plugin-vue": "^6.0.8",
     "@vitest/coverage-v8": "^4.1.9",
     "@vue/test-utils": "^2.4.6",
     "concurrently": "^8.2.2",
