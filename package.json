@@ -52,7 +52,7 @@
     "@tiptap/extension-bullet-list": "^3.27.1",
     "@tiptap/extension-code": "^3.27.1",
     "@tiptap/extension-code-block": "^3.27.1",
-    "@tiptap/extension-code-block-lowlight": "^3.27.1",
+    "@tiptap/extension-code-block-lowlight": "^3.30.1",
     "@tiptap/extension-document": "^3.27.1",
     "@tiptap/extension-dropcursor": "^3.27.1",
     "@tiptap/extension-gapcursor": "^3.27.1",
