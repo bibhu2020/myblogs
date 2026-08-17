@@ -63,7 +63,7 @@
     "@tiptap/extension-italic": "^3.27.1",
     "@tiptap/extension-link": "^3.27.1",
     "@tiptap/extension-list": "^3.27.1",
-    "@tiptap/extension-list-item": "^3.27.1",
+    "@tiptap/extension-list-item": "^3.30.1",
     "@tiptap/extension-list-keymap": "^3.27.1",
     "@tiptap/extension-ordered-list": "^3.27.1",
     "@tiptap/extension-paragraph": "^3.27.1",
