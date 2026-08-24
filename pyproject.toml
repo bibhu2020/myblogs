@@ -33,7 +33,7 @@ tts = [
     "transformers>=4.35",
     "scipy>=1.15.3",
     "numpy>=1.24",
-    "gunicorn>=21.0",
+    "gunicorn>=26.1.0",
 ]
 maintenance = [
     "autogen-agentchat>=0.7.5",
