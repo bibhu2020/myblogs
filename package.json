@@ -106,7 +106,7 @@
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
-    "@nestjs/testing": "^11.1.27",
+    "@nestjs/testing": "^11.2.1",
     "@sonar/scan": "^4.3.8",
     "@types/bcryptjs": "^3.0.0",
     "@types/better-sqlite3": "^7.6.8",
