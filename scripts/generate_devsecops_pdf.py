@@ -993,7 +993,7 @@ def build():
     story.append(Paragraph('6.3 No container/base-image scanning (Medium)', h2_style))
     story.append(Paragraph(
         'The production <font face="Courier">Dockerfile</font> builds from <font face="Courier">'
-        'node:20-slim</font> — SAST covers this project’s own source, SCA covers its npm/pip dependencies, '
+        'node:24-slim</font> — SAST covers this project’s own source, SCA covers its npm/pip dependencies, '
         'but neither touches the base image’s OS packages or any CVEs specific to the image itself. A '
         'dedicated container-scanning step (e.g. <font face="Courier">aquasecurity/trivy-action</font> or '
         'Docker Scout, both with official GitHub Actions) closes this gap and would slot in as a sibling job '
@@ -1005,7 +1005,7 @@ def build():
         '<font face="Courier">npm</font> and <font face="Courier">pip</font> only. Dependabot also supports '
         'a <font face="Courier">docker</font> ecosystem specifically for tracking a Dockerfile’s '
         '<font face="Courier">FROM</font> line and opening a PR when a newer tag is available — currently '
-        'absent, so <font face="Courier">node:20-slim</font> only ever changes when someone remembers to '
+        'absent, so <font face="Courier">node:24-slim</font> only ever changes when someone remembers to '
         'bump it by hand.', body_style))
 
     story.append(Paragraph('6.5 Repo-level default GITHUB_TOKEN permission is write (Low)', h2_style))

@@ -62,11 +62,11 @@ jobs:
           python-version: '3.11'
           cache: pip
 
-      - name: Set up Node.js 20 (frontend build verification)
+      - name: Set up Node.js 24 (frontend build verification)
         uses: actions/setup-node@v4
         if: steps.guard.outputs.skip != 'true'
         with:
-          node-version: '20'
+          node-version: '24'
           cache: npm
 
       - name: Install dependencies

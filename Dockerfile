@@ -1,5 +1,5 @@
 # ── Builder (Debian slim — same base as production so native modules match) ───
-FROM node:20-slim AS builder
+FROM node:24-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ && rm -rf /var/lib/apt/lists/*
@@ -21,7 +21,7 @@ RUN npm run build:all
 RUN npm prune --production --legacy-peer-deps
 
 # ── Production ────────────────────────────────────────────────────────────────
-FROM node:20-slim
+FROM node:24-slim
 
 # System packages: nginx, supervisor, Python for local TTS service.
 # ffmpeg: encodes pre-rendered blog-post narration to mp3 for the media library.
