@@ -30,8 +30,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /var/log/supervisor /run/nginx
 
-# Python virtual environment — isolates TTS deps from system Python
-RUN python3 -m venv /opt/tts-venv
+# Python virtual environment — isolates TTS deps from system Python.
+# Upgrade pip: Debian's bundled pip 23.0 rejects wheels whose metadata Name isn't
+# normalised (e.g. typing_extensions 4.16) and falls back to an sdist build that
+# can't resolve its build deps from the PyTorch-only index.
+RUN python3 -m venv /opt/tts-venv \
+    && /opt/tts-venv/bin/pip install --no-cache-dir --upgrade pip
 
 # PyTorch CPU-only (much smaller than CUDA build; sufficient for inference)
 RUN /opt/tts-venv/bin/pip install --no-cache-dir \
