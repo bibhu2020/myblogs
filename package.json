@@ -74,7 +74,7 @@
     "@tiptap/extensions": "^3.31.3",
     "@tiptap/pm": "^3.31.3",
     "@tiptap/starter-kit": "^3.31.3",
-    "@tiptap/vue-3": "^3.31.3",
+    "@tiptap/vue-3": "^3.31.4",
     "@vueuse/core": "^14.3.0",
     "axios": "^1.18.0",
     "bcryptjs": "^3.0.3",
