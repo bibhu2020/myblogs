@@ -54,7 +54,7 @@
     "@tiptap/extension-code-block": "^3.31.3",
     "@tiptap/extension-code-block-lowlight": "^3.31.3",
     "@tiptap/extension-document": "^3.31.3",
-    "@tiptap/extension-dropcursor": "^3.31.3",
+    "@tiptap/extension-dropcursor": "^3.31.4",
     "@tiptap/extension-gapcursor": "^3.31.3",
     "@tiptap/extension-hard-break": "^3.31.3",
     "@tiptap/extension-heading": "^3.31.3",
