@@ -11,7 +11,7 @@ dependencies = []
 
 [project.optional-dependencies]
 observability = [
-    "langfuse>=4.17.0",
+    "langfuse>=4.18.0",
     "openinference-instrumentation-openai>=0.1.64",
     "openinference-instrumentation-openai-agents>=0.1",
 ]
