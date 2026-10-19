@@ -12,7 +12,7 @@ dependencies = []
 [project.optional-dependencies]
 observability = [
     "langfuse>=4.17.0",
-    "openinference-instrumentation-openai>=0.1.64",
+    "openinference-instrumentation-openai>=0.1.65",
     "openinference-instrumentation-openai-agents>=0.1",
 ]
 post_agent = [
