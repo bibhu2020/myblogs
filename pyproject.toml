@@ -25,7 +25,7 @@ post_agent = [
     "requests>=2.31",
     "google-genai>=2.25.0",
     "Pillow>=10.0",
-    "croniter>=2.0",
+    "croniter>=7.0.0",
     "meridian[observability]",
 ]
 tts = [
@@ -41,7 +41,7 @@ maintenance = [
     "openai>=3.19.2",
     "python-dotenv>=1.2.2",
     "requests>=2.31",
-    "croniter>=2.0",
+    "croniter>=7.0.0",
     "meridian[observability]",
 ]
 rebranding = [
@@ -59,7 +59,7 @@ story_agent = [
     "requests>=2.31",
     "google-genai>=2.25.0",
     "Pillow>=10.0",
-    "croniter>=2.0",
+    "croniter>=7.0.0",
     "langgraph>=1.2.12",
     "langchain-core>=1.6.9",
     "meridian[observability]",
